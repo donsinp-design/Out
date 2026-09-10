@@ -1,0 +1,31 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
+<title>OutRun Bangkok</title>
+<style>
+@font-face{font-family:'Press Start 2P';src:url('fonts/PressStart2P.woff2') format('woff2');font-display:block}
+@font-face{font-family:'Kanit';font-weight:700;src:url('fonts/Kanit-Bold-Thai.woff2') format('woff2');unicode-range:U+0E01-0E5B,U+200C-200D,U+25CC;font-display:block}
+@font-face{font-family:'Kanit';font-weight:700;src:url('fonts/Kanit-Bold-Latin.woff2') format('woff2');font-display:block}
+@font-face{font-family:'Kanit';font-weight:500;src:url('fonts/Kanit-Medium-Thai.woff2') format('woff2');unicode-range:U+0E01-0E5B,U+200C-200D,U+25CC;font-display:block}
+@font-face{font-family:'Kanit';font-weight:500;src:url('fonts/Kanit-Medium-Latin.woff2') format('woff2');font-display:block}
+</style>
+<link rel="stylesheet" href="src/style.css">
+</head>
+<body>
+<div id="stage">
+  <canvas id="screen" width="840" height="472"></canvas>
+  <div id="touch" hidden>
+    <div class="tc left"><button data-k="left">◀</button><button data-k="right">▶</button></div>
+    <div class="tc right"><button data-k="brake">BRAKE</button><button data-k="gas">GAS</button></div>
+  </div>
+</div>
+<script src="src/util.js"></script>
+<script src="src/assets.js"></script>
+<script src="src/audio.js"></script>
+<script src="src/track.js"></script>
+<script src="src/render.js"></script>
+<script src="src/game.js"></script>
+</body>
+</html>
