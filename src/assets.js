@@ -474,23 +474,35 @@
     add('pillar', tx(pillar(), { amp: 0.06 }), 640, { solid: true });
     // shophouses: the reference's own facade (rectified) with drawn upper storeys and swappable shop modules
     const AWN = [null, null, null, '#c8322b', '#1f8a4c', '#d99a1c', '#8a1c8c', '#2b6fb0'];
-    const INT = ['keep', 'shutter', 'gold', 'pharmacy', 'eatery', 'shutter', 'eatery'];
+    const INT = ['shutter', 'gold', 'pharmacy', 'eatery', 'shutter', 'eatery', 'gold']; // the reference interior is only used behind the food cart
+    const facades = [], cnFacades = [], backFacades = [];
     for (let i = 0; i < 14; i++) {
       const cart = i % 5 === 0;
       const opt = { cart, floors: rng.chance(0.55) ? 1 : 2, band: cart ? 'stripes' : rng.pick(['stripes', 'sign', 'sign', 'wall']), interior: cart ? 'keep' : rng.pick(INT), awning: rng.pick(AWN) };
-      add('fac' + i, composeFacade(rng, opt), 2400, { solid: true, building: true });
-    }
-    // taller back-row shophouses (3 storeys) that sit behind the street-front row and close the gaps between cards
-    for (let i = 0; i < 6; i++) {
-      const opt = { cart: false, floors: 3, band: rng.pick(['sign', 'wall', 'stripes']), interior: rng.pick(['shutter', 'keep', 'gold', 'eatery']), awning: rng.pick(AWN), wall: rng.pick(FAC_WALLS) };
-      add('facb' + i, composeFacade(rng, opt), 2600, { solid: true, building: true });
+      facades.push({ c: composeFacade(rng, opt), cart });
     }
     const CNTXT = ['ร้านทอง', 'ฮั่วเซ่งเฮง', 'หูฉลาม', 'เป็ดย่าง', 'ตั้งโต๊ะกัง', 'บะหมี่เกี๊ยว', 'ร้านชาจีน', 'เยาวราช'];
     for (let i = 0; i < 8; i++) {
       const opt = { cart: i === 3, floors: rng.chance(0.4) ? 1 : 2, band: 'sign', text: CNTXT[i], signCol: rng.pick([['#c8222a', '#ffe37a'], ['#f2c12e', '#8a1c1c'], ['#c8222a', '#ffffff']]),
-        interior: i === 3 ? 'keep' : rng.pick(['gold', 'gold', 'eatery', 'shutter', 'keep']), awning: rng.pick(['#c8322b', '#c8322b', '#d99a1c', null]) };
-      add('faccn' + i, composeFacade(rng, opt), 2400, { solid: true, building: true });
+        interior: i === 3 ? 'keep' : rng.pick(['gold', 'gold', 'eatery', 'shutter']), awning: rng.pick(['#c8322b', '#c8322b', '#d99a1c', null]) };
+      cnFacades.push({ c: composeFacade(rng, opt), cart: i === 3 });
     }
+    for (let i = 0; i < 6; i++) {
+      const opt = { cart: false, floors: 3, band: rng.pick(['sign', 'wall', 'stripes']), interior: rng.pick(INT), awning: rng.pick(AWN), wall: rng.pick(FAC_WALLS) };
+      backFacades.push({ c: composeFacade(rng, opt), cart: false });
+    }
+    // Street blocks: three different shophouses side by side on one card. Blocks are much wider than their
+    // spacing along the road, so consecutive cards always overlap on screen and the street reads as a solid wall.
+    const blockOf = (pool, n, maxCarts) => {
+      const chosen = []; let carts = 0, guard = 0;
+      while (chosen.length < n && guard++ < 50) { const f = rng.pick(pool); if (chosen.indexOf(f) >= 0) continue; if (f.cart && carts >= maxCarts) continue; if (f.cart) carts++; chosen.push(f); }
+      const Hh = Math.max(...chosen.map(f => f.c.height)), c = mk(260 * chosen.length, Hh), g = c.getContext('2d');
+      chosen.forEach((f, i) => g.drawImage(f.c, i * 260, Hh - f.c.height));
+      return c;
+    };
+    for (let i = 0; i < 10; i++) add('blk' + i, blockOf(facades, 3, 1), 7200, { solid: true, building: true });
+    for (let i = 0; i < 6; i++) add('blkcn' + i, blockOf(cnFacades.concat(facades.slice(1, 6)), 3, 1), 7200, { solid: true, building: true });
+    for (let i = 0; i < 4; i++) add('blkb' + i, blockOf(backFacades, 3, 0), 7800, { solid: true, building: true });
     for (let i = 0; i < 8; i++) add('tower' + i, tx(tower(rng), { amp: 0.06 }), 2600 + rng.int(1400), { solid: true, building: true });
     for (let i = 0; i < 4; i++) add('tree' + i, tx(tree(rng, false), { amp: 0.12, outline: 0.5 }), 1500, { solid: true, thin: 0.15 });
     for (let i = 0; i < 3; i++) add('palm' + i, tx(tree(rng, true), { amp: 0.1, outline: 0.5 }), 1300, { solid: true, thin: 0.12 });

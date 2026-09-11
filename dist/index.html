@@ -558,23 +558,35 @@ window.OB = window.OB || {};
     add('pillar', tx(pillar(), { amp: 0.06 }), 640, { solid: true });
     // shophouses: the reference's own facade (rectified) with drawn upper storeys and swappable shop modules
     const AWN = [null, null, null, '#c8322b', '#1f8a4c', '#d99a1c', '#8a1c8c', '#2b6fb0'];
-    const INT = ['keep', 'shutter', 'gold', 'pharmacy', 'eatery', 'shutter', 'eatery'];
+    const INT = ['shutter', 'gold', 'pharmacy', 'eatery', 'shutter', 'eatery', 'gold']; // the reference interior is only used behind the food cart
+    const facades = [], cnFacades = [], backFacades = [];
     for (let i = 0; i < 14; i++) {
       const cart = i % 5 === 0;
       const opt = { cart, floors: rng.chance(0.55) ? 1 : 2, band: cart ? 'stripes' : rng.pick(['stripes', 'sign', 'sign', 'wall']), interior: cart ? 'keep' : rng.pick(INT), awning: rng.pick(AWN) };
-      add('fac' + i, composeFacade(rng, opt), 2400, { solid: true, building: true });
-    }
-    // taller back-row shophouses (3 storeys) that sit behind the street-front row and close the gaps between cards
-    for (let i = 0; i < 6; i++) {
-      const opt = { cart: false, floors: 3, band: rng.pick(['sign', 'wall', 'stripes']), interior: rng.pick(['shutter', 'keep', 'gold', 'eatery']), awning: rng.pick(AWN), wall: rng.pick(FAC_WALLS) };
-      add('facb' + i, composeFacade(rng, opt), 2600, { solid: true, building: true });
+      facades.push({ c: composeFacade(rng, opt), cart });
     }
     const CNTXT = ['ร้านทอง', 'ฮั่วเซ่งเฮง', 'หูฉลาม', 'เป็ดย่าง', 'ตั้งโต๊ะกัง', 'บะหมี่เกี๊ยว', 'ร้านชาจีน', 'เยาวราช'];
     for (let i = 0; i < 8; i++) {
       const opt = { cart: i === 3, floors: rng.chance(0.4) ? 1 : 2, band: 'sign', text: CNTXT[i], signCol: rng.pick([['#c8222a', '#ffe37a'], ['#f2c12e', '#8a1c1c'], ['#c8222a', '#ffffff']]),
-        interior: i === 3 ? 'keep' : rng.pick(['gold', 'gold', 'eatery', 'shutter', 'keep']), awning: rng.pick(['#c8322b', '#c8322b', '#d99a1c', null]) };
-      add('faccn' + i, composeFacade(rng, opt), 2400, { solid: true, building: true });
+        interior: i === 3 ? 'keep' : rng.pick(['gold', 'gold', 'eatery', 'shutter']), awning: rng.pick(['#c8322b', '#c8322b', '#d99a1c', null]) };
+      cnFacades.push({ c: composeFacade(rng, opt), cart: i === 3 });
     }
+    for (let i = 0; i < 6; i++) {
+      const opt = { cart: false, floors: 3, band: rng.pick(['sign', 'wall', 'stripes']), interior: rng.pick(INT), awning: rng.pick(AWN), wall: rng.pick(FAC_WALLS) };
+      backFacades.push({ c: composeFacade(rng, opt), cart: false });
+    }
+    // Street blocks: three different shophouses side by side on one card. Blocks are much wider than their
+    // spacing along the road, so consecutive cards always overlap on screen and the street reads as a solid wall.
+    const blockOf = (pool, n, maxCarts) => {
+      const chosen = []; let carts = 0, guard = 0;
+      while (chosen.length < n && guard++ < 50) { const f = rng.pick(pool); if (chosen.indexOf(f) >= 0) continue; if (f.cart && carts >= maxCarts) continue; if (f.cart) carts++; chosen.push(f); }
+      const Hh = Math.max(...chosen.map(f => f.c.height)), c = mk(260 * chosen.length, Hh), g = c.getContext('2d');
+      chosen.forEach((f, i) => g.drawImage(f.c, i * 260, Hh - f.c.height));
+      return c;
+    };
+    for (let i = 0; i < 10; i++) add('blk' + i, blockOf(facades, 3, 1), 7200, { solid: true, building: true });
+    for (let i = 0; i < 6; i++) add('blkcn' + i, blockOf(cnFacades.concat(facades.slice(1, 6)), 3, 1), 7200, { solid: true, building: true });
+    for (let i = 0; i < 4; i++) add('blkb' + i, blockOf(backFacades, 3, 0), 7800, { solid: true, building: true });
     for (let i = 0; i < 8; i++) add('tower' + i, tx(tower(rng), { amp: 0.06 }), 2600 + rng.int(1400), { solid: true, building: true });
     for (let i = 0; i < 4; i++) add('tree' + i, tx(tree(rng, false), { amp: 0.12, outline: 0.5 }), 1500, { solid: true, thin: 0.15 });
     for (let i = 0; i < 3; i++) add('palm' + i, tx(tree(rng, true), { amp: 0.1, outline: 0.5 }), 1300, { solid: true, thin: 0.12 });
@@ -809,9 +821,9 @@ window.OB = window.OB || {};
   }
 
   // ---------- population ----------
-  const FACADES = []; for (let i = 0; i < 14; i++) FACADES.push('fac' + i);
-  const CNFACADES = []; for (let i = 0; i < 8; i++) CNFACADES.push('faccn' + i);
-  const BACKROW = []; for (let i = 0; i < 6; i++) BACKROW.push('facb' + i);
+  const FACADES = []; for (let i = 0; i < 10; i++) FACADES.push('blk' + i);
+  const CNFACADES = []; for (let i = 0; i < 6; i++) CNFACADES.push('blkcn' + i);
+  const BACKROW = []; for (let i = 0; i < 4; i++) BACKROW.push('blkb' + i);
   const TOWERS = ['tower0', 'tower1', 'tower2', 'tower3', 'tower4', 'tower5', 'tower6', 'tower7'];
   // shophouse picker: composed reference facades, never the same one twice in a row per side
   const lastPick = {};
@@ -832,8 +844,8 @@ window.OB = window.OB || {};
       if (opts.noSprites) continue;
       // ---- LEFT ----
       if (th.left === 'shop') {
-        if (rel % (stage.theme === 'chinatown' ? 10 : 12) === 0) put(seg, pickShop(rng, stage.theme, 'L'), edgeL - 0.12, { anchor: 'left' });
-        if (rel % 12 === 6) put(seg, rng.pick(BACKROW), edgeL - 1.15, { anchor: 'left' });
+        if (rel % 10 === 0) put(seg, pickShop(rng, stage.theme, 'L'), edgeL - 0.12, { anchor: 'left' });
+        if (rel % 14 === 5) put(seg, rng.pick(BACKROW), edgeL - 1.6, { anchor: 'left' });
         if (rel % 16 === 4) { put(seg, rng.chance(0.7) ? 'pole' : 'pole2', edgeL + 0.1, { pole: 'L' }); }
         if (rel % 160 === 40) put(seg, 'signs_pole', edgeL + 0.08);
         if (rel % 210 === 120) put(seg, 'ckrd_pole', edgeL + 0.1);
@@ -843,7 +855,7 @@ window.OB = window.OB || {};
         if (stage.theme === 'chinatown' && rel % 33 === 20) put(seg, 'redsign_pole', edgeL + 0.1);
       } else if (th.left === 'city') {
         if (rel % 10 === 0) put(seg, rng.pick(TOWERS), edgeL - 0.45 - rng.range(0, 1.4), { anchor: 'left' });
-        if (rel % 9 === 3 && rng.chance(0.4)) put(seg, pickShop(rng, 'city', 'L'), edgeL - 0.12, { anchor: 'left' });
+        if (rel % 12 === 3 && rng.chance(0.5)) put(seg, pickShop(rng, 'city', 'L'), edgeL - 0.12, { anchor: 'left' });
         if (rel % 26 === 8) put(seg, 'lamp', edgeL + 0.06, { flip: true });
         if (rel % 44 === 20) put(seg, rng.pick(['tree0', 'tree1', 'palm0']), edgeL - 0.1);
         if (th.skytrain && rel % 14 === 7) put(seg, 'pillar', edgeL + 0.05, { pillar: true });
@@ -863,15 +875,15 @@ window.OB = window.OB || {};
         if (rel % 330 === 60) put(seg, 'thatien_pole', edgeR - 0.08);
         if (rel % 60 === 30) put(seg, rng.pick(['boat0', 'boat1', 'boat2']), edgeR + rng.range(1.2, 3.5), { water: true });
       } else if (th.right === 'shop') {
-        if (rel % (stage.theme === 'chinatown' ? 10 : 12) === 5) put(seg, pickShop(rng, stage.theme, 'R'), edgeR + 0.12, { anchor: 'right' });
-        if (rel % 12 === 11) put(seg, rng.pick(BACKROW), edgeR + 1.15, { anchor: 'right' });
+        if (rel % 10 === 5) put(seg, pickShop(rng, stage.theme, 'R'), edgeR + 0.12, { anchor: 'right' });
+        if (rel % 14 === 12) put(seg, rng.pick(BACKROW), edgeR + 1.6, { anchor: 'right' });
         if (rel % 16 === 4) put(seg, 'pole2', edgeR - 0.1, { pole: 'R', flip: true });
         if (rel % 33 === 20 && stage.theme === 'chinatown') put(seg, 'redsign_pole', edgeR - 0.1);
         if (rel % 150 === 75) put(seg, 'vendor', edgeR + 0.02, { flip: true });
         if (rel % 120 === 100) put(seg, 'tuktuk_parked', edgeR - 0.32);
       } else if (th.right === 'city') {
         if (rel % 10 === 5) put(seg, rng.pick(TOWERS), edgeR + 0.45 + rng.range(0, 1.4), { anchor: 'right' });
-        if (rel % 9 === 8 && rng.chance(0.4)) put(seg, pickShop(rng, 'city', 'R'), edgeR + 0.12, { anchor: 'right' });
+        if (rel % 12 === 9 && rng.chance(0.5)) put(seg, pickShop(rng, 'city', 'R'), edgeR + 0.12, { anchor: 'right' });
         if (rel % 26 === 21) put(seg, 'lamp', edgeR - 0.06);
         if (rel % 44 === 30) put(seg, rng.pick(['tree2', 'tree3', 'palm2']), edgeR + 0.1);
         if (th.skytrain && rel % 14 === 7) put(seg, 'pillar', edgeR - 0.05, { pillar: true });
