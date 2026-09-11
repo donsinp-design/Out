@@ -236,7 +236,7 @@
       const dl = debrisBySeg.get(seg.index); if (dl) for (const d of dl) WD.drawDebris(ctx, d, seg);
     }
     // speed streaks radiate from the road's vanishing point (only near top speed)
-    if (WD.streaks.n) { const last = projected.length ? projected[projected.length - 1] : null; WD.drawStreaks(ctx, G, last ? last.p2.screen.x : W / 2, HZ); }
+    if (WD.streaks.n) WD.drawStreaks(ctx, G, W / 2 + (G.drawShift || 0) + (G.playerDX || 0), 457 - 95);
     // ---- wires (left-hand power lines only, as in the reference frame) ----
     drawWires(poles.L, G, -1, baseSeg, camX, camY, camZ, playerSeg);
     // ---- player ----
@@ -338,8 +338,8 @@
       baseY -= dh;
     }
     // the rider's back and helmet: stretched down a little to meet the stack when the ice has shrunk
-    const topY = by - H0 + lift;
-    ctx.drawImage(f.img, f.x, f.y, f.w, rp[0], x0, Math.round(topY), Math.round(W0), Math.max(1, Math.round(baseY + lift - topY) + 1));
+    const topH = rp[0] * scale;
+    ctx.drawImage(f.img, f.x, f.y, f.w, rp[0], x0, Math.round(baseY + lift - topH), Math.round(W0), Math.round(topH) + 1);
     ctx.restore();
   }
   function drawCrash(G, cx, by) {
@@ -542,7 +542,7 @@
     { const bx = W - 44, by = 10, s = 30; ctx.fillStyle = 'rgba(0,0,0,0.5)'; ctx.fillRect(bx, by, s, s); ctx.fillStyle = '#fff';
       for (const [cx, cy] of [[0, 0], [1, 0], [0, 1], [1, 1]]) { const px = bx + 6 + cx * (s - 12 - 3), py = by + 6 + cy * (s - 12 - 3); ctx.fillRect(px, py + (cy ? 6 : 0), 9, 3); ctx.fillRect(px + (cx ? 6 : 0), py, 3, 9); }
       R.hit.fs = { x: bx - 8, y: by - 8, w: s + 16, h: s + 16 }; }
-    if (G.touchMode && window.innerHeight > window.innerWidth) TXT(ctx, 'ROTATE YOUR PHONE FOR FULL SCREEN', W / 2, 16, { size: 7, sy: 1.4, fill: '#ffd800', outline: '#000', outlineW: 3, align: 'center' });
+    if (false) TXT(ctx, 'ROTATE YOUR PHONE FOR FULL SCREEN', W / 2, 16, { size: 7, sy: 1.4, fill: '#ffd800', outline: '#000', outlineW: 3, align: 'center' });
   };
   R.radio = function (G) {
     dim(0.35); R.hit.rows = []; R.hit.nodes = []; R.hit.cells = []; R.hit.start = null;

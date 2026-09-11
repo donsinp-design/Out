@@ -91,6 +91,14 @@
   // three fingers brake. Menus are tapped. A small pause button sits top-right during play.
   const touch = { steer: 0, active: false, fingers: 0, twoT: 0 };
   const pointers = new Map();
+  // portrait phone: the stage is rotated 90 degrees by CSS to fill the screen; touches are mapped back through it
+  function toCanvas(e) {
+    const cv = document.getElementById('screen'), r = cv.getBoundingClientRect();
+    if (document.body.classList.contains('rot')) return { x: (e.clientY - r.top) / r.height * W, y: (r.right - e.clientX) / r.width * H };
+    return { x: (e.clientX - r.left) / r.width * W, y: (e.clientY - r.top) / r.height * H };
+  }
+  function fitPortrait() { const rot = G.touchMode && window.innerHeight > window.innerWidth * 1.1; document.body.classList.toggle('rot', rot); }
+  window.addEventListener('resize', fitPortrait); window.addEventListener('orientationchange', () => setTimeout(fitPortrait, 200));
   function bindTouch() {
     const cv = document.getElementById('screen');
     G.touchMode = !!(window.matchMedia && window.matchMedia('(pointer: coarse)').matches);
@@ -98,19 +106,19 @@
       touch.fingers = pointers.size;
       if (!pointers.size) { touch.active = false; touch.steer = 0; return; }
       const first = pointers.values().next().value; // the first finger down steers; extra fingers only count
-      const r = cv.getBoundingClientRect(), rel = (first - r.left) / r.width - 0.5;
+      const rel = first / W - 0.5;
       touch.steer = OB.clamp(rel / 0.3, -1, 1); touch.active = true;
     };
     let swipeX = null;
     cv.addEventListener('pointerdown', e => {
       A.init(); A.unlock();
-      const r = cv.getBoundingClientRect(), ix = (e.clientX - r.left) / r.width * W, iy = (e.clientY - r.top) / r.height * H;
+      const pc = toCanvas(e), ix = pc.x, iy = pc.y;
       const inBox = (b) => !!b && ix >= b.x && ix <= b.x + b.w && iy >= b.y && iy <= b.y + b.h;
-      if (e.pointerType !== 'mouse') G.touchMode = true;
+      if (e.pointerType !== 'mouse' && !G.touchMode) { G.touchMode = true; fitPortrait(); }
       if (G.mode === 'play' && G.paused) { const row = R.hit.rows.find(inBox); if (row) menuAction(row.i); else if (inBox(R.hit.pause)) G.paused = false; }
       else if (G.mode === 'play' && inBox(R.hit.pause)) { G.paused = true; G.menuSel = 0; A.sfx('select'); }
       else if (G.mode === 'play' || G.mode === 'countdown') {
-        if (e.pointerType !== 'mouse') { pointers.set(e.pointerId, e.clientX); upd(); }
+        if (e.pointerType !== 'mouse') { pointers.set(e.pointerId, ix); upd(); }
       }
       else if (G.mode === 'radio') { // tap a station row (tap the selected one again to start), START button, or swipe
         swipeX = ix;
@@ -126,10 +134,10 @@
       else { startPressed = true; if (G.mode === 'title' && G.touchMode && !OB.isFullscreen() && !fsFailed) toggleFullscreen(true); }
       e.preventDefault();
     });
-    cv.addEventListener('pointermove', e => { if (pointers.has(e.pointerId)) { pointers.set(e.pointerId, e.clientX); upd(); } });
+    cv.addEventListener('pointermove', e => { if (pointers.has(e.pointerId)) { pointers.set(e.pointerId, toCanvas(e).x); upd(); } });
     const end = e => {
       if (pointers.has(e.pointerId)) { pointers.delete(e.pointerId); upd(); }
-      if (swipeX !== null && (G.mode === 'radio' || G.mode === 'course')) { const r = cv.getBoundingClientRect(), ix = (e.clientX - r.left) / r.width * W; if (Math.abs(ix - swipeX) > 70) tuneDir = ix > swipeX ? 1 : -1; }
+      if (swipeX !== null && (G.mode === 'radio' || G.mode === 'course')) { const ix = toCanvas(e).x; if (Math.abs(ix - swipeX) > 70) tuneDir = ix > swipeX ? 1 : -1; }
       swipeX = null;
     };
     cv.addEventListener('pointerup', end); cv.addEventListener('pointercancel', end); cv.addEventListener('pointerleave', end);
@@ -452,7 +460,7 @@
       if (seg.index > T.segments.length - 700) { newGame(); }
       if (startPressed) { startPressed = false; A.init(); A.sfx('select');
         if (mode !== 'title' && !A.music.playing && A.ready()) A.playMusic(G.station); // audio may have unlocked late
-        if (mode === 'title') { G.mode = 'radio'; A.playMusic(G.station); A.setMusicVolume(G.muted ? 0 : A.MUSIC_VOL); }
+        if (mode === 'title') { A.playMusic(G.station); A.setMusicVolume(G.muted ? 0 : A.MUSIC_VOL); startRun(); } // pickers hidden for now: straight into the run
         else if (mode === 'radio') { G.mode = 'course'; }
         else { startRun(); } }
       if (mode === 'radio' && tuneDir) { const ns = A.stations.length; G.station = (((G.station + tuneDir) % ns) + ns) % ns; store.set('ob_station', G.station); A.playMusic(G.station); A.sfx('select'); }
@@ -586,7 +594,7 @@
   R.init(canvas); R.ctx = canvas.getContext('2d');
   R.loading(0);
   OB.loadAssets().then(() => {
-    bindTouch();
+    bindTouch(); fitPortrait();
     newGame();
     G.mode = 'title';
     requestAnimationFrame(loop);

@@ -54,18 +54,20 @@
   // ---------- cast ----------
   // each character only ever uses its own frames, so the shirt never changes between poses
   const PEDS = {
-    manWhite: { idle: ['PD_JUMP'], walk: ['PA_WALK', 'PC_JUMP'], react: 'PA_JUMP', jump: 'PA_JUMP', run: ['PE_CHASE', 'PA_WALK'], point: 'PC_JUMP' },
+    manWhite: { idle: ['PA_WALK'], walk: ['PA_WALK'], react: 'PA_JUMP', jump: 'PA_JUMP', run: ['PE_CHASE'], point: 'PA_JUMP' },
+    manClap: { idle: ['PD_JUMP'], walk: ['PD_JUMP'], react: 'PD_JUMP', jump: 'PD_JUMP', run: ['PD_JUMP'], point: 'PC_JUMP', still: true },
     manBlue: { idle: ['PA_IDLE'], walk: ['PA_IDLE'], react: 'PA_IDLE', jump: 'PA_IDLE', run: ['PA_IDLE'], point: 'PA_IDLE', still: true },
-    womanYellow: { idle: ['PB_IDLE'], walk: ['PA_REACT', 'PB_IDLE'], react: 'PB_REACT', jump: 'PB_REACT', run: ['PA_REACT', 'PB_REACT'], point: 'PB_REACT' },
-    schoolgirl: { idle: ['PC_WALK'], walk: ['PC_WALK', 'PB_RUN'], react: 'PC_REACT', jump: 'PB_WALK', run: ['PC_RUN', 'PB_RUN'], point: 'PC_REACT' },
+    womanYellow: { idle: ['PB_IDLE'], walk: ['PB_IDLE'], react: 'PB_REACT', jump: 'PB_REACT', run: ['PB_REACT'], point: 'PB_REACT', still: true },
+    womanBag: { idle: ['PA_REACT'], walk: ['PA_REACT'], react: 'PA_REACT', jump: 'PA_REACT', run: ['PA_REACT'], point: 'PA_REACT' },
+    schoolgirl: { idle: ['PC_WALK'], walk: ['PC_WALK'], react: 'PC_REACT', jump: 'PB_WALK', run: ['PC_RUN'], point: 'PC_REACT' },
     schoolboy: { idle: ['PC_IDLE'], walk: ['PC_IDLE'], react: 'PC_IDLE', jump: 'PC_IDLE', run: ['PC_IDLE'], point: 'PC_IDLE', still: true },
     girlPink: { idle: ['PB_JUMP'], walk: ['PB_JUMP'], react: 'PB_JUMP', jump: 'PB_JUMP', run: ['PB_JUMP'], point: 'PB_JUMP', skip: true },
     tourist: { idle: ['PD_RUN'], walk: ['PD_RUN'], react: 'PD_RUN', jump: 'PD_RUN', run: ['PD_RUN'], point: 'PD_RUN', still: true, photo: true },
     photoWoman: { idle: ['PE_IDLE'], walk: ['PE_IDLE', 'PD_IDLE'], react: 'PD_IDLE', jump: 'PD_IDLE', run: ['PD_IDLE', 'PE_IDLE'], point: 'PE_IDLE' },
     monk: { idle: ['MONK_WALK'], walk: ['MONK_WALK', 'MONK_STEP'], react: 'MONK_REACT', jump: 'MONK_STEP', run: ['MONK_STEP', 'MONK_WALK'], point: 'MONK_REACT', calm: true }
   };
-  const CAST = { shop: ['manWhite', 'manWhite', 'manBlue', 'womanYellow', 'womanYellow', 'schoolgirl', 'schoolgirl', 'schoolboy', 'girlPink', 'photoWoman', 'monk'],
-    city: ['manWhite', 'manBlue', 'womanYellow', 'photoWoman', 'schoolgirl', 'manWhite'], temple: ['monk', 'monk', 'monk', 'tourist', 'womanYellow'], park: ['tourist', 'photoWoman', 'girlPink', 'schoolboy', 'manWhite', 'monk'], water: ['tourist', 'photoWoman'] };
+  const CAST = { shop: ['manWhite', 'manClap', 'manBlue', 'womanYellow', 'womanBag', 'schoolgirl', 'schoolgirl', 'schoolboy', 'girlPink', 'photoWoman', 'monk'],
+    city: ['manWhite', 'manBlue', 'womanBag', 'photoWoman', 'schoolgirl', 'manClap'], temple: ['monk', 'monk', 'monk', 'tourist', 'womanYellow'], park: ['tourist', 'photoWoman', 'girlPink', 'schoolboy', 'manWhite', 'monk'], water: ['tourist', 'photoWoman'] };
   const UPX = { ped: 9, dog: 8, cat: 7, lizard: 7, stall: 10, cart: 10, chair: 7, cone: 6, box: 7, sign: 8, vendor: 9, fruit: 9, pot: 9, boxbit: 8, cube: 7, bag: 8, dust: 9, leaf: 7, splash: 8, drop: 6 };
 
   // ---------- spawning ----------
@@ -176,9 +178,9 @@
     switch (a.state) {
       case 'idle': case 'walk': case 'talk':
         if (a.state === 'walk') {
-          a.z += a.dir * 190 * dt; a.frame = ch.walk[Math.floor(a.walkPh * 3) % ch.walk.length]; a.flip = a.dir < 0 ? a.side < 0 : a.side > 0;
+          a.z -= 150 * dt; a.frame = ch.walk[Math.floor(a.walkPh * 3) % ch.walk.length]; a.hop = Math.abs(Math.sin(a.walkPh * 5.5)) * 1.5; // front-view sprites: they walk toward the camera
           if (a.t > 4 + (a.seed % 5)) { a.state = 'idle'; a.t = 0; }
-        } else { a.frame = ch.idle[0]; if (ch.skip) a.hop = Math.abs(Math.sin(a.walkPh * 5)) * 6; if (a.t > 3 + (a.seed % 6) && !ch.still && !a.talk) { a.state = 'walk'; a.t = 0; a.dir = Math.random() < 0.5 ? 1 : -1; } }
+        } else { a.frame = ch.idle[0]; a.hop = 0; if (ch.skip) a.hop = Math.abs(Math.sin(a.walkPh * 5)) * 6; if (a.t > 3 + (a.seed % 6) && !ch.still && !a.talk) { a.state = 'walk'; a.t = 0; a.dir = Math.random() < 0.5 ? 1 : -1; } }
         if ((danger && (a.calm < 0.75 || late)) || late) { a.state = 'notice'; a.t = 0; a.frame = ch.react; a.reactType = (Math.random() < 0.45 || ch.still) ? 'jump' : 'run'; if (ch.calm) a.reactType = 'step'; }
         break;
       case 'notice':
@@ -193,7 +195,7 @@
         a.frame = ch.jump; a.x += a.side * 0.14 * dt; if (a.t > 0.5) { a.state = 'recover'; a.t = 0; }
         break;
       case 'run': // runs away from the bike along the pavement
-        a.frame = ch.run[Math.floor(a.t * 8) % ch.run.length]; a.x += a.side * 0.25 * dt; a.z += 420 * dt; a.flip = a.side < 0;
+        a.frame = ch.run[Math.floor(a.t * 8) % ch.run.length]; a.x += a.side * 0.25 * dt; a.z -= 380 * dt; a.hop = Math.abs(Math.sin(a.t * 14)) * 3;
         if (a.t > 0.7) { a.state = 'recover'; a.t = 0; }
         break;
       case 'recover': // watches / points after the bike, then goes back to what they were doing
@@ -356,7 +358,7 @@
     const pct = G.speed / G.maxSpeed, k = OB.clamp((pct - 0.72) / 0.28, 0, 1);
     if (k > 0 && Math.random() < dt * (6 + 26 * k)) {
       const s = streaks.get();
-      if (s) { const ang = Math.random() * Math.PI * 2; s.ang = ang; s.r = 90 + Math.random() * 160; s.v = 700 + Math.random() * 900; s.len = 50 + k * (90 + Math.random() * 200); s.a = 0.1 + k * 0.42; s.t = 0; s.life = 0.35 + Math.random() * 0.25; }
+      if (s) { const ang = Math.random() * Math.PI * 2; s.ang = ang; s.r = 110 + Math.random() * 120; s.v = 900 + Math.random() * 900; s.len = 50 + k * (90 + Math.random() * 200); s.a = 0.1 + k * 0.42; s.t = 0; s.life = 0.35 + Math.random() * 0.25; }
     }
     for (let i = streaks.n - 1; i >= 0; i--) { const s = streaks.items[i]; s.t += dt; s.r += s.v * dt; if (s.t > s.life || s.r > 900) streaks.kill(i); }
   }
@@ -366,8 +368,8 @@
     for (let i = 0; i < streaks.n; i++) {
       const s = streaks.items[i], c = Math.cos(s.ang), sn = Math.sin(s.ang);
       // steeper angles are the sides and bottom; skip the strip straight up into the sky so they read as road speed
-      if (sn < -0.55) continue;
-      const x1 = vpX + c * s.r, y1 = vpY + sn * s.r * 0.75, x2 = vpX + c * (s.r + s.len), y2 = vpY + sn * (s.r + s.len) * 0.75;
+      if (sn > 0.35) continue; // not down through the bike
+      const x1 = vpX + c * s.r, y1 = vpY + sn * s.r, x2 = vpX + c * (s.r + s.len), y2 = vpY + sn * (s.r + s.len);
       const fade = s.t < 0.08 ? s.t / 0.08 : 1 - (s.t - 0.08) / (s.life - 0.08);
       ctx.strokeStyle = 'rgba(255,255,255,' + (s.a * fade).toFixed(3) + ')'; ctx.lineWidth = 1 + (s.r > 300 ? 1 : 0) + (s.a > 0.4 && s.r > 500 ? 1 : 0);
       ctx.beginPath(); ctx.moveTo(x1, y1); ctx.lineTo(x2, y2); ctx.stroke();

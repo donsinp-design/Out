@@ -174,7 +174,7 @@
     px(g, 3, ay + 10, W - 12, 2, shade(aw[0], 0.7)); for (let x = 3; x < W - 12; x += 6) px(g, x, ay + 12, 3, 2, shade(aw[0], 0.7));
     px(g, 3, ay - 1, W - 12, 1, shade(aw[0], 1.3));
     // sign board above awning
-    const useImg = opt.sign !== undefined ? opt.sign : (rng.chance(0.4) ? rng.pick(['storepanel', 'sangchai', 'thongbai', 'redsign']) : null);
+    const useImg = opt.sign !== undefined ? opt.sign : (rng.chance(0.4) ? rng.pick(['sangchai', 'thongbai', 'redsign']) : null);
     if (useImg && IMG[useImg]) {
       const im = IMG[useImg];
       let sw = Math.min(W - 30, im.width * 1.25), sh = sw * im.height / im.width;
