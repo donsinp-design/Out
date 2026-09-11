@@ -108,7 +108,6 @@
           else spawn('dog', 'cross', z, pave(0.0), { state: 'wait', flip: s > 0, crossTo: -s, crossAt: 6000 + rng.range(0, 6000) });
         }
         if (env === 'shop' && (rel + (sd === 'L' ? 29 : 71)) % 130 === 0) spawn('cat', 'cat', z, pave(rng.range(0.04, 0.1)), { state: 'idle', flip: rng.chance(0.5) });
-        if ((env === 'park' || env === 'water' || env === 'temple') && rel % 900 === 450 && rng.chance(0.6)) spawn('lizard', 'lizard', z, pave(0.06), { state: 'walk', flip: rng.chance(0.5), dir: rng.chance(0.5) ? 1 : -1 });
         // destructible props
         if (env === 'shop' || env === 'city' || env === 'park') {
           if ((rel + (sd === 'L' ? 5 : 41)) % 73 === 0 && env !== 'park') { spawn('stall', 'stall', z, pave(0.06), { state: 'idle', flip: s > 0 }); if (rng.chance(0.7)) spawn('chair', 'chair', z + 2.5 * L, pave(0.03), { state: 'idle', flip: rng.chance(0.5) }); }

@@ -24,7 +24,7 @@
   G.playerZ = G.cameraDepth * G.cameraH * K / (457 - OB.HORIZON);
   const PLAYER_W = 480 / T.roadW;
   const CARS = ['taxi', 'taxi', 'taxi_orange', 'taxi_blue', 'taxi_green', 'sedan', 'sedan', 'sedan_black', 'sedan_red', 'green', 'green_yellow', 'green_purple', 'truck', 'pickup', 'pickup_w'];
-  const ONCOMING = ['bus', 'tuktuk', 'tuktuk', 'songthaew'];
+  const ONCOMING = []; // no traffic comes the other way; every theme's oncoming rate is 0 so all lanes run with us
   const store = { get(k, d) { try { const v = localStorage.getItem(k); return v === null ? d : JSON.parse(v); } catch (e) { return d; } }, set(k, v) { try { localStorage.setItem(k, JSON.stringify(v)); } catch (e) { } } };
   G.ranking = store.get('ob_ranking', []); if (!Array.isArray(G.ranking)) G.ranking = [];
   { const legacy = parseInt(store.get('ob_hiscore', 0)) || 0; if (legacy > 0 && !G.ranking.length) G.ranking.push({ name: 'ICE', score: legacy, route: '' }); }
