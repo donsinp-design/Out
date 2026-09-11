@@ -3097,6 +3097,18 @@ window.OB = window.OB || {};
   for (const t of ['contextmenu', 'selectstart', 'dragstart', 'gesturestart', 'gesturechange', 'gestureend']) {
     document.addEventListener(t, e => e.preventDefault());
   }
+  // iOS runs its double-tap gestures (zoom, and the word-select loupe) off the touch stream, which neither the CSS
+  // above nor preventDefault on a pointer event reaches — pointer events are synthesised separately, so vetoing
+  // them leaves the touch defaults untouched. Cancel the second tap of a quick pair instead. Steering is driven
+  // from pointer events, which have already fired by this point, and a double tap is not a touch control here
+  // (drift is a held second finger), so nothing the game reads is lost.
+  let lastTapEnd = 0;
+  document.addEventListener('touchend', e => {
+    const now = Date.now();
+    if (now - lastTapEnd <= 350) e.preventDefault();
+    lastTapEnd = now;
+  }, { passive: false });
+  document.addEventListener('dblclick', e => e.preventDefault());
   // ---------- boot ----------
   const canvas = document.getElementById('screen');
   R.init(canvas); R.ctx = canvas.getContext('2d');
