@@ -79,10 +79,12 @@
       // river surface sits below road level: embankment wall face + lowered water plane
       const d1 = seg.p1.screen.scale * WATER_DROP * K, d2 = seg.p2.screen.scale * WATER_DROP * K;
       const ox1 = x1 + w1 + swr1, ox2 = x2 + w2 + swr2;
+      ctx.save(); ctx.beginPath(); ctx.rect(0, 0, W, seg.clip); ctx.clip();
       poly(ox1, y1 + d1, W, y1 + d1, W, y2 + d2, ox2, y2 + d2, envR[alt]);
       if (alt === 0 && seg.index % 12 === 0) poly(ox1 + sw1 * 1.5, y1 + d1, W, y1 + d1, W, y2 + d2, ox2 + sw2 * 1.5, y2 + d2, pal.water[1]);
       poly(ox1, y1, ox1, y1 + d1, ox2, y2 + d2, ox2, y2, pal.wall);
       poly(ox1, y1 + d1 * 0.85, ox1, y1 + d1, ox2, y2 + d2, ox2, y2 + d2 * 0.85, '#3d4a3a');
+      ctx.restore();
     } else poly(x1 + w1 + sw1, y1, W, y1, W, y2, x2 + w2 + sw2, y2, envR[alt]);
     // sidewalks
     poly(x1 - w1 - sw1, y1, x1 - w1, y1, x2 - w2, y2, x2 - w2 - sw2, y2, pal.side[alt]);

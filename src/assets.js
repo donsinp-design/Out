@@ -407,9 +407,9 @@
     g.drawImage(U, 0, 0); g.drawImage(base, 0, TOP + upperH);
     // ground-floor modules
     const O = mk(W, 300), o = O.getContext('2d'); let any = false; o.imageSmoothingEnabled = false;
-    if (opt.band === 'sign' || opt.band === 'wall') {
-      px(o, 0, 36, W, 62, wall); px(o, 0, 36, W, 2, light); px(o, W - 6, 36, 6, 62, dark); any = true;
-      if (opt.band === 'sign') {
+    { const band = opt.band === 'sign' || opt.band === 'wall' ? opt.band : (rng.chance(0.6) ? 'sign' : 'wall');
+      px(o, 0, 0, W, 98, wall); px(o, 0, 36, W, 2, light); px(o, W - 6, 0, 6, 98, dark); any = true;
+      if (band === 'sign') {
         const sc = opt.signCol || rng.pick(SIGNCOL), txt = opt.text || rng.pick(SIGNTXT);
         px(o, 14, 44, W - 34, 46, sc[0]); px(o, 14, 44, W - 34, 3, shade(sc[0], 1.3)); px(o, 14, 87, W - 34, 3, shade(sc[0], 0.6)); px(o, 14, 44, 3, 46, shade(sc[0], 0.6)); px(o, W - 23, 44, 3, 46, shade(sc[0], 0.6));
         o.fillStyle = sc[1]; o.font = '700 30px "Kanit"'; o.textAlign = 'center'; o.textBaseline = 'middle'; o.fillText(txt, W / 2 - 4, 67);
