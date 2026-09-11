@@ -92,7 +92,7 @@
       for (const sd of ['L', 'R']) {
         const env = sideKinds[sd], s = sd === 'L' ? -1 : 1, rw = seg.rw;
         if (!env) continue;
-        const pave = (o) => s * (rw + 0.02 + o); // x on the pavement, o in 0..0.11
+        const pave = (o) => s * (rw + 0.02 + (env === 'water' ? Math.min(o, 0.05) : o)); // x on the pavement, o in 0..0.11
         // pedestrians: dense along shophouses, sparse elsewhere
         const pedEvery = env === 'shop' ? 13 : env === 'city' ? 22 : env === 'temple' ? 26 : env === 'park' ? 30 : 90;
         if ((rel + (sd === 'L' ? 0 : 7)) % pedEvery === 3 && rng.chance(0.8)) {

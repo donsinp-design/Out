@@ -121,9 +121,9 @@
       if (th.right === 'water') {
         seg.rail = true;
         // everything on the river side stands on the walkway (1.0 .. 1.13), never past the railing
-        if (rel % 24 === 12) put(seg, 'lamp', edgeR - 0.12, { flip: true });
-        if (rel % 230 === 150) put(seg, 'spirit_small', edgeR - 0.05);
-        if (rel % 330 === 60) put(seg, 'thatien_pole', edgeR - 0.05);
+        if (rel % 24 === 12) put(seg, 'lamp', edgeR - 0.21, { flip: true });
+        if (rel % 230 === 150) put(seg, 'spirit_small', edgeR - 0.13);
+        if (rel % 330 === 60) put(seg, 'thatien_pole', edgeR - 0.12);
         if (rel % 60 === 30) put(seg, rng.pick(['boat0', 'boat1', 'boat2']), edgeR + rng.range(1.2, 3.5), { water: true });
       } else if (th.right === 'shop') {
         if (rel % 10 === 5) put(seg, pickShop(rng, stage.theme, 'R'), edgeR + 0.12, { anchor: 'right' });

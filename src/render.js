@@ -71,7 +71,7 @@
   function renderGround(seg, pal, th) {
     const p1 = seg.p1.screen, p2 = seg.p2.screen;
     const x1 = p1.x, y1 = p1.y, w1 = p1.w, x2 = p2.x, y2 = p2.y, w2 = p2.w;
-    const swR = th.right === 'water' ? 0.3 : SIDEWALK;
+    const swR = th.right === 'water' ? 0.22 : SIDEWALK;
     const sw1 = w1 * SIDEWALK, sw2 = w2 * SIDEWALK, swr1 = w1 * swR, swr2 = w2 * swR, alt = Math.floor(seg.index / 3) % 2;
     const envL = pal[th.left] || pal.shop, envR = pal[th.right] || pal.shop;
     poly(0, y1, x1 - w1 - sw1, y1, x2 - w2 - sw2, y2, 0, y2, envL[alt]);
@@ -86,7 +86,7 @@
     } else poly(x1 + w1 + sw1, y1, W, y1, W, y2, x2 + w2 + sw2, y2, envR[alt]);
     // sidewalks
     poly(x1 - w1 - sw1, y1, x1 - w1, y1, x2 - w2, y2, x2 - w2 - sw2, y2, pal.side[alt]);
-    poly(x1 + w1, y1, x1 + w1 + swr1, y1, x2 + w2 + swr2, y2, x2 + w2, y2, pal.side[alt]);
+    poly(x1 + w1, y1, x1 + w1 + swr1, y1, x2 + w2 + swr2, y2, x2 + w2, y2, th.right === 'water' ? (alt ? '#cbbc9c' : '#d3c4a4') : pal.side[alt]);
     // paving joints
     if (seg.index % 6 === 0 && (y1 - y2) > 2) { ctx.fillStyle = pal.curb; ctx.globalAlpha = 0.35; poly(x1 - w1 - sw1, y1, x1 - w1, y1, x1 - w1, y1 - 1, x1 - w1 - sw1, y1 - 1, pal.curb); poly(x1 + w1, y1, x1 + w1 + sw1, y1, x1 + w1 + sw1, y1 - 1, x1 + w1, y1 - 1, pal.curb); ctx.globalAlpha = 1; }
     // curbs
@@ -130,7 +130,7 @@
 
   function renderRail(seg, pal) {
     const p1 = seg.p1.screen, p2 = seg.p2.screen;
-    const rx1 = p1.x + p1.w + p1.w * 0.3, rx2 = p2.x + p2.w + p2.w * 0.3;
+    const rx1 = p1.x + p1.w + p1.w * 0.22, rx2 = p2.x + p2.w + p2.w * 0.22;
     const h1 = p1.scale * 420 * K, h2 = p2.scale * 420 * K;
     if (h1 < 1) return;
     const t1 = Math.max(1, h1 * 0.07), t2 = Math.max(1, h2 * 0.07);

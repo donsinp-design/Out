@@ -485,7 +485,7 @@
     add('pillar', tx(pillar(), { amp: 0.06 }), 640, { solid: true });
     // shophouses: the reference's own facade (rectified) with drawn upper storeys and swappable shop modules
     const AWN = [null, null, null, '#c8322b', '#1f8a4c', '#d99a1c', '#8a1c8c', '#2b6fb0'];
-    const INT = ['shutter', 'gold', 'pharmacy', 'eatery', 'shutter', 'eatery', 'gold']; // the reference interior is only used behind the food cart
+    const INT = ['shutter', 'gold', 'eatery', 'shutter', 'eatery', 'gold', 'shutter']; // the reference interior is only used behind the food cart
     const facades = [], cnFacades = [], backFacades = [];
     for (let i = 0; i < 14; i++) {
       const cart = i % 5 === 0;

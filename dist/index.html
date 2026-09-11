@@ -563,7 +563,7 @@ window.OB = window.OB || {};
     add('pillar', tx(pillar(), { amp: 0.06 }), 640, { solid: true });
     // shophouses: the reference's own facade (rectified) with drawn upper storeys and swappable shop modules
     const AWN = [null, null, null, '#c8322b', '#1f8a4c', '#d99a1c', '#8a1c8c', '#2b6fb0'];
-    const INT = ['shutter', 'gold', 'pharmacy', 'eatery', 'shutter', 'eatery', 'gold']; // the reference interior is only used behind the food cart
+    const INT = ['shutter', 'gold', 'eatery', 'shutter', 'eatery', 'gold', 'shutter']; // the reference interior is only used behind the food cart
     const facades = [], cnFacades = [], backFacades = [];
     for (let i = 0; i < 14; i++) {
       const cart = i % 5 === 0;
@@ -1214,9 +1214,9 @@ window.OB = window.OB || {};
       if (th.right === 'water') {
         seg.rail = true;
         // everything on the river side stands on the walkway (1.0 .. 1.13), never past the railing
-        if (rel % 24 === 12) put(seg, 'lamp', edgeR - 0.12, { flip: true });
-        if (rel % 230 === 150) put(seg, 'spirit_small', edgeR - 0.05);
-        if (rel % 330 === 60) put(seg, 'thatien_pole', edgeR - 0.05);
+        if (rel % 24 === 12) put(seg, 'lamp', edgeR - 0.21, { flip: true });
+        if (rel % 230 === 150) put(seg, 'spirit_small', edgeR - 0.13);
+        if (rel % 330 === 60) put(seg, 'thatien_pole', edgeR - 0.12);
         if (rel % 60 === 30) put(seg, rng.pick(['boat0', 'boat1', 'boat2']), edgeR + rng.range(1.2, 3.5), { water: true });
       } else if (th.right === 'shop') {
         if (rel % 10 === 5) put(seg, pickShop(rng, stage.theme, 'R'), edgeR + 0.12, { anchor: 'right' });
@@ -1382,7 +1382,7 @@ window.OB = window.OB || {};
       for (const sd of ['L', 'R']) {
         const env = sideKinds[sd], s = sd === 'L' ? -1 : 1, rw = seg.rw;
         if (!env) continue;
-        const pave = (o) => s * (rw + 0.02 + o); // x on the pavement, o in 0..0.11
+        const pave = (o) => s * (rw + 0.02 + (env === 'water' ? Math.min(o, 0.05) : o)); // x on the pavement, o in 0..0.11
         // pedestrians: dense along shophouses, sparse elsewhere
         const pedEvery = env === 'shop' ? 13 : env === 'city' ? 22 : env === 'temple' ? 26 : env === 'park' ? 30 : 90;
         if ((rel + (sd === 'L' ? 0 : 7)) % pedEvery === 3 && rng.chance(0.8)) {
@@ -1803,7 +1803,7 @@ window.OB = window.OB || {};
   function renderGround(seg, pal, th) {
     const p1 = seg.p1.screen, p2 = seg.p2.screen;
     const x1 = p1.x, y1 = p1.y, w1 = p1.w, x2 = p2.x, y2 = p2.y, w2 = p2.w;
-    const swR = th.right === 'water' ? 0.3 : SIDEWALK;
+    const swR = th.right === 'water' ? 0.22 : SIDEWALK;
     const sw1 = w1 * SIDEWALK, sw2 = w2 * SIDEWALK, swr1 = w1 * swR, swr2 = w2 * swR, alt = Math.floor(seg.index / 3) % 2;
     const envL = pal[th.left] || pal.shop, envR = pal[th.right] || pal.shop;
     poly(0, y1, x1 - w1 - sw1, y1, x2 - w2 - sw2, y2, 0, y2, envL[alt]);
@@ -1818,7 +1818,7 @@ window.OB = window.OB || {};
     } else poly(x1 + w1 + sw1, y1, W, y1, W, y2, x2 + w2 + sw2, y2, envR[alt]);
     // sidewalks
     poly(x1 - w1 - sw1, y1, x1 - w1, y1, x2 - w2, y2, x2 - w2 - sw2, y2, pal.side[alt]);
-    poly(x1 + w1, y1, x1 + w1 + swr1, y1, x2 + w2 + swr2, y2, x2 + w2, y2, pal.side[alt]);
+    poly(x1 + w1, y1, x1 + w1 + swr1, y1, x2 + w2 + swr2, y2, x2 + w2, y2, th.right === 'water' ? (alt ? '#cbbc9c' : '#d3c4a4') : pal.side[alt]);
     // paving joints
     if (seg.index % 6 === 0 && (y1 - y2) > 2) { ctx.fillStyle = pal.curb; ctx.globalAlpha = 0.35; poly(x1 - w1 - sw1, y1, x1 - w1, y1, x1 - w1, y1 - 1, x1 - w1 - sw1, y1 - 1, pal.curb); poly(x1 + w1, y1, x1 + w1 + sw1, y1, x1 + w1 + sw1, y1 - 1, x1 + w1, y1 - 1, pal.curb); ctx.globalAlpha = 1; }
     // curbs
@@ -1862,7 +1862,7 @@ window.OB = window.OB || {};
 
   function renderRail(seg, pal) {
     const p1 = seg.p1.screen, p2 = seg.p2.screen;
-    const rx1 = p1.x + p1.w + p1.w * 0.3, rx2 = p2.x + p2.w + p2.w * 0.3;
+    const rx1 = p1.x + p1.w + p1.w * 0.22, rx2 = p2.x + p2.w + p2.w * 0.22;
     const h1 = p1.scale * 420 * K, h2 = p2.scale * 420 * K;
     if (h1 < 1) return;
     const t1 = Math.max(1, h1 * 0.07), t2 = Math.max(1, h2 * 0.07);
