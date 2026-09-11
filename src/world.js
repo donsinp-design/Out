@@ -122,7 +122,7 @@
       if (rel % 57 === 20 && rng.chance(0.6)) seg.decals.push({ f: 'PUDDLE_' + (rng.chance(0.5) ? 'S' : 'L'), x: rng.range(-0.8, 0.8) * seg.rw, upx: 14, kind: 'puddle', seed: rng() });
       if (rel % 91 === 44 && rng.chance(0.5)) seg.decals.push({ f: 'MANHOLE', x: rng.range(-0.6, 0.6) * seg.rw, upx: 10, kind: 'manhole' });
       if (rel % 67 === 10 && rng.chance(0.5)) seg.decals.push({ f: 'ROAD_CRACK', x: rng.range(-0.7, 0.7) * seg.rw, upx: 10, kind: 'crack' });
-      if (rel % 73 === 31 && rng.chance(0.55)) seg.decals.push({ f: rng.chance(0.45) ? 'POTHOLE' : 'POTHOLE_S', x: rng.range(-0.82, 0.82) * seg.rw, upx: 9, kind: 'pothole' });
+      if (rel % 73 === 31 && rng.chance(0.55)) seg.decals.push({ f: rng.chance(0.45) ? 'POTHOLE' : 'POTHOLE_S', x: rng.range(-0.82, 0.82) * seg.rw, upx: 10, kind: 'pothole', seed: rng() });
       if ((th.left === 'temple' || th.right === 'park') && rel % 41 === 7 && rng.chance(0.6)) seg.decals.push({ f: 'LEAVES', x: rng.range(-0.9, 0.9) * seg.rw, upx: 8, kind: 'leaves' });
       if ((themeKey === 'oldtown' || themeKey === 'chinatown' || themeKey === 'final_park') && rel % 260 === 130 && seg.median === 0) seg.decals.push({ f: 'SPEED_BUMP', x: 0, upx: 42, kind: 'bump' });
       // only a few of the lit signs ever flicker, each on its own phase
@@ -207,49 +207,54 @@
     if (ch.photo && Math.floor(a.age * 0.7 + a.seed) % 7 === 0 && (a.age % 1.4) < 0.05) a.flash = 0.08; // the tourist's camera flash
     if (a.flash > 0) a.flash -= dt;
   }
-  const DOG_RUN = ['DOG_RUN', 'DOG_RUN2', 'DOG_JUMP'];
+  // The sheet's animal frames are not one animal in several poses — DOG_IDLE is a tan dog while DOG_WALK and
+  // DOG_RUN are different dogs entirely — so cycling frames swapped the breed mid-stride however the cycle was
+  // written. Each animal instead picks ONE body at spawn and keeps it for life; movement is carried by the bob.
+  const DOG_BODIES = ['DOG_IDLE', 'DOG_WALK', 'DOG_RUN', 'DOG_BARK'];
+  const CAT_BODIES = ['CAT_IDLE', 'CAT_WALK', 'CAT_RUN'];
+  function bodyOf(a, list) { if (!a.body) a.body = list[Math.abs(a.seed | 0) % list.length]; return a.body; }
   function dogUpdate(a, dt, G, pz, px, pct) {
     const dz = a.z - pz, rw = T.findSegment(a.z).rw; a.t += dt;
     const near = dz > -segLen() && dz < 1400;
     switch (a.state) {
       case 'sleep': a.frame = 'DOG_SLEEP'; break;
       case 'idle':
-        a.frame = (Math.floor(a.t * 1.5 + a.seed) % 5 === 0) ? 'DOG_BARK' : 'DOG_IDLE';
+        a.frame = bodyOf(a, DOG_BODIES); a.hop = 0;
         if (a.t > 3 + (a.seed % 4)) { a.state = 'walk'; a.t = 0; a.dir = Math.random() < 0.5 ? 1 : -1; }
         if (near && Math.abs(px) > rw * 0.85 && Math.sign(px) === a.side) { a.state = 'flee'; a.t = 0; }
         if (dz < -segLen() && dz > -3 * segLen() && !a.chased && pct < 0.45 && a.dogSeed < 0.3) { a.state = 'chase'; a.t = 0; a.chased = true; OB.audio.sfx('bark'); }
         break;
       case 'walk':
-        a.frame = 'DOG_WALK'; a.hop = Math.abs(Math.sin(a.t * 8)) * 0.5; a.z += a.dir * 160 * dt; a.flip = a.dir < 0 ? a.side < 0 : a.side > 0;
+        a.frame = bodyOf(a, DOG_BODIES); a.hop = Math.abs(Math.sin(a.t * 8)) * 0.5; a.z += a.dir * 160 * dt; a.flip = a.dir < 0 ? a.side < 0 : a.side > 0;
         if (a.t > 2.5 + (a.seed % 3)) { a.state = 'idle'; a.t = 0; }
         if (near && Math.abs(px) > rw * 0.85 && Math.sign(px) === a.side) { a.state = 'flee'; a.t = 0; }
         break;
       case 'wait': // crossing dog: sets off when the bike is still a way off
-        a.frame = 'DOG_IDLE'; if (dz > 0 && dz < a.crossAt) { a.state = 'cross'; a.t = 0; }
+        a.frame = bodyOf(a, DOG_BODIES); if (dz > 0 && dz < a.crossAt) { a.state = 'cross'; a.t = 0; }
         break;
       case 'cross':
-        a.frame = DOG_RUN[Math.floor(a.t * 9) % 3]; a.flip = a.crossTo > 0; a.x += a.crossTo * 0.45 * dt;
+        a.frame = bodyOf(a, DOG_BODIES); a.hop = Math.abs(Math.sin(a.t * 13)) * 0.7; a.flip = a.crossTo > 0; a.x += a.crossTo * 0.45 * dt;
         if (near && Math.abs(a.x - px) < 0.6) { a.state = 'notice'; a.t = 0; }
         if (a.x * a.crossTo >= rw + 0.03) { a.x = a.crossTo * (rw + 0.03); a.side = a.crossTo; a.state = 'idle'; a.t = 0; }
         break;
       case 'notice': // freezes for a beat, then sprints to whichever kerb is nearer
-        a.frame = 'DOG_BARK'; if (a.t > 0.12) { a.state = 'sprint'; a.t = 0; a.sprintTo = a.x >= 0 ? 1 : -1; if (Math.abs(a.x) < 0.25) a.sprintTo = -a.crossTo; }
+        a.frame = bodyOf(a, DOG_BODIES); if (a.t > 0.12) { a.state = 'sprint'; a.t = 0; a.sprintTo = a.x >= 0 ? 1 : -1; if (Math.abs(a.x) < 0.25) a.sprintTo = -a.crossTo; }
         break;
       case 'sprint':
-        a.frame = DOG_RUN[Math.floor(a.t * 14) % 3]; a.flip = a.sprintTo > 0; a.x += a.sprintTo * 1.3 * dt; a.z += 260 * dt;
+        a.frame = bodyOf(a, DOG_BODIES); a.hop = Math.abs(Math.sin(a.t * 16)) * 0.9; a.flip = a.sprintTo > 0; a.x += a.sprintTo * 1.3 * dt; a.z += 260 * dt;
         if (a.x * a.sprintTo >= rw + 0.03) { a.x = a.sprintTo * (rw + 0.03); a.side = a.sprintTo; a.state = 'idle'; a.t = 0; }
         break;
       case 'flee': // bike on its pavement: scatters along it
-        a.frame = DOG_RUN[Math.floor(a.t * 12) % 3]; a.x += a.side * 0.3 * dt; a.z += 500 * dt; a.flip = a.side < 0;
+        a.frame = bodyOf(a, DOG_BODIES); a.hop = Math.abs(Math.sin(a.t * 15)) * 0.8; a.x += a.side * 0.3 * dt; a.z += 500 * dt; a.flip = a.side < 0;
         if (a.t > 0.8) { a.state = 'idle'; a.t = 0; }
         break;
       case 'chase': { // runs after the bike for a moment, then drops back
-        a.frame = DOG_RUN[Math.floor(a.t * 12) % 3];
+        a.frame = bodyOf(a, DOG_BODIES); a.hop = Math.abs(Math.sin(a.t * 15)) * 0.8;
         const v = Math.min(G.speed * 0.95, 2800); a.z += v * dt; a.x += (px + a.side * 0.35 - a.x) * Math.min(1, dt * 1.5); a.flip = a.x > px;
         if (a.t > 1.6 || dz > 400) { a.state = 'exit'; a.t = 0; }
         break; }
       case 'exit':
-        a.frame = DOG_RUN[Math.floor(a.t * 6) % 3]; a.z += 300 * dt; a.x += (a.side * (rw + 0.03) - a.x) * Math.min(1, dt * 2);
+        a.frame = bodyOf(a, DOG_BODIES); a.hop = Math.abs(Math.sin(a.t * 11)) * 0.6; a.z += 300 * dt; a.x += (a.side * (rw + 0.03) - a.x) * Math.min(1, dt * 2);
         if (a.t > 1.5) { a.state = 'idle'; a.t = 0; }
         break;
     }
@@ -258,14 +263,14 @@
   function catUpdate(a, dt, G, pz, px) {
     const dz = a.z - pz, rw = T.findSegment(a.z).rw; a.t += dt;
     switch (a.state) {
-      case 'idle': a.frame = 'CAT_IDLE'; a.hop = 0; if (a.t > 4 + (a.seed % 5)) { a.state = 'walk'; a.t = 0; a.dir = Math.random() < 0.5 ? 1 : -1; }
+      case 'idle': a.frame = bodyOf(a, CAT_BODIES); a.hop = 0; if (a.t > 4 + (a.seed % 5)) { a.state = 'walk'; a.t = 0; a.dir = Math.random() < 0.5 ? 1 : -1; }
         if (dz > -segLen() && dz < 800 && (Math.abs(a.x - px) < 0.45)) { a.state = 'run'; a.t = 0; } break;
       // one body per state plus a step bob: alternating between two differently shaped frames read as the cat
       // swapping for a different animal mid-stride, the same way the pedestrians used to
-      case 'walk': a.frame = 'CAT_WALK'; a.hop = Math.abs(Math.sin(a.t * 9)) * 0.5; a.z += a.dir * 110 * dt; a.flip = a.dir < 0 ? a.side < 0 : a.side > 0;
+      case 'walk': a.frame = bodyOf(a, CAT_BODIES); a.hop = Math.abs(Math.sin(a.t * 9)) * 0.5; a.z += a.dir * 110 * dt; a.flip = a.dir < 0 ? a.side < 0 : a.side > 0;
         if (a.t > 2) { a.state = 'idle'; a.t = 0; } if (dz > -segLen() && dz < 800 && Math.abs(a.x - px) < 0.45) { a.state = 'run'; a.t = 0; } break;
-      case 'run': a.frame = 'CAT_RUN'; a.hop = Math.abs(Math.sin(a.t * 17)) * 0.8; a.x += a.side * 0.4 * dt; a.flip = a.side < 0; if (a.t > 0.5) { a.state = 'hide'; a.t = 0; } break;
-      case 'hide': a.frame = 'CAT_IDLE'; if (a.t > 3) { a.state = 'idle'; a.t = 0; } break;
+      case 'run': a.frame = bodyOf(a, CAT_BODIES); a.hop = Math.abs(Math.sin(a.t * 17)) * 0.8; a.x += a.side * 0.4 * dt; a.flip = a.side < 0; if (a.t > 0.5) { a.state = 'hide'; a.t = 0; } break;
+      case 'hide': a.frame = bodyOf(a, CAT_BODIES); if (a.t > 3) { a.state = 'idle'; a.t = 0; } break;
     }
     if (Math.abs(a.x) > rw + 0.125) a.x = Math.sign(a.x) * (rw + 0.125);
   }
@@ -439,9 +444,19 @@
     for (const d of seg.decals) {
       const f = F(d.f); if (!f) continue;
       const cs = (p1.scale + p2.scale) / 2, sx = (p1.x + p2.x) / 2 + cs * d.x * RW() * K, sy = (p1.y + p2.y) / 2;
-      const dw = f.w * d.upx * cs * K, dh = Math.max(1, f.h * d.upx * cs * K * 0.55);
+      const hole = d.kind === 'pothole';
+      // a pothole you cannot see until you are in it is just an unfair hit, so hold it at a readable size
+      // right out to the horizon instead of letting perspective shrink it into a single dark pixel
+      let dw = f.w * d.upx * cs * K, dh = Math.max(1, f.h * d.upx * cs * K * 0.55);
+      if (hole && dw < 7) { dh = Math.max(dh, dh * 7 / Math.max(dw, 0.01)); dw = 7; }
       if (dw < 2) continue;
       ctx.drawImage(f.img, f.x, f.y, f.w, f.h, Math.round(sx - dw / 2), Math.round(sy - dh / 2), Math.round(dw), Math.round(dh));
+      if (hole) { // the near lip catches the streetlight and pulses as you close on it: the warning you steer off
+        const k = 0.35 + 0.25 * Math.sin(G.t * 6 + (d.seed || 0) * 10);
+        ctx.fillStyle = 'rgba(255,186,90,' + k.toFixed(2) + ')';
+        const lw = Math.max(2, Math.round(dw * 0.62)), lh = Math.max(1, Math.round(dh * 0.16));
+        ctx.fillRect(Math.round(sx - lw / 2), Math.round(sy + dh / 2 - lh), lw, lh);
+      }
       if (d.kind === 'puddle' && dw > 8) { // a flickering sky highlight stands in for the reflection
         const ph = (G.t * 2 + d.seed * 10) % 1; ctx.fillStyle = 'rgba(200,225,255,' + (0.25 + 0.2 * Math.sin(ph * Math.PI * 2)).toFixed(2) + ')';
         ctx.fillRect(Math.round(sx - dw * 0.25 + Math.sin(G.t * 3 + d.seed) * dw * 0.1), Math.round(sy - dh * 0.15), Math.max(1, Math.round(dw * 0.3)), Math.max(1, Math.round(dh * 0.18)));

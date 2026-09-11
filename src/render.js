@@ -456,13 +456,14 @@
     TXT(ctx, OB.pad(G.score, 7), 704, 34, { size: 12, sy: 1.7, fill: '#fff', outline: '#000', outlineW: 5 });
     // live multiplier, under the score, with what is feeding it
     if (G.mode === 'play' || G.mode === 'countdown') {
-      const m = G.mult || 1, hot = m >= 2, brk = (G.multBreak || 0) > 0;
-      const col = brk ? '#ff6a5a' : m >= 4 ? '#ff37a8' : hot ? '#ffd800' : '#cfd3da';
+      const m = G.mult || 1, hot = m >= 2, brk = (G.multBreak || 0) > 0, armed = !!G.multArmed;
+      const col = brk ? '#ff6a5a' : m >= 4 ? '#ff37a8' : hot ? '#ffd800' : armed ? '#cfd3da' : '#6c727d';
       const sc = 1 + Math.min(0.35, Math.max(0, m - 1) * 0.05) + (brk ? 0.25 : 0);
       ctx.save(); ctx.translate(762, 56); ctx.scale(sc, sc);
       TXT(ctx, m.toFixed(2) + 'x', 0, 0, { size: 11, sy: 1.5, fill: col, outline: '#000', outlineW: 5, align: 'center' });
       ctx.restore();
-      if (G.multWhy && m > 1.2 && !brk) TXT(ctx, G.multWhy, 762, 74, { size: 6, sy: 1.4, fill: col, outline: '#000', outlineW: 3, align: 'center' });
+      // while the combo is dormant the label is the instruction for waking it, not a bonus name
+      if (G.multWhy && !brk && (!armed || m > 1.2)) TXT(ctx, G.multWhy, 762, 74, { size: 6, sy: 1.4, fill: armed ? col : '#7fe0ff', outline: '#000', outlineW: 3, align: 'center' });
     }
     // pause button (top-right corner)
     if (G.mode === 'play') {

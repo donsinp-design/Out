@@ -182,7 +182,7 @@
     G.light = T.THEMES[T.STAGES[G.stageKey].theme].light;
     G.position = 0; G.playerX = 0; G.speed = 0; G.steer = 0; G.lean = 0; G.bgOffset = 0;
     G.health = 100; G.ice = 100; G.score = 0; G.time = T.STAGES[G.stageKey].time + (G.stageNo > 1 ? 10 : 0);
-    G.cars = []; G.msg = null; G.shake = 0; G.invuln = 0; G.forkHint = null; G.result = null; G.overReason = null; G.paused = false; G.mult = 1; G.multStep = 1; G.multBreak = 0; G.draft = 0;
+    G.cars = []; G.msg = null; G.shake = 0; G.invuln = 0; G.forkHint = null; G.result = null; G.overReason = null; G.paused = false; G.mult = 1; G.multStep = 1; G.multArmed = false; G.multBreak = 0; G.draft = 0;
     G.wipe = 0; G.parts = []; G.skidCd = 0; G.smoke = []; G.smokeAcc = 0; G.pops = [];
     G.flip = null; G.rider = null; G.drift = 0; G.driftK = 0; G.marks = []; markLast = -1; G.goT = 0;
     for (let i = 0; i < 8; i++) spawnCar(60 + i * 40);
@@ -224,9 +224,12 @@
   // Traffic leans on the horn when the bike crowds it: cutting across a bonnet, sitting in a blind spot, or a hit.
   // Rate-limited per vehicle and globally, so heavy traffic never turns into a wall of noise.
   let hornCd = 0;
-  function horn(c, urgency) {
-    if (hornCd > 0) return;
-    if (c) { if (c.hornT > 0) return; c.hornT = 2.2 + Math.random() * 2; }
+  // `force` is for the events that must always be heard — a hit, or a dodge close enough to count. Without it the
+  // ordinary proximity honk fires first as you close in, sets the vehicle's cooldown, and swallows the one that matters.
+  function horn(c, urgency, force) {
+    if (hornCd > 0 && !force) return;
+    if (c) { if (c.hornT > 0 && !force) return; c.hornT = 2.2 + Math.random() * 2; }
+    if (force) hornCd = 0;
     hornCd = 0.28 + Math.random() * 0.25;
     A.sfx('horn');
     if (urgency > 0.8 && Math.random() < 0.5) setTimeout(() => A.sfx('horn'), 150); // a second blast when it is close
@@ -250,22 +253,25 @@
   // tucked in a slipstream, and simply not taking damage — and drops straight back to 1.00 on any hit, so the
   // reward is continuous rather than a lump sum on a timer.
   const MULT_MAX = 9.99;
+  const MULT_ARM_PCT = 0.96;                         // the combo does not start until the bike has been flat out
   function multGain(G, pct) {
+    if (!G.multArmed) return 0;
     let g = 0.45;                                    // clean riding, the base rate
-    if (pct > 0.96) g += 1.05;                       // held at top speed
+    if (pct > MULT_ARM_PCT) g += 1.05;               // held at top speed
     if (G.drift > 0) g += 1.15;
     if (G.draft > 0.25) g += 1.1 * G.draft;
     return g;
   }
   function multLabel(G, pct) {
+    if (!G.multArmed) return 'HIT TOP SPEED';
     if (G.draft > 0.25) return 'DRAFT';
     if (G.drift > 0) return 'DRIFT';
-    if (pct > 0.96) return 'MAX SPEED';
+    if (pct > MULT_ARM_PCT) return 'MAX SPEED';
     return 'NO DAMAGE';
   }
   G.breakCombo = function (hard) {
     if (G.mult > 1.35) { G.multBreak = 0.7; pop('COMBO LOST', '#ff6a5a'); }
-    G.mult = 1; G.multStep = 1;
+    G.mult = 1; G.multStep = 1; G.multArmed = false;  // earn it back by getting flat out again
   };
   // ---------- slipstream ----------
   // Sitting square behind a vehicle and close to it pulls you along: free speed for a risky line.
@@ -462,7 +468,7 @@
     if (kind === 'wall' || kind === 'median') { if (G.wallCd > 0) return; G.wallCd = 0.9; }
     else if (G.invuln > 0) return;
     A.sfx(kind === 'wall' || kind === 'median' ? 'bump' : 'crash');
-    if (kind === 'car') { hornCd = 0; horn(car && car.spr ? car : null, 1); }   // whoever you hit lays on it
+    if (kind === 'car') horn(car && car.spr ? car : null, 1, true);            // whoever you hit lays on it
     G.shake = 1; G.invuln = 1.3; G.bounce = 4; G.breakCombo();
     if (kind === 'car') {
       const carX = car.offset * T.findSegment(car.z).rw;
@@ -522,7 +528,7 @@
             G.playerX += (G.playerX >= c.offset * cseg.rw ? 1 : -1) * (big ? 0.03 : 0.02); G.stackKick(big ? 0.5 : 0.35);
             const pts = Math.round((c.oncoming ? 600 : 300) * G.mult); G.score += pts;
           pop('NEAR MISS +' + pts, c.oncoming ? '#ff6a5a' : '#ffd800');
-          horn(c, 0.9);                                    // they lean on it as you cut past
+          horn(c, 0.9, true);                              // they lean on it as you cut past
           }
         }
       }
@@ -532,7 +538,7 @@
         if (c.oncoming) { crash('car', c); c.z = pz + segLen * 2; return; }
         if (G.speed > c.speed) {
           if (G.speed - c.speed < G.maxSpeed * 0.18) { // gentle nudge: match speed, no damage
-            G.speed = c.speed * 0.92; G.shake = Math.max(G.shake, 0.3); if (G.wallCd <= 0) { A.sfx('bump'); G.wallCd = 0.5; }
+            G.speed = c.speed * 0.92; G.shake = Math.max(G.shake, 0.3); if (G.wallCd <= 0) { A.sfx('bump'); horn(c, 1, true); G.wallCd = 0.5; }
           } else crash('car', c);
           return;
         }
@@ -697,6 +703,7 @@
       proximityHorns(dt, G);
       // the multiplier climbs with the riding and every point earned is scaled by it
       G.draft = G.draft + (draftAmount(G) - G.draft) * Math.min(1, dt * 6);
+      if (!G.multArmed && pct > MULT_ARM_PCT) { G.multArmed = true; pop('COMBO ON', '#7fe0ff'); }
       G.mult = Math.min(MULT_MAX, G.mult + multGain(G, pct) * dt * 0.11);
       G.multWhy = multLabel(G, pct);
       if (G.multBreak > 0) G.multBreak -= dt;
@@ -759,7 +766,7 @@
     T.reset(); WD.clear(); G.stageNo = no || 2; G.stageKey = key; G.route = ['charoenkrung', key]; G.nextKey = null; G.nextInfo = null;
     G.cur = buildStage(key, G.stageNo); G.light = T.THEMES[T.STAGES[key].theme].light;
     G.position = 0; G.playerX = -0.3; G.speed = G.maxSpeed * 0.5; G.cars = []; G.time = 90; G.mode = 'play'; G.drawShift = 0; G.smoke = []; G.parts = [];
-    G.flip = null; G.rider = null; G.drift = 0; G.driftK = 0; G.marks = []; markLast = -1; G.goT = 0; G.crash = null; G.pops = []; G.mult = 1; G.multStep = 1; G.draft = 0;
+    G.flip = null; G.rider = null; G.drift = 0; G.driftK = 0; G.marks = []; markLast = -1; G.goT = 0; G.crash = null; G.pops = []; G.mult = 1; G.multStep = 1; G.multArmed = false; G.draft = 0;
     for (let i = 0; i < 8; i++) spawnCar(40 + i * 45);
   };
   // Belt and braces beyond the CSS (-webkit-touch-callout etc. on #screen): some WebKit versions still start the
