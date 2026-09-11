@@ -123,7 +123,9 @@
       if (G.mode === 'play' && G.paused) { const row = R.hit.rows.find(inBox); if (row) menuAction(row.i); else if (inBox(R.hit.pause)) G.paused = false; }
       else if (G.mode === 'play' && inBox(R.hit.pause)) { G.paused = true; G.menuSel = 0; A.sfx('select'); }
       else if (G.mode === 'play' || G.mode === 'countdown') {
-        if (e.pointerType !== 'mouse') { pointers.set(e.pointerId, ix); upd(); }
+        // capture the pointer so a hard turn that drags the finger past the canvas edge keeps steering
+        // instead of firing pointerleave (read as the finger lifting) and snapping the steering to zero
+        if (e.pointerType !== 'mouse') { pointers.set(e.pointerId, ix); upd(); try { cv.setPointerCapture(e.pointerId); } catch (_) {} }
       }
       else if (G.mode === 'radio') { // tap a station row (tap the selected one again to start), START button, or swipe
         swipeX = ix;
@@ -145,7 +147,7 @@
       if (swipeX !== null && (G.mode === 'radio' || G.mode === 'course')) { const ix = toCanvas(e).x; if (Math.abs(ix - swipeX) > 70) tuneDir = ix > swipeX ? 1 : -1; }
       swipeX = null;
     };
-    cv.addEventListener('pointerup', end); cv.addEventListener('pointercancel', end); cv.addEventListener('pointerleave', end);
+    cv.addEventListener('pointerup', end); cv.addEventListener('pointercancel', end); cv.addEventListener('pointerleave', end); cv.addEventListener('lostpointercapture', end);
   }
 
   // ---------- game setup ----------
