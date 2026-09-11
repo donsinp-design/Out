@@ -10,7 +10,7 @@
     forkHint: null, wallCd: 0, countdown: 0, overReason: null, result: null, seed: 20240808, paused: false, route: [], cur: null, nextInfo: null, nextKey: null,
     muted: false, drawShift: -200, playerDX: 0, course: 0, touchMode: false,
     wipe: 0, wipeDir: 1, parts: [], skidCd: 0, ranking: [], pendingRecord: null, nameEntry: null, smoke: [], smokeAcc: 0,
-    flip: null, rider: null, drift: 0, driftDir: 1, driftK: 0, marks: [], goT: 0, cleanT: 0,
+    flip: null, rider: null, drift: 0, driftDir: 1, driftK: 0, marks: [], goT: 0, cleanT: 0, pops: [],
     // sprite-driven rider / world state
     crash: null, bumpT: 0, braking: false, crouch: false, riderT: 0, vxLat: 0, flutter: 0,
     hopY: 0, hopV: 0, stackY: 0, stackV: 0, stackC: 0, splashT: 0, splashSide: 1,
@@ -165,7 +165,7 @@
     G.position = 0; G.playerX = 0; G.speed = 0; G.steer = 0; G.lean = 0; G.bgOffset = 0;
     G.health = 100; G.ice = 100; G.score = 0; G.time = T.STAGES[G.stageKey].time + (G.stageNo > 1 ? 10 : 0);
     G.cars = []; G.msg = null; G.shake = 0; G.invuln = 0; G.forkHint = null; G.result = null; G.overReason = null; G.paused = false; G.cleanT = 0;
-    G.wipe = 0; G.parts = []; G.skidCd = 0; G.smoke = []; G.smokeAcc = 0;
+    G.wipe = 0; G.parts = []; G.skidCd = 0; G.smoke = []; G.smokeAcc = 0; G.pops = [];
     G.flip = null; G.rider = null; G.drift = 0; G.driftK = 0; G.marks = []; markLast = -1; G.goT = 0;
     for (let i = 0; i < 8; i++) spawnCar(60 + i * 40);
   }
@@ -266,6 +266,8 @@
     for (let i = G.parts.length - 1; i >= 0; i--) { const p = G.parts[i]; p.vy += 1100 * dt; p.x += p.vx * dt; p.y += p.vy * dt; p.rot += p.vr * dt; p.life -= dt; if (p.life <= 0 || p.y > H + 30) G.parts.splice(i, 1); }
   }
   function say(text, sub, dur, fill, size) { G.msg = { text, sub, t: dur || 2, dur: dur || 2, fill, size }; }
+  // a short score tag that rises off the rider, so a bonus is seen the moment it is earned rather than only in the total
+  function pop(text, fill) { G.pops.push({ text, fill: fill || '#ffd800', t: 0 }); }
   const segLen = T.segLen;
 
   // ---------- traffic ----------
@@ -391,7 +393,7 @@
             const big = c.spr.w >= 1100;
             A.sfx('whoosh'); G.shake = Math.max(G.shake, big ? 0.3 : 0.2); G.bumpT = 0.35; G.flutter = 1;
             G.playerX += (G.playerX >= c.offset * cseg.rw ? 1 : -1) * (big ? 0.03 : 0.02); G.stackKick(big ? 0.5 : 0.35);
-            G.score += c.oncoming ? 600 : 300;
+            const pts = c.oncoming ? 600 : 300; G.score += pts; pop('NEAR MISS +' + pts, c.oncoming ? '#ff6a5a' : '#ffd800');
           }
         }
       }
@@ -448,6 +450,7 @@
   function update(dt) {
     G.t += dt;
     if (G.msg) G.msg.t -= dt;
+    for (let i = G.pops.length - 1; i >= 0; i--) { G.pops[i].t += dt; if (G.pops[i].t > 1.1) G.pops.splice(i, 1); }
     if (G.shake > 0) G.shake = Math.max(0, G.shake - dt * 3);
     if (G.invuln > 0) G.invuln -= dt;
     if (G.wallCd > 0) G.wallCd -= dt;
@@ -615,7 +618,7 @@
     T.reset(); WD.clear(); G.stageNo = no || 2; G.stageKey = key; G.route = ['charoenkrung', key]; G.nextKey = null; G.nextInfo = null;
     G.cur = buildStage(key, G.stageNo); G.light = T.THEMES[T.STAGES[key].theme].light;
     G.position = 0; G.playerX = -0.3; G.speed = G.maxSpeed * 0.5; G.cars = []; G.time = 90; G.mode = 'play'; G.drawShift = 0; G.smoke = []; G.parts = [];
-    G.flip = null; G.rider = null; G.drift = 0; G.driftK = 0; G.marks = []; markLast = -1; G.goT = 0; G.crash = null; G.cleanT = 0;
+    G.flip = null; G.rider = null; G.drift = 0; G.driftK = 0; G.marks = []; markLast = -1; G.goT = 0; G.crash = null; G.cleanT = 0; G.pops = [];
     for (let i = 0; i < 8; i++) spawnCar(40 + i * 45);
   };
   // Belt and braces beyond the CSS (-webkit-touch-callout etc. on #screen): some WebKit versions still start the
@@ -636,6 +639,9 @@
     lastTapEnd = now;
   }, { passive: false });
   document.addEventListener('dblclick', e => e.preventDefault());
+  // and the start of the touch too: iOS decides some double-tap behaviour on the second touchstart, before touchend.
+  // Pointer events, which carry the steering, are dispatched independently of the touch defaults, so this costs nothing.
+  for (const t of ['touchstart', 'touchmove']) document.addEventListener(t, e => { if (e.cancelable) e.preventDefault(); }, { passive: false });
   // ---------- boot ----------
   const canvas = document.getElementById('screen');
   R.init(canvas); R.ctx = canvas.getContext('2d');

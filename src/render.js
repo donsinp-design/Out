@@ -486,6 +486,17 @@
       if (m.sub) TXT(ctx, m.sub, 0, 34, { size: 20, font: 'Kanit', weight: '700', fill: '#fff', outline: '#000', outlineW: 5, align: 'center' });
       ctx.restore();
     }
+    // bonus tags: rise off the rider and fade, most recent lowest
+    if (G.pops && G.pops.length) {
+      const cx = Math.round(W / 2 + (G.drawShift || 0) + (G.playerDX || 0));
+      for (let i = 0; i < G.pops.length; i++) {
+        const p = G.pops[i], k = Math.min(1, p.t * 8), y = 296 - p.t * 46 - (G.pops.length - 1 - i) * 16;
+        ctx.save(); ctx.globalAlpha = p.t < 0.65 ? 1 : Math.max(0, 1 - (p.t - 0.65) / 0.45);
+        ctx.translate(cx, y); ctx.scale(0.7 + 0.3 * k, 0.7 + 0.3 * k);
+        TXT(ctx, p.text, 0, 0, { size: 10, sy: 1.4, fill: p.fill, outline: '#000', outlineW: 5, align: 'center' });
+        ctx.restore();
+      }
+    }
   };
 
   // ---------- overlays ----------
@@ -559,7 +570,8 @@
     if (!OB.standalone) { const bx = W - 44, by = 10, s = 30; ctx.fillStyle = 'rgba(0,0,0,0.5)'; ctx.fillRect(bx, by, s, s); ctx.fillStyle = '#fff';
       for (const [cx, cy] of [[0, 0], [1, 0], [0, 1], [1, 1]]) { const px = bx + 6 + cx * (s - 12 - 3), py = by + 6 + cy * (s - 12 - 3); ctx.fillRect(px, py + (cy ? 6 : 0), 9, 3); ctx.fillRect(px + (cx ? 6 : 0), py, 3, 9); }
       R.hit.fs = { x: bx - 8, y: by - 8, w: s + 16, h: s + 16 }; }
-    if (false) TXT(ctx, 'ROTATE YOUR PHONE FOR FULL SCREEN', W / 2, 16, { size: 7, sy: 1.4, fill: '#ffd800', outline: '#000', outlineW: 3, align: 'center' });
+    // build stamp, so a stale cached copy can be told apart from the current one
+    if (window.__BUILD__) TXT(ctx, 'BUILD ' + window.__BUILD__, 8, H - 12, { size: 6, sy: 1.4, fill: '#9fb2c0', outline: '#000', outlineW: 3 });
   };
   R.radio = function (G) {
     dim(0.35); R.hit.rows = []; R.hit.nodes = []; R.hit.cells = []; R.hit.start = null;

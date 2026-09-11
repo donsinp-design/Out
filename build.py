@@ -4,7 +4,7 @@
 dist/index.html  body fragment for the claude.ai artifact host, which supplies its own document wrapper
 dist/app/        full standalone page for hosting (GitHub Pages): home-screen web app meta, manifest, icons
 """
-import base64, json, pathlib, re, shutil
+import base64, datetime, json, pathlib, re, shutil
 ROOT = pathlib.Path(__file__).parent
 def b64(path, mime):
     return 'data:%s;base64,%s' % (mime, base64.b64encode((ROOT / path).read_bytes()).decode())
@@ -20,7 +20,8 @@ for f in sorted((ROOT / 'assets').glob('*.png')):
     assets[f.stem] = b64('assets/' + f.name, 'image/png')
 css = (ROOT / 'src/style.css').read_text()
 js = '\n'.join((ROOT / 'src' / n).read_text() for n in ['util.js', 'assets.js', 'atlas_frames.js', 'audio.js', 'track.js', 'world.js', 'render.js', 'game.js'])
-assets_js = 'window.__ASSETS__=' + '{' + ','.join('%s:"%s"' % (k, v) for k, v in assets.items()) + '};'
+build_stamp = datetime.datetime.now(datetime.timezone.utc).strftime('%Y-%m-%d %H:%M UTC')
+assets_js = 'window.__BUILD__=%s;' % json.dumps(build_stamp) + 'window.__ASSETS__=' + '{' + ','.join('%s:"%s"' % (k, v) for k, v in assets.items()) + '};'
 html = (ROOT / 'index.html').read_text()
 body = re.search(r'<body>(.*)</body>', html, re.S).group(1)
 body = re.sub(r'<script src="[^"]+"></script>\s*', '', body)
