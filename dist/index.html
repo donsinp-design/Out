@@ -2831,22 +2831,30 @@ window.OB = window.OB || {};
     // cars
     for (const c of G.cars) {
       const dz = c.z - pz;
-      if (dz < -segLen * 0.6 || dz > segLen * 1.4) continue;
       const cseg = T.findSegment(c.z);
-      // any vehicle passing very close at speed: a near dodge, worth a score bonus (bigger for oncoming traffic).
-      // a bus or truck still gets the bigger flinch and nudge; a car just gets the whoosh and the points.
-      // the zone is measured from the actual crash boundary below (same pct=0.8 half-width), not a flat number,
-      // so it starts exactly where a hit would otherwise happen instead of leaving a dead gap next to it.
+      // Near-dodge tracking: a single-frame "is the gap in this thin band right now" check can't reliably see a
+      // close pass, because the lateral speed during a real weave (or a fast car itself) covers more ground per
+      // frame than the band is wide, jumping straight from "clearly clear" to "already touching" between two
+      // frames. So instead the closest clearance reached over the whole encounter is tracked every frame the
+      // vehicle is nearby (clearance measured from the same crash boundary the collision check below uses), and
+      // the verdict — a clean near miss worth a bonus, or a touch that doesn't count — is settled once the
+      // vehicle has fully dropped behind. Bigger vehicles keep their old wider flinch; oncoming traffic pays more.
       if (!c.whooshed && Math.abs(dz) < segLen * 1.2) {
         const halfSum = (PLAYER_W + c.spr.w / RW) / 2, crashHalf = halfSum * 0.8;
         const clearance = Math.abs(G.playerX - c.offset * cseg.rw) - crashHalf;
-        if (clearance > 0 && clearance < halfSum * 0.45 && Math.abs(G.speed - c.speed) > G.maxSpeed * 0.25) {
-          c.whooshed = true; const big = c.spr.w >= 1100;
+        if (clearance < 0) c.everHit = true;
+        else if (c.minClear === undefined || clearance < c.minClear) c.minClear = clearance;
+      }
+      if (!c.whooshed && dz < -segLen * 0.6 && c.minClear !== undefined) {
+        c.whooshed = true;
+        if (!c.everHit && c.minClear < (PLAYER_W + c.spr.w / RW) * 0.25 && Math.abs(G.speed - c.speed) > G.maxSpeed * 0.2) {
+          const big = c.spr.w >= 1100;
           A.sfx('whoosh'); G.shake = Math.max(G.shake, big ? 0.3 : 0.2); G.bumpT = 0.35; G.flutter = 1;
           G.playerX += (G.playerX >= c.offset * cseg.rw ? 1 : -1) * (big ? 0.03 : 0.02); G.stackKick(big ? 0.5 : 0.35);
           G.score += c.oncoming ? 600 : 300;
         }
       }
+      if (dz < -segLen * 0.6 || dz > segLen * 1.4) continue;
       if (OB.overlap(G.playerX, PLAYER_W, c.offset * cseg.rw, c.spr.w / RW, 0.8)) {
         if (c.oncoming) { crash('car', c); c.z = pz + segLen * 2; return; }
         if (G.speed > c.speed) {
@@ -3012,7 +3020,7 @@ window.OB = window.OB || {};
       G.score += pct * dt * 2000;
       // clean-riding streak: every 10 seconds without a crash, a top-up and a score bonus; resets on any crash
       G.cleanT += dt;
-      if (G.cleanT >= 10) { G.cleanT -= 10; G.health = Math.min(100, G.health + 6); G.ice = Math.min(100, G.ice + 8); G.score += 1000; say('CLEAN STREAK', 'ไม่มีอุบัติเหตุ 10 วินาที  ·  +1000', 1.8, '#7CFF7C', 14); A.sfx('check'); }
+      if (G.cleanT >= 10) { G.cleanT -= 10; G.health = Math.min(100, G.health + 6); G.ice = Math.min(100, G.ice + 8); G.score += 1000; say('NO DAMAGE', 'ไม่มีความเสียหาย 10 วินาที  ·  +1000', 1.8, '#7CFF7C', 14); A.sfx('check'); }
       progress(seg);
     } else if (mode === 'goal') {
       G.goalT += dt;
