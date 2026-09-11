@@ -2466,7 +2466,7 @@ window.OB = window.OB || {};
     forkHint: null, wallCd: 0, countdown: 0, overReason: null, result: null, seed: 20240808, paused: false, route: [], cur: null, nextInfo: null, nextKey: null,
     muted: false, drawShift: -200, playerDX: 0, course: 0, touchMode: false,
     wipe: 0, wipeDir: 1, parts: [], skidCd: 0, ranking: [], pendingRecord: null, nameEntry: null, smoke: [], smokeAcc: 0,
-    flip: null, rider: null, drift: 0, driftDir: 1, driftK: 0, marks: [], goT: 0,
+    flip: null, rider: null, drift: 0, driftDir: 1, driftK: 0, marks: [], goT: 0, cleanT: 0,
     // sprite-driven rider / world state
     crash: null, bumpT: 0, braking: false, crouch: false, riderT: 0, vxLat: 0, flutter: 0,
     hopY: 0, hopV: 0, stackY: 0, stackV: 0, stackC: 0, splashT: 0, splashSide: 1,
@@ -2620,7 +2620,7 @@ window.OB = window.OB || {};
     G.light = T.THEMES[T.STAGES[G.stageKey].theme].light;
     G.position = 0; G.playerX = 0; G.speed = 0; G.steer = 0; G.lean = 0; G.bgOffset = 0;
     G.health = 100; G.ice = 100; G.score = 0; G.time = T.STAGES[G.stageKey].time + (G.stageNo > 1 ? 10 : 0);
-    G.cars = []; G.msg = null; G.shake = 0; G.invuln = 0; G.forkHint = null; G.result = null; G.overReason = null; G.paused = false;
+    G.cars = []; G.msg = null; G.shake = 0; G.invuln = 0; G.forkHint = null; G.result = null; G.overReason = null; G.paused = false; G.cleanT = 0;
     G.wipe = 0; G.parts = []; G.skidCd = 0; G.smoke = []; G.smokeAcc = 0;
     G.flip = null; G.rider = null; G.drift = 0; G.driftK = 0; G.marks = []; markLast = -1; G.goT = 0;
     for (let i = 0; i < 8; i++) spawnCar(60 + i * 40);
@@ -2790,7 +2790,7 @@ window.OB = window.OB || {};
     if (kind === 'wall' || kind === 'median') { if (G.wallCd > 0) return; G.wallCd = 0.9; }
     else if (G.invuln > 0) return;
     A.sfx(kind === 'wall' || kind === 'median' ? 'bump' : 'crash');
-    G.shake = 1; G.invuln = 1.3; G.bounce = 4;
+    G.shake = 1; G.invuln = 1.3; G.bounce = 4; G.cleanT = 0;
     if (kind === 'car') {
       const carX = car.offset * T.findSegment(car.z).rw;
       if (car.oncoming) { G.speed = 0; G.health -= 18; G.ice -= 8; wipeout(3, carX); }
@@ -2829,10 +2829,16 @@ window.OB = window.OB || {};
       const dz = c.z - pz;
       if (dz < -segLen * 0.6 || dz > segLen * 1.4) continue;
       const cseg = T.findSegment(c.z);
-      // a bus or truck thundering past: whoosh, a flinch, a nudge (never enough to throw you off line)
-      if (c.spr.w >= 1100 && !c.whooshed && Math.abs(dz) < segLen * 1.2) {
+      // any vehicle passing very close at speed: a near dodge, worth a score bonus (bigger for oncoming traffic).
+      // a bus or truck still gets the bigger flinch and nudge; a car just gets the whoosh and the points.
+      if (!c.whooshed && Math.abs(dz) < segLen * 1.2) {
         const gap = Math.abs(G.playerX - c.offset * cseg.rw) - (PLAYER_W + c.spr.w / RW) / 2;
-        if (gap > 0 && gap < 0.2 && Math.abs(G.speed - c.speed) > G.maxSpeed * 0.25) { c.whooshed = true; A.sfx('whoosh'); G.shake = Math.max(G.shake, 0.3); G.bumpT = 0.35; G.flutter = 1; G.playerX += (G.playerX >= c.offset * cseg.rw ? 1 : -1) * 0.03; G.stackKick(0.5); }
+        if (gap > 0 && gap < 0.2 && Math.abs(G.speed - c.speed) > G.maxSpeed * 0.25) {
+          c.whooshed = true; const big = c.spr.w >= 1100;
+          A.sfx('whoosh'); G.shake = Math.max(G.shake, big ? 0.3 : 0.2); G.bumpT = 0.35; G.flutter = 1;
+          G.playerX += (G.playerX >= c.offset * cseg.rw ? 1 : -1) * (big ? 0.03 : 0.02); G.stackKick(big ? 0.5 : 0.35);
+          G.score += c.oncoming ? 600 : 300;
+        }
       }
       if (OB.overlap(G.playerX, PLAYER_W, c.offset * cseg.rw, c.spr.w / RW, 0.8)) {
         if (c.oncoming) { crash('car', c); c.z = pz + segLen * 2; return; }
@@ -2997,6 +3003,9 @@ window.OB = window.OB || {};
       if (G.ice <= 0) { G.ice = 0; gameOver('ice'); return; }
       if (G.ice < 25 && Math.floor(G.t * 2) !== Math.floor((G.t - dt) * 2) && Math.floor(G.t * 2) % 4 === 0) A.sfx('melt');
       G.score += pct * dt * 2000;
+      // clean-riding streak: every 10 seconds without a crash, a top-up and a score bonus; resets on any crash
+      G.cleanT += dt;
+      if (G.cleanT >= 10) { G.cleanT -= 10; G.health = Math.min(100, G.health + 6); G.ice = Math.min(100, G.ice + 8); G.score += 1000; say('CLEAN STREAK', 'ไม่มีอุบัติเหตุ 10 วินาที  ·  +1000', 1.8, '#7CFF7C', 14); A.sfx('check'); }
       progress(seg);
     } else if (mode === 'goal') {
       G.goalT += dt;
@@ -3049,7 +3058,7 @@ window.OB = window.OB || {};
     T.reset(); WD.clear(); G.stageNo = no || 2; G.stageKey = key; G.route = ['charoenkrung', key]; G.nextKey = null; G.nextInfo = null;
     G.cur = buildStage(key, G.stageNo); G.light = T.THEMES[T.STAGES[key].theme].light;
     G.position = 0; G.playerX = -0.3; G.speed = G.maxSpeed * 0.5; G.cars = []; G.time = 90; G.mode = 'play'; G.drawShift = 0; G.smoke = []; G.parts = [];
-    G.flip = null; G.rider = null; G.drift = 0; G.driftK = 0; G.marks = []; markLast = -1; G.goT = 0; G.crash = null;
+    G.flip = null; G.rider = null; G.drift = 0; G.driftK = 0; G.marks = []; markLast = -1; G.goT = 0; G.crash = null; G.cleanT = 0;
     for (let i = 0; i < 8; i++) spawnCar(40 + i * 45);
   };
   // ---------- boot ----------
