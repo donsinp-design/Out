@@ -375,9 +375,12 @@
       const cseg = T.findSegment(c.z);
       // any vehicle passing very close at speed: a near dodge, worth a score bonus (bigger for oncoming traffic).
       // a bus or truck still gets the bigger flinch and nudge; a car just gets the whoosh and the points.
+      // the zone is measured from the actual crash boundary below (same pct=0.8 half-width), not a flat number,
+      // so it starts exactly where a hit would otherwise happen instead of leaving a dead gap next to it.
       if (!c.whooshed && Math.abs(dz) < segLen * 1.2) {
-        const gap = Math.abs(G.playerX - c.offset * cseg.rw) - (PLAYER_W + c.spr.w / RW) / 2;
-        if (gap > 0 && gap < 0.2 && Math.abs(G.speed - c.speed) > G.maxSpeed * 0.25) {
+        const halfSum = (PLAYER_W + c.spr.w / RW) / 2, crashHalf = halfSum * 0.8;
+        const clearance = Math.abs(G.playerX - c.offset * cseg.rw) - crashHalf;
+        if (clearance > 0 && clearance < halfSum * 0.45 && Math.abs(G.speed - c.speed) > G.maxSpeed * 0.25) {
           c.whooshed = true; const big = c.spr.w >= 1100;
           A.sfx('whoosh'); G.shake = Math.max(G.shake, big ? 0.3 : 0.2); G.bumpT = 0.35; G.flutter = 1;
           G.playerX += (G.playerX >= c.offset * cseg.rw ? 1 : -1) * (big ? 0.03 : 0.02); G.stackKick(big ? 0.5 : 0.35);
