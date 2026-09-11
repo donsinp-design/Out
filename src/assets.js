@@ -3,7 +3,8 @@
   'use strict';
   const FILES = ['bg','bike','portrait','taxi','taxi_orange','taxi_blue','taxi_green','sedan','sedan_black','sedan_red',
     'green','green_yellow','green_purple','bus','tuktuk','seven','signs','ckrd','spirit','thatien','yen','vendor',
-    'noodle','storepanel','sangchai','thongbai','redsign','chedi'];
+    'noodle','storepanel','sangchai','thongbai','redsign','chedi',
+    'facade0','facade1','facade2','facade3','facade4','facade5'];
   const IMG = {};
   OB.IMG = IMG;
 
@@ -32,6 +33,38 @@
     return '#' + ((1 << 24) + (r << 16) + (g << 8) + b).toString(16).slice(1);
   }
   OB.shade = shade;
+
+  // Pixel-texture pass: painterly value noise, a dark 1px outline at the silhouette and at strong
+  // internal contrast edges, slight top-light, and a coarse quantisation. Makes flat procedural art
+  // sit next to the sprites cut from the reference frame.
+  function texturize(c, opt) {
+    opt = opt || {};
+    const w = c.width, h = c.height, g = c.getContext('2d');
+    const id = g.getImageData(0, 0, w, h), d = id.data, out = new Uint8ClampedArray(d);
+    const rnd = OB.rng(opt.seed || (w * 131 + h * 17));
+    const gs = opt.grain || 6, gw = Math.ceil(w / gs) + 2, gh = Math.ceil(h / gs) + 2;
+    const grid = new Float32Array(gw * gh); for (let i = 0; i < grid.length; i++) grid[i] = rnd() * 2 - 1;
+    const noise = (x, y) => { const fx = x / gs, fy = y / gs, ix = fx | 0, iy = fy | 0, tx = fx - ix, ty = fy - iy;
+      const a = grid[iy * gw + ix], b = grid[iy * gw + ix + 1], cc = grid[(iy + 1) * gw + ix], dd = grid[(iy + 1) * gw + ix + 1];
+      return (a * (1 - tx) + b * tx) * (1 - ty) + (cc * (1 - tx) + dd * tx) * ty; };
+    const amp = opt.amp === undefined ? 0.09 : opt.amp, dither = opt.dither === undefined ? 0.04 : opt.dither;
+    const edgeK = opt.outline === undefined ? 0.42 : opt.outline;
+    const alpha = (x, y) => (x < 0 || y < 0 || x >= w || y >= h) ? 0 : d[(y * w + x) * 4 + 3];
+    const lum = (x, y) => { const i = (y * w + x) * 4; return d[i] + d[i + 1] + d[i + 2]; };
+    for (let y = 0; y < h; y++) for (let x = 0; x < w; x++) {
+      const i = (y * w + x) * 4; if (d[i + 3] < 8) continue;
+      let f = 1 + amp * noise(x, y) + dither * ((((x * 7 + y * 13) % 5) / 2) - 1) + 0.05 - 0.10 * (y / h);
+      if (alpha(x - 1, y) < 8 || alpha(x + 1, y) < 8 || alpha(x, y - 1) < 8 || alpha(x, y + 1) < 8) f *= edgeK;
+      else {
+        const l = lum(x, y);
+        if ((alpha(x + 1, y) > 8 && lum(x + 1, y) - l > 130) || (alpha(x - 1, y) > 8 && lum(x - 1, y) - l > 130) ||
+            (alpha(x, y + 1) > 8 && lum(x, y + 1) - l > 130) || (alpha(x, y - 1) > 8 && lum(x, y - 1) - l > 130)) f *= 0.72;
+      }
+      out[i] = Math.round(d[i] * f / 6) * 6; out[i + 1] = Math.round(d[i + 1] * f / 6) * 6; out[i + 2] = Math.round(d[i + 2] * f / 6) * 6;
+    }
+    id.data.set(out); g.putImageData(id, 0, 0); return c;
+  }
+  OB.texturize = texturize;
 
   // ---------- procedural sprites ----------
   function pole(h, opt) {
@@ -162,31 +195,29 @@
     return c;
   }
 
-  function tower(rng) {
-    const W = 110 + rng.int(60), H = 300 + rng.int(200);
-    const c = mk(W, H), g = c.getContext('2d');
-    const base = rng.pick(['#6f8fb5', '#8ea7c2', '#5f7d9c', '#a9b7c6', '#7b8ea1', '#9fb5cf']);
-    px(g, 0, 0, W, H, base); px(g, W - 8, 0, 8, H, shade(base, 0.7)); px(g, 0, 0, 4, H, shade(base, 1.15));
-    const style = rng.int(3), glass = rng.pick(['#2d4a6a', '#1f3a52', '#334e6e']);
-    for (let y = 8; y < H - 4; y += 12) {
-      for (let x = 6; x < W - 12; x += 10) {
-        const lit = rng.chance(0.18);
-        px(g, x, y, 7, 8, lit ? '#f4efc2' : (style === 0 ? glass : shade(base, 0.55)));
-        px(g, x, y, 7, 1, lit ? '#fff' : shade(glass, 1.6)); px(g, x, y + 8, 7, 1, shade(base, 0.8));
-      }
-      if (style === 2) px(g, 0, y - 2, W, 2, shade(base, 1.2));
-      if (style === 1 && (y / 12) % 6 === 0) px(g, 0, y - 3, W, 3, shade(base, 0.7));
+  function tower(rng) { // Bangkok office tower: glass or concrete body, lobby podium, rooftop plant + sign
+    const W = 96 + rng.int(60), H = 260 + rng.int(200), P = 30;
+    const c = mk(W + 24, H + 34), g = c.getContext('2d');
+    const ox = 12, oy = 34;
+    const base = rng.pick(['#c9c0b0', '#6f8fb5', '#5f9a9c', '#dcd8cf', '#4c5d73', '#c9a99a', '#8ea7c2', '#a7a39b']);
+    const glass = rng.pick(['#2d4a6a', '#1f3a52', '#334e6e', '#3a5a6a', '#26364a']);
+    const style = rng.int(3);
+    px(g, ox, oy, W, H - P, base); px(g, ox + W - 7, oy, 7, H - P, shade(base, 0.68)); px(g, ox, oy, 3, H - P, shade(base, 1.15));
+    if (style === 0) { for (let y = oy + 8; y < oy + H - P - 6; y += 11) for (let x = ox + 6; x < ox + W - 12; x += 9) { const lit = rng.chance(0.08); px(g, x, y, 6, 7, lit ? '#f7f0c8' : glass); px(g, x, y, 6, 1, shade(glass, 1.7)); } }
+    else if (style === 1) { for (let y = oy + 8; y < oy + H - P - 6; y += 12) { px(g, ox + 4, y, W - 12, 7, glass); px(g, ox + 4, y, W - 12, 1, shade(glass, 1.7)); for (let x = ox + 4; x < ox + W - 12; x += 14) px(g, x, y, 1, 7, shade(base, 0.8)); } }
+    else { for (let x = ox + 5; x < ox + W - 11; x += 8) { px(g, x, oy + 6, 5, H - P - 12, glass); for (let y = oy + 6; y < oy + H - P - 6; y += 10) px(g, x, y, 5, 1, shade(glass, 1.5)); } }
+    // podium with glass lobby and canopy
+    px(g, 0, oy + H - P, W + 24, P, shade(base, 0.9)); px(g, 0, oy + H - P, W + 24, 3, shade(base, 1.2)); px(g, W + 18, oy + H - P, 6, P, shade(base, 0.65));
+    px(g, 10, oy + H - P + 8, W + 4, P - 8, '#2a3440'); for (let x = 14; x < W + 10; x += 12) px(g, x, oy + H - P + 8, 2, P - 8, '#c9c4b4');
+    px(g, 6, oy + H - P + 4, W + 12, 4, '#d9d3c4');
+    // roof plant, antenna, optional sign
+    px(g, ox + 8, oy - 8, W - 16, 8, shade(base, 0.85)); px(g, ox + W / 2 - 2, oy - 30, 4, 22, '#8b8f94'); px(g, ox + W / 2 - 2, oy - 34, 4, 4, '#ff3b3b');
+    if (rng.chance(0.55)) {
+      const sc = rng.pick([['#c8222a', '#ffffff'], ['#1b3c8c', '#ffffff'], ['#f2c12e', '#8a1c1c'], ['#0f7a3d', '#ffffff']]);
+      px(g, ox + 4, oy - 4, W - 8, 14, sc[0]); g.fillStyle = sc[1]; g.font = '700 11px "Kanit"'; g.textAlign = 'center'; g.textBaseline = 'middle';
+      g.fillText(rng.pick(['ธนาคาร', 'โรงแรม', 'สำนักงาน', 'ประกันภัย', 'BANGKOK', 'SATHORN']), ox + W / 2, oy + 3);
     }
-    // crown
-    if (rng.chance(0.6)) { px(g, W / 2 - 3, -0, 6, 0, base); }
-    px(g, 0, 0, W, 6, shade(base, 1.25));
-    if (rng.chance(0.5)) { px(g, W / 2 - 1, 0, 2, 0, '#aaa'); }
-    // rooftop
-    const c2 = mk(W, H + 30), g2 = c2.getContext('2d');
-    g2.drawImage(c, 0, 30);
-    if (rng.chance(0.6)) { px(g2, W / 2 - 2, 4, 4, 28, '#8b8f94'); px(g2, W / 2 - 2, 2, 4, 3, '#ff3b3b'); }
-    if (rng.chance(0.5)) { px(g2, 12, 16, W * 0.4, 14, shade(base, 0.9)); }
-    return c2;
+    return c;
   }
 
   function tree(rng, palm) {
@@ -251,8 +282,8 @@
     px(g, 10, 60, 12, 240, '#7c7f82'); px(g, 20, 60, 2, 240, '#4a4c4e'); px(g, W - 22, 60, 12, 240, '#7c7f82'); px(g, W - 12, 60, 2, 240, '#4a4c4e');
     px(g, 0, 54, W, 8, '#7c7f82'); px(g, 0, 60, W, 2, '#4a4c4e');
     for (let x = 30; x < W - 30; x += 24) px(g, x, 48, 3, 8, '#5d6063');
-    signBoard(g, 40, 0, 230, 70, '← ' + left.thai, left.eng, 'left');
-    signBoard(g, W - 270, 0, 230, 70, right.thai + ' →', right.eng, 'right');
+    signBoard(g, 40, 0, 230, 70, left.thai, left.eng, 'left');
+    signBoard(g, W - 270, 0, 230, 70, right.thai, right.eng, 'right');
     // lights
     for (let x = 60; x < W - 40; x += 90) px(g, x, -0, 6, 4, '#333');
     return c;
@@ -359,21 +390,24 @@
     add('thatien_pole', onPole(IMG.thatien, 150, 1, 5), 700, { solid: true, thin: 0.2 });
     add('chedi_far', IMG.chedi, 3200, {});
     // procedural
-    const p = pole(300); add('pole', p.c, 520, { solid: true, thin: 0.35, poleTop: { x: p.topX / 40, y: p.topY / 300 } });
-    const p2 = pole(300, { noTx: true }); add('pole2', p2.c, 520, { solid: true, thin: 0.35, poleTop: { x: p2.topX / 40, y: p2.topY / 300 } });
-    add('lamp', lampPost(), 600, { solid: true, thin: 0.3 });
-    add('pillar', pillar(), 640, { solid: true });
-    for (let i = 0; i < 10; i++) add('shop' + i, shophouse(rng), 3400, { solid: true, building: true });
-    add('shop_seven', shophouse(rng, { floors: 3, color: '#e9e2cf', sign: 'storepanel', seven: true, shop: 0 }), 3400, { solid: true, building: true });
-    add('shop_noodle', shophouse(rng, { floors: 2, color: '#d9c9a4', text: 'ก๋วยเตี๋ยวเรือ', shop: 1 }), 3400, { solid: true, building: true });
-    for (let i = 0; i < 4; i++) add('shopcn' + i, shophouse(rng, { text: ['ร้านทองเยาวราช', 'หูฉลาม', 'เป็ดย่าง', 'ร้านชาจีน'][i], color: ['#d8b7ac', '#e2cfa0', '#c9c0b0', '#d0a889'][i] }), 3400, { solid: true, building: true });
-    for (let i = 0; i < 8; i++) add('tower' + i, tower(rng), 2600 + rng.int(1400), { solid: true, building: true });
-    for (let i = 0; i < 4; i++) add('tree' + i, tree(rng, false), 1500, { solid: true, thin: 0.15 });
-    for (let i = 0; i < 3; i++) add('palm' + i, tree(rng, true), 1300, { solid: true, thin: 0.12 });
-    add('wall', templeWall(), 3600, { solid: true, building: true });
-    for (let i = 0; i < 3; i++) add('boat' + i, boat(rng), 1400, {});
-    add('chedi', goldenChedi(), 1800, { solid: true, building: true });
-    add('wat', wat(), 3600, { solid: true, building: true });
+    const tx = texturize;
+    const p = pole(300); add('pole', tx(p.c, { amp: 0.05 }), 520, { solid: true, thin: 0.35, poleTop: { x: p.topX / 40, y: p.topY / 300 } });
+    const p2 = pole(300, { noTx: true }); add('pole2', tx(p2.c, { amp: 0.05 }), 520, { solid: true, thin: 0.35, poleTop: { x: p2.topX / 40, y: p2.topY / 300 } });
+    add('lamp', tx(lampPost(), { amp: 0.04 }), 600, { solid: true, thin: 0.3 });
+    add('pillar', tx(pillar(), { amp: 0.06 }), 640, { solid: true });
+    // shophouse facades rectified straight out of the reference frame
+    for (let i = 0; i < 6; i++) add('facade' + i, IMG['facade' + i], 2400, { solid: true, building: true });
+    for (let i = 0; i < 6; i++) add('shop' + i, tx(shophouse(rng)), 3000, { solid: true, building: true });
+    add('shop_seven', tx(shophouse(rng, { floors: 2, color: '#e9e2cf', sign: 'storepanel', seven: true, shop: 0 })), 3000, { solid: true, building: true });
+    add('shop_noodle', tx(shophouse(rng, { floors: 2, color: '#d9c9a4', text: 'ก๋วยเตี๋ยวเรือ', shop: 1 })), 3000, { solid: true, building: true });
+    for (let i = 0; i < 4; i++) add('shopcn' + i, tx(shophouse(rng, { text: ['ร้านทองเยาวราช', 'หูฉลาม', 'เป็ดย่าง', 'ร้านชาจีน'][i], color: ['#d8b7ac', '#e2cfa0', '#c9c0b0', '#d0a889'][i] })), 3000, { solid: true, building: true });
+    for (let i = 0; i < 8; i++) add('tower' + i, tx(tower(rng), { amp: 0.06 }), 2600 + rng.int(1400), { solid: true, building: true });
+    for (let i = 0; i < 4; i++) add('tree' + i, tx(tree(rng, false), { amp: 0.12, outline: 0.5 }), 1500, { solid: true, thin: 0.15 });
+    for (let i = 0; i < 3; i++) add('palm' + i, tx(tree(rng, true), { amp: 0.1, outline: 0.5 }), 1300, { solid: true, thin: 0.12 });
+    add('wall', tx(templeWall(), { amp: 0.06 }), 3600, { solid: true, building: true });
+    for (let i = 0; i < 3; i++) add('boat' + i, tx(boat(rng), { amp: 0.05 }), 1400, {});
+    add('chedi', tx(goldenChedi(), { amp: 0.07 }), 1800, { solid: true, building: true });
+    add('wat', tx(wat(), { amp: 0.06 }), 3600, { solid: true, building: true });
     add('lantern', lanternSprite(), 80, {});
     add('median_head', median(), 500, {});
     add('banner_start', banner('START', 'ถนนเจริญกรุง · CHAROEN KRUNG', '#d9262e'), 4400, {});

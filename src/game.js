@@ -183,7 +183,7 @@
         cur.forkDone = true;
         const choice = G.playerX < 0 ? cur.next[0] : cur.next[1];
         G.nextKey = choice; G.nextInfo = buildStage(choice, G.stageNo + 1);
-        const nm = T.STAGES[choice].name; say((G.playerX < 0 ? '◀ ' : '') + nm.eng + (G.playerX < 0 ? '' : ' ▶'), nm.thai, 2.2, '#7fe0ff', 18); A.sfx('fork');
+        const nm = T.STAGES[choice].name; say(nm.eng, nm.thai, 2.2, '#7fe0ff', 18); A.sfx('fork');
       }
     }
     if (cur.checkAt && !cur.checkDone && i >= cur.checkAt) {
@@ -257,7 +257,6 @@
     G.speed = OB.clamp(G.speed, 0, G.maxSpeed);
     if (mode === 'play') checkCollisions(seg);
     advance(dt, true);
-    G.bgOffset += seg.curve * pct * dt * 55;
     if (mode === 'play') {
       G.time -= dt; if (G.time <= 0) { G.time = 0; gameOver('time'); return; }
       G.ice -= dt * (100 / 290) * (pct < 0.08 ? 1.6 : 1);

@@ -39,20 +39,19 @@
       g.globalCompositeOperation = 'multiply'; const gr = g.createLinearGradient(0, 0, 0, c.height); gr.addColorStop(0, '#5a3d9a'); gr.addColorStop(0.55, '#c86a8a'); gr.addColorStop(1, '#ffb070'); g.fillStyle = gr; g.fillRect(0, 0, c.width, c.height);
       g.globalCompositeOperation = 'screen'; const gr2 = g.createLinearGradient(0, 0, 0, c.height); gr2.addColorStop(0, 'rgba(40,10,80,0.2)'); gr2.addColorStop(0.7, 'rgba(255,90,40,0.25)'); gr2.addColorStop(1, 'rgba(255,170,90,0.45)'); g.fillStyle = gr2; g.fillRect(0, 0, c.width, c.height);
       // sun
-      g.globalCompositeOperation = 'lighter'; g.fillStyle = 'rgba(255,190,90,0.55)'; g.beginPath(); g.arc(560, 205, 26, 0, Math.PI * 2); g.fill();
-      g.fillStyle = 'rgba(255,220,150,0.35)'; g.beginPath(); g.arc(560, 205, 44, 0, Math.PI * 2); g.fill();
+      g.globalCompositeOperation = 'lighter'; g.fillStyle = 'rgba(255,190,90,0.55)'; g.beginPath(); g.arc(230, 178, 26, 0, Math.PI * 2); g.fill();
+      g.fillStyle = 'rgba(255,220,150,0.35)'; g.beginPath(); g.arc(230, 178, 44, 0, Math.PI * 2); g.fill();
     }
     g.globalCompositeOperation = 'source-over';
     BG[light] = c; return c;
   };
   function drawBackground(G) {
+    // The skyline is one continuous image, fixed horizontally like the reference frame (no tiling, no mirroring).
     const bg = R.bgFor(G.light);
-    const period = bg.width;
-    const off = ((G.bgOffset % period) + period) % period;
     const y0 = HZ - bg.height + Math.round(G.bgShift || 0);
     ctx.fillStyle = PAL[G.light].ground; ctx.fillRect(0, 0, W, H);
     if (y0 > 0) { ctx.fillStyle = '#0558f0'; ctx.fillRect(0, 0, W, y0 + 1); }
-    ctx.drawImage(bg, Math.round(-off), y0); ctx.drawImage(bg, Math.round(period - off), y0);
+    ctx.drawImage(bg, Math.round((W - bg.width) / 2), y0);
   }
 
   // ---------- projection ----------
@@ -282,6 +281,16 @@
 
   // ---------- HUD ----------
   const TXT = OB.text;
+  // chunky pixel arrow (dir -1 = left, 1 = right), centred on x,y
+  function arrow(x, y, dir, s, fill, outline) {
+    const d = dir < 0 ? -1 : 1;
+    const pts = [[d * s, 0], [0, -s * 0.8], [0, -s * 0.35], [-d * s, -s * 0.35], [-d * s, s * 0.35], [0, s * 0.35], [0, s * 0.8]];
+    ctx.save(); ctx.translate(Math.round(x), Math.round(y)); ctx.beginPath();
+    pts.forEach((p, i) => i ? ctx.lineTo(p[0], p[1]) : ctx.moveTo(p[0], p[1])); ctx.closePath();
+    if (outline) { ctx.lineJoin = 'miter'; ctx.strokeStyle = outline; ctx.lineWidth = 4; ctx.stroke(); }
+    ctx.fillStyle = fill; ctx.fill(); ctx.restore();
+  }
+  R.arrow = arrow;
   function bar(x, y, segs, size, gap, h, filled, col, colTop, colOff) {
     const w = segs * (size + gap) + gap;
     ctx.fillStyle = '#000'; ctx.fillRect(x - 1, y - 1, w + 2, h + 2);
@@ -320,8 +329,10 @@
     if (G.forkHint) {
       const a = 0.6 + 0.4 * Math.sin(G.t * 8);
       ctx.globalAlpha = a;
-      TXT(ctx, '◀ ' + G.forkHint[0].eng, W / 2 - 40, 120, { size: 9, sy: 1.5, fill: '#ffd800', outline: '#000', outlineW: 4, align: 'right' });
-      TXT(ctx, G.forkHint[1].eng + ' ▶', W / 2 + 40, 120, { size: 9, sy: 1.5, fill: '#ffd800', outline: '#000', outlineW: 4, align: 'left' });
+      const wl = TXT(ctx, G.forkHint[0].eng, W / 2 - 40, 120, { size: 9, sy: 1.5, fill: '#ffd800', outline: '#000', outlineW: 4, align: 'right' });
+      const wr = TXT(ctx, G.forkHint[1].eng, W / 2 + 40, 120, { size: 9, sy: 1.5, fill: '#ffd800', outline: '#000', outlineW: 4, align: 'left' });
+      arrow(W / 2 - 40 - wl - 16, 114, -1, 9, '#ffd800', '#000');
+      arrow(W / 2 + 40 + wr + 16, 114, 1, 9, '#ffd800', '#000');
       ctx.globalAlpha = 1;
     }
     // message
@@ -363,13 +374,14 @@
     TXT(ctx, 'กรุงเทพมหานคร', W / 2, 212, { size: 20, font: 'Kanit', weight: '700', fill: '#ffd23f', outline: '#000', outlineW: 5, align: 'center' });
     // ribbon
     ctx.fillStyle = '#c8102e'; ctx.fillRect(W / 2 - 170, 224, 340, 22); ctx.fillStyle = '#000'; ctx.fillRect(W / 2 - 170, 224, 340, 2); ctx.fillRect(W / 2 - 170, 244, 340, 2);
-    TXT(ctx, 'HIDDEN STAGE  ·  ICE RUN  ·  ภารกิจลับ', W / 2, 240, { size: 8, sy: 1.4, fill: '#fff', align: 'center' });
+    TXT(ctx, 'HIDDEN STAGE - ICE RUN', W / 2 - 152, 240, { size: 8, sy: 1.4, fill: '#fff', align: 'left' });
+    TXT(ctx, 'ภารกิจลับ', W / 2 + 152, 241, { size: 14, font: 'Kanit', weight: '500', fill: '#fff', align: 'right' });
     if (Math.floor(G.t * 2) % 2 === 0) TXT(ctx, 'PRESS START', W / 2, 330, { size: 14, sy: 1.3, fill: '#fff', outline: '#000', outlineW: 5, align: 'center' });
     TXT(ctx, 'HI-SCORE ' + OB.pad(G.hiScore, 7), W / 2, 366, { size: 9, sy: 1.4, fill: '#ffd800', outline: '#000', outlineW: 4, align: 'center' });
     TXT(ctx, 'DELIVER THE ICE TO WAT PHO BEFORE IT MELTS', W / 2, 392, { size: 7, sy: 1.4, fill: '#bfefff', outline: '#000', outlineW: 3, align: 'center' });
     TXT(ctx, 'ส่งน้ำแข็งให้ถึงวัดโพธิ์ก่อนละลาย', W / 2, 412, { size: 14, font: 'Kanit', weight: '500', fill: '#fff', outline: '#000', outlineW: 3, align: 'center' });
-    TXT(ctx, '◀ ▶ STEER   ▲ GAS   ▼ BRAKE   M MUSIC', W / 2, H - 14, { size: 7, sy: 1.3, fill: '#fff', outline: '#000', outlineW: 3, align: 'center' });
-    TXT(ctx, '© 1986 · 2024  A SECRET SEQUEL', W / 2, H - 30, { size: 6, sy: 1.3, fill: '#ffd800', outline: '#000', outlineW: 3, align: 'center' });
+    TXT(ctx, 'LEFT/RIGHT STEER   UP GAS   DOWN BRAKE   M MUSIC', W / 2, H - 14, { size: 7, sy: 1.3, fill: '#fff', outline: '#000', outlineW: 3, align: 'center' });
+    TXT(ctx, '1986 - 2024   A SECRET SEQUEL', W / 2, H - 30, { size: 6, sy: 1.3, fill: '#ffd800', outline: '#000', outlineW: 3, align: 'center' });
   };
   R.radio = function (G) {
     dim(0.35);
@@ -382,12 +394,13 @@
     OB.audio.stations.forEach((s, i) => {
       const sel = i === G.station, yy = y + 98 + i * 30;
       if (sel) { ctx.fillStyle = 'rgba(255,216,0,0.15)'; ctx.fillRect(x + 20, yy - 16, w - 40, 26); }
-      TXT(ctx, (sel ? '▶ ' : '  ') + s.name, x + 36, yy, { size: 9, sy: 1.4, fill: sel ? '#ffd800' : '#cfd3da', outline: '#000', outlineW: 3 });
+      if (sel) arrow(x + 36, yy - 6, 1, 6, '#ffd800', '#000');
+      TXT(ctx, s.name, x + 54, yy, { size: 9, sy: 1.4, fill: sel ? '#ffd800' : '#cfd3da', outline: '#000', outlineW: 3 });
       TXT(ctx, s.thai, x + w - 36, yy, { size: 13, font: 'Kanit', weight: '500', fill: sel ? '#fff' : '#8a8f99', align: 'right' });
     });
     // eq bars
     for (let i = 0; i < 12; i++) { const hh = 4 + Math.abs(Math.sin(G.t * 9 + i * 1.3)) * 22; ctx.fillStyle = i < 8 ? '#39f2b0' : '#ff5a5a'; ctx.fillRect(x + w - 150 + i * 9, y + 66 - hh, 6, hh); }
-    TXT(ctx, '◀ ▶ TUNE      GAS / ENTER : START', W / 2, y + h + 26, { size: 8, sy: 1.4, fill: '#fff', outline: '#000', outlineW: 3, align: 'center' });
+    TXT(ctx, 'LEFT / RIGHT : TUNE      GAS / ENTER : START', W / 2, y + h + 26, { size: 8, sy: 1.4, fill: '#fff', outline: '#000', outlineW: 3, align: 'center' });
   };
   R.countdown = function (G) {
     const n = Math.ceil(G.countdown);
