@@ -24,12 +24,12 @@
   const KEYMAP = { ArrowLeft: 'left', a: 'left', A: 'left', ArrowRight: 'right', d: 'right', D: 'right', ArrowUp: 'gas', w: 'gas', W: 'gas', x: 'gas', X: 'gas', ArrowDown: 'brake', s: 'brake', S: 'brake', z: 'brake', Z: 'brake' };
   window.addEventListener('keydown', e => {
     if (e.repeat) { if (KEYMAP[e.key]) e.preventDefault(); return; }
-    A.init();
+    A.init(); A.unlock();
     if (KEYMAP[e.key]) { keys[KEYMAP[e.key]] = true; e.preventDefault(); }
     if (e.key === 'Enter' || e.key === ' ') { startPressed = true; e.preventDefault(); }
     if (e.key === 'ArrowLeft' || e.key === 'a') tuneDir = -1; if (e.key === 'ArrowRight' || e.key === 'd') tuneDir = 1;
     if (e.key === 'ArrowUp' && (G.mode === 'radio' || G.mode === 'course')) startPressed = true;
-    if (e.key === 'm' || e.key === 'M') { G.muted = !G.muted; A.setMusicVolume(G.muted ? 0 : 0.8); }
+    if (e.key === 'm' || e.key === 'M') { G.muted = !G.muted; A.setMusicVolume(G.muted ? 0 : A.MUSIC_VOL); }
     if ((e.key === 'p' || e.key === 'P' || e.key === 'Escape') && (G.mode === 'play')) G.paused = !G.paused;
   });
   window.addEventListener('keyup', e => { if (KEYMAP[e.key]) { keys[KEYMAP[e.key]] = false; e.preventDefault(); } });
@@ -48,7 +48,7 @@
       touch.steer = OB.clamp(rel / 0.3, -1, 1); touch.active = true;
     };
     cv.addEventListener('pointerdown', e => {
-      A.init();
+      A.init(); A.unlock();
       const r = cv.getBoundingClientRect(), fx = (e.clientX - r.left) / r.width;
       if (e.pointerType !== 'mouse') G.touchMode = true;
       if (G.mode === 'play' || G.mode === 'countdown') { if (e.pointerType !== 'mouse') { pointers.set(e.pointerId, e.clientX); upd(); } }
@@ -239,7 +239,8 @@
       advance(dt, true);
       if (seg.index > T.segments.length - 700) { newGame(); }
       if (startPressed) { startPressed = false; A.init(); A.sfx('select');
-        if (mode === 'title') { G.mode = 'radio'; A.playMusic(G.station); A.setMusicVolume(G.muted ? 0 : 0.8); }
+        if (mode !== 'title' && !A.music.playing && A.ready()) A.playMusic(G.station); // audio may have unlocked late
+        if (mode === 'title') { G.mode = 'radio'; A.playMusic(G.station); A.setMusicVolume(G.muted ? 0 : A.MUSIC_VOL); }
         else if (mode === 'radio') { G.mode = 'course'; }
         else { startRun(); } }
       if (mode === 'radio' && tuneDir) { G.station = (G.station + tuneDir + 3) % 3; A.playMusic(G.station); A.sfx('select'); }

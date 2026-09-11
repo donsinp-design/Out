@@ -398,8 +398,9 @@
       TXT(ctx, s.name, x + 54, yy, { size: 9, sy: 1.4, fill: sel ? '#ffd800' : '#cfd3da', outline: '#000', outlineW: 3 });
       TXT(ctx, s.thai, x + w - 36, yy, { size: 13, font: 'Kanit', weight: '500', fill: sel ? '#fff' : '#8a8f99', align: 'right' });
     });
-    // eq bars
-    for (let i = 0; i < 12; i++) { const hh = 4 + Math.abs(Math.sin(G.t * 9 + i * 1.3)) * 22; ctx.fillStyle = i < 8 ? '#39f2b0' : '#ff5a5a'; ctx.fillRect(x + w - 150 + i * 9, y + 66 - hh, 6, hh); }
+    // eq bars driven by the actual output spectrum
+    const sp = OB.audio.spectrum(12);
+    for (let i = 0; i < 12; i++) { const hh = 3 + sp[i] * 30; ctx.fillStyle = sp[i] > 0.8 ? '#ff5a5a' : '#39f2b0'; ctx.fillRect(x + w - 150 + i * 9, y + 66 - hh, 6, hh); }
     TXT(ctx, G.touchMode ? 'TAP LEFT / RIGHT : TUNE      TAP CENTER : START' : 'LEFT / RIGHT : TUNE      GAS / ENTER : START', W / 2, y + h + 26, { size: 8, sy: 1.4, fill: '#fff', outline: '#000', outlineW: 3, align: 'center' });
   };
   R.course = function (G) {
