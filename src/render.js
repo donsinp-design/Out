@@ -164,10 +164,17 @@
     const playerY = OB.lerp(playerSeg.p1.world.y, playerSeg.p2.world.y, playerPct);
     G.bgShift = -(playerY) * 0.004;
     const camX = G.playerX * RW * FOLLOW, camY = G.cameraH + playerY, camZ = G.position;
-    G.playerDX = (G.playerX * RW - camX) * (G.cameraDepth / G.playerZ) * K;
+    const cam = G.cam || { pitch: 0, lean: 0, squash: 0, zoom: 1 }, depth = G.cameraDepth * (cam.zoom || 1);
+    G.playerDX = (G.playerX * RW - camX) * (depth / G.playerZ) * K;
     ctx.save();
+    // camera cues: forward pitch on acceleration, lateral lean in corners, a squash on hard landings, shakes.
+    // A hair of overscan hides the edges the shifts would otherwise expose.
+    if (cam.pitch || cam.lean || cam.squash) { ctx.translate(W / 2, H / 2); ctx.scale(1.012, 1.012); ctx.translate(-W / 2, -H / 2); ctx.translate(Math.round(cam.lean), Math.round(cam.pitch)); }
+    if (cam.squash > 0) { ctx.translate(0, H); ctx.scale(1, 1 - 0.02 * cam.squash); ctx.translate(0, -H); }
     if (G.shake > 0) ctx.translate(Math.round((Math.random() - 0.5) * G.shake * 8), Math.round((Math.random() - 0.5) * G.shake * 6));
     drawBackground(G);
+    const WD = OB.world, actorsBySeg = new Map(), debrisBySeg = new Map();
+    WD.bucket(actorsBySeg, WD.actors.items, WD.actors.n, segLen); WD.bucket(debrisBySeg, WD.debris.items, WD.debris.n, segLen);
     // cars per segment
     const carsBySeg = new Map();
     for (const c of G.cars) { const i = Math.floor(c.z / segLen); if (!carsBySeg.has(i)) carsBySeg.set(i, []); carsBySeg.get(i).push(c); }
@@ -177,15 +184,16 @@
     for (let n = 0; n < G.drawDistance; n++) {
       const idx = baseSeg.index + n; if (idx >= segs.length) break;
       const seg = segs[idx];
-      project(seg.p1, camX - x, camY, camZ, G.cameraDepth, seg.rw);
-      project(seg.p2, camX - x - dx, camY, camZ, G.cameraDepth, seg.rw);
+      project(seg.p1, camX - x, camY, camZ, depth, seg.rw);
+      project(seg.p2, camX - x - dx, camY, camZ, depth, seg.rw);
       x += dx; dx += seg.curve;
       seg.clip = maxy;
-      if (seg.p1.camera.z <= G.cameraDepth) { seg.hidden = true; seg.behind = true; continue; }
+      if (seg.p1.camera.z <= depth) { seg.hidden = true; seg.behind = true; continue; }
       seg.behind = false; projected.push(seg);
       if (seg.p2.screen.y >= seg.p1.screen.y || seg.p2.screen.y >= maxy) { seg.hidden = true; continue; }
       seg.hidden = false;
       renderGround(seg, pal, T.THEMES[seg.theme]);
+      if (seg.decals && seg.decals.length) WD.drawDecals(ctx, seg, G);
       maxy = seg.p2.screen.y;
     }
     // ---- sprite pass (back to front): every projected slice, clipped by the crest line, so nothing pops ----
@@ -204,7 +212,9 @@
         let destY = sy - destH;
         if (sp.water) destY += scale * WATER_DROP * K;
         if (destX > W || destX + destW < 0) continue;
+        if (sp.flick) { const ph = (G.t * 6 + sp.flick * 1.7) % 4; if (ph < 0.07 || (ph > 0.5 && ph < 0.54)) ctx.globalAlpha = 0.45; } // a lit sign with a bad tube
         drawSprite(img, destX, destY, destW, destH, seg.clip, sp.flip);
+        ctx.globalAlpha = 1;
         if (sp.pole && s.poleTop) poles[sp.pole].push({ x: destX + destW * s.poleTop.x, y: destY + destH * s.poleTop.y, w: destW, seg: seg.index });
         if (sp.pillar) { /* pillars carry the deck */ }
       }
@@ -214,9 +224,19 @@
         const pct = (c.z % segLen) / segLen;
         const cs = OB.lerp(seg.p1.screen.scale, seg.p2.screen.scale, pct), cx = OB.lerp(seg.p1.screen.x, seg.p2.screen.x, pct), cy = OB.lerp(seg.p1.screen.y, seg.p2.screen.y, pct);
         const img = c.spr.img, destW = c.spr.w * cs * K, destH = destW * img.height / img.width;
-        drawSprite(img, cx + cs * c.offset * RW * seg.rw * K - destW / 2, cy - destH, destW, destH, seg.clip, false);
+        const dx0 = cx + cs * c.offset * RW * seg.rw * K - destW / 2;
+        drawSprite(img, dx0, cy - destH, destW, destH, seg.clip, false);
+        // brake lights and indicators (rear views only; the indicator sits on the side it announces)
+        if (!c.oncoming && destW > 8 && cy <= seg.clip + destH) {
+          if (c.brake > 0) { const f = WD.F('BRAKE_LIGHT'); if (f) WD.blitC(ctx, f, dx0 + destW / 2, cy - destH * 0.3, destW * 0.7, destW * 0.7 * f.h / f.w, 0, 0.95); }
+          if (c.ind && ((G.t * 2.5) % 1) < 0.62) { const f = WD.F(c.ind < 0 ? 'INDICATOR_L' : 'INDICATOR_R'); if (f) WD.blitC(ctx, f, dx0 + destW * (c.ind < 0 ? 0.12 : 0.88), cy - destH * 0.32, destW * 0.22, destW * 0.22 * f.h / f.w, 0, 1); }
+        }
       }
+      const al = actorsBySeg.get(seg.index); if (al) for (const a of al) WD.drawActor(ctx, a, seg);
+      const dl = debrisBySeg.get(seg.index); if (dl) for (const d of dl) WD.drawDebris(ctx, d, seg);
     }
+    // speed streaks radiate from the road's vanishing point (only near top speed)
+    if (WD.streaks.n) { const last = projected.length ? projected[projected.length - 1] : null; WD.drawStreaks(ctx, G, last ? last.p2.screen.x : W / 2, HZ); }
     // ---- wires (left-hand power lines only, as in the reference frame) ----
     drawWires(poles.L, G, -1, baseSeg, camX, camY, camZ, playerSeg);
     // ---- player ----
@@ -274,17 +294,72 @@
     [[0, 0, 0], [-1, 0, 0], [1, 0, 0], [-2, 0, 0], [2, 0, 1], [0, -1, 0], [-1, 1, 1], [1, 1, 1]],
     [[0, 0, 0], [1, 0, 0], [0, -1, 0], [1, -1, 0], [-1, 0, 1], [2, 0, 1], [0, 1, 1], [1, 1, 1]]
   ];
+  // ---------- rider (sprite-sheet frames) ----------
+  const RS = 178 / 137; // sheet rider frames drawn at the height the bike has always had on screen
+  const ROWS = [0.30, 0.45, 0.60, 0.74]; // ice stack rows as fractions of a rider frame's height: top of row 3 ... bottom of row 1
+  const ANCHOR = { BRAKE: 0.6, BUMP: 0.4 }; // where the bike sits inside the wider frames
+  function riderFrameName(G) {
+    if (G.bumpT > 0) return 'BUMP';
+    const lean = (G.lean || 0) + (G.driftK || 0) * (G.driftDir || 1) * 0.6, al = Math.abs(lean);
+    if (al > 0.72) return lean < 0 ? 'L3' : 'R3';
+    if (al > 0.42) return lean < 0 ? 'L2' : 'R2';
+    if (al > 0.16) return lean < 0 ? 'L1' : 'R1';
+    if (G.braking) return 'BRAKE';
+    if (G.crouch) return 'ACCEL';
+    return 'D' + (Math.floor(G.riderT || 0) % 6);
+  }
+  // A rider frame drawn in slices so the ice moves on its own: each bag row (and each half of it) vibrates at
+  // speed, shifts outward in corners, lifts on knocks, squashes on hard landings, and shrinks as the ice goes.
+  function drawRiderFrame(G, f, cx, by, scale, alpha) {
+    const W0 = f.w * scale, H0 = f.h * scale, ax = ANCHOR[f.name] || 0.5;
+    const x0 = Math.round(cx - W0 * ax);
+    const pct = G.speed / G.maxSpeed, lean = G.lean || 0, t = G.t;
+    const iceRows = G.ice / 100 * 3;
+    const melt = [OB.clamp(iceRows, 0.3, 1), OB.clamp(iceRows - 1, 0.3, 1), OB.clamp(iceRows - 2, 0.3, 1)]; // bottom, middle, top row
+    const squash = 1 - 0.18 * (G.stackC || 0);
+    const rp = ROWS.map(r => Math.round(r * f.h));
+    ctx.save(); if (alpha < 1) ctx.globalAlpha = alpha;
+    // bike, tail light, wheel: fixed
+    ctx.drawImage(f.img, f.x, f.y + rp[3], f.w, f.h - rp[3], x0, Math.round(by - (f.h - rp[3]) * scale), Math.round(W0), Math.round((f.h - rp[3]) * scale));
+    let baseY = by - (f.h - rp[3]) * scale, lift = 0;
+    for (let i = 0; i < 3; i++) { // rows from the bottom up
+      const sTop = rp[2 - i], sBot = rp[3 - i], sh = sBot - sTop, dh = Math.max(1, sh * scale * melt[i] * squash);
+      lift = (G.stackY || 0) * (0.5 + 0.35 * i);
+      const dxRow = -lean * 2.2 * (i + 1) / 3;
+      for (let h = 0; h < 2; h++) {
+        const jit = pct > 0.25 ? Math.round(Math.sin(t * (37 + i * 5) + h * 3 + i) * pct * 1.3) : 0;
+        const sw = Math.floor(f.w / 2), sx = f.x + h * sw;
+        ctx.drawImage(f.img, sx, f.y + sTop, sw + (h ? f.w - 2 * sw : 0), sh, x0 + Math.round(h * W0 / 2 + dxRow + jit * 0.6), Math.round(baseY - dh + lift), Math.round(W0 / 2) + 1, Math.round(dh));
+      }
+      baseY -= dh;
+    }
+    // the rider's back and helmet: stretched down a little to meet the stack when the ice has shrunk
+    const topY = by - H0 + lift;
+    ctx.drawImage(f.img, f.x, f.y, f.w, rp[0], x0, Math.round(topY), Math.round(W0), Math.max(1, Math.round(baseY + lift - topY) + 1));
+    ctx.restore();
+  }
+  function drawCrash(G, cx, by) {
+    const c = G.crash, dir = c.dir, k = RS, WD = OB.world;
+    const blit = (name, x, y, flip, alpha) => { const f = WD.F(name); if (f) WD.blit(ctx, f, x, y, f.w * k, f.h * k, flip, 0, alpha); };
+    if (c.phase === 'lose') { const f = WD.F(dir < 0 ? 'L3' : 'R3'); drawRiderFrame(G, f, cx + Math.round((Math.random() - 0.5) * 5), by, k, 1); return; }
+    if (c.phase === 'eject') { blit('CL_EJECT', cx + c.rider.x * 0.4, by, false, 1); return; }
+    const rx = cx + c.rider.x, ry = by + c.rider.y, bx = cx + c.bike.x;
+    ctx.fillStyle = 'rgba(0,0,0,0.3)'; ctx.beginPath(); ctx.ellipse(bx, by - 4, 70, 8, 0, 0, Math.PI * 2); ctx.fill();
+    blit(dir < 0 ? 'CL_BIKE' : 'CR_BIKE2', bx, by, false, 1);
+    if (c.phase === 'air') { const h = -c.rider.y; ctx.fillStyle = 'rgba(0,0,0,' + (0.3 * Math.max(0.3, 1 - h / 260)).toFixed(2) + ')'; ctx.beginPath(); ctx.ellipse(rx, by - 4, 34, 6, 0, 0, Math.PI * 2); ctx.fill(); blit(dir < 0 ? 'CL_AIR' : 'CR_AIR', rx, ry - 16, false, 1); }
+    else if (c.phase === 'ground') blit('CR_GROUND', rx, by, dir < 0, 1);
+    else if (c.phase === 'recover') { const i = Math.min(3, Math.floor(c.recT / 0.125)); blit('G' + (i + 1), rx, by, false, 1); }
+  }
   function drawPlayer(G) {
-    const img = OB.IMG.bike; const bw = img.width, bh = img.height;
-    const bounce = G.bounce || 0;
-    const cx = Math.round(W / 2 + (G.drawShift || 0) + (G.playerDX || 0)), by = 457 + bounce;
-    const f = G.flip;
-    // shadow (stays on the road while the bike tumbles above it)
-    { const sx = cx + (f ? f.x : 0), h = f ? -f.y : 0, k = Math.max(0.35, 1 - h / 320);
-      ctx.fillStyle = 'rgba(0,0,0,' + (0.35 * k).toFixed(2) + ')'; ctx.beginPath(); ctx.ellipse(sx + 2, by - 6, bw * 0.42 * k, 7 * k, 0, 0, Math.PI * 2); ctx.fill(); }
+    const WD = OB.world, cam = G.cam || { zoom: 1 }, zoom = cam.zoom || 1, bounce = G.bounce || 0;
+    const groundY = Math.round(HZ + (457 - HZ) * zoom + bounce);
+    const cx = Math.round(W / 2 + (G.drawShift || 0) + (G.playerDX || 0)), by = groundY - Math.round(G.hopY || 0);
+    // shadow stays on the road under a hopping bike
+    { const h = G.hopY || 0, k = Math.max(0.4, 1 - h / 200), sx = cx + (G.crash ? 0 : 2);
+      if (!G.crash) { ctx.fillStyle = 'rgba(0,0,0,' + (0.35 * k).toFixed(2) + ')'; ctx.beginPath(); ctx.ellipse(sx, groundY - 6, 40 * k, 7 * k, 0, 0, Math.PI * 2); ctx.fill(); } }
     // rubber: a dark trail from the rear tyre that smears sideways with the road under the smoke
     if (G.marks && G.marks.length > 1) {
-      ctx.save(); ctx.lineCap = 'butt'; // butt caps: adjacent pieces do not overlap, so the fade stays even instead of dotting at the joints
+      ctx.save(); ctx.lineCap = 'butt';
       for (let i = 1; i < G.marks.length; i++) {
         const a = G.marks[i - 1], b = G.marks[i]; if (b.start) continue;
         const al = b.t < 0.2 ? 0.9 : 0.9 * (1 - (b.t - 0.2) / 0.3);
@@ -305,33 +380,17 @@
         }
       }
     }
-    if (f) {
-      // crash: riderless bike barrel-rolls through the air (a roll seen from behind is a plain spin of the rear view),
-      // bouncing across the road; the rider is thrown clear and ends up sitting on the tarmac
-      const wimg = OB.IMG.wreck, ww = wimg.width, wh = wimg.height;
-      const ext = Math.abs(Math.cos(f.rot)) * wh / 2 + Math.abs(Math.sin(f.rot)) * ww / 2; // keeps the spinning sprite on the road line
-      ctx.save(); ctx.translate(Math.round(cx + f.x), Math.round(by + f.y - ext)); ctx.rotate(f.rot); ctx.drawImage(wimg, -ww / 2, -wh / 2); ctx.restore();
-      const r = G.rider;
-      if (r) {
-        const rimg = OB.IMG.rider, rw = rimg.width, rh = rimg.height;
-        ctx.save();
-        if (r.down) { ctx.translate(Math.round(cx + r.x), Math.round(by + 2)); ctx.scale(1, 0.8); ctx.drawImage(rimg, -rw / 2, -rh); }
-        else { ctx.translate(Math.round(cx + r.x), Math.round(by + r.y - rh / 2)); ctx.rotate(r.rot); ctx.drawImage(rimg, -rw / 2, -rh / 2); }
+    // puddle splash off the rear wheel
+    if (G.splashT > 0) { const f = WD.F('WATER_SPLASH_L'); if (f) { const s = G.splashSide || 1, k = OB.clamp(G.splashT / 0.32, 0, 1); WD.blit(ctx, f, cx + s * 30, groundY + 2, f.w * 1.5 * (1.3 - k * 0.3), f.h * 1.5, s < 0, 0, Math.min(1, k * 2.5)); } }
+    if (G.crash) { drawCrash(G, cx, by); }
+    else {
+      const f = WD.F(riderFrameName(G));
+      if (f) {
+        const dk = G.driftK || 0, dd = G.driftDir || 1;
+        ctx.save(); ctx.translate(cx - dd * dk * 6, by); ctx.rotate(dk * dd * 0.22); ctx.translate(-(cx - dd * dk * 6), -by);
+        drawRiderFrame(G, f, cx - dd * dk * 6, by, RS * zoom, (G.invuln > 0 && Math.floor(G.t * 8) % 2 === 0) ? 0.7 : 1);
         ctx.restore();
       }
-    } else {
-      // riding: lean into the turn; a drift throws the back end out and leans harder
-      const dk = G.driftK || 0, dd = G.driftDir || 1;
-      ctx.save(); ctx.translate(cx - dd * dk * 6, by); ctx.rotate(G.lean * 0.16 + dk * dd * 0.3); ctx.translate(-bw / 2 + G.lean * 6 + dk * dd * 4, -bh);
-      if (G.invuln > 0 && Math.floor(G.t * 8) % 2 === 0) ctx.globalAlpha = 0.7;
-      ctx.drawImage(img, 0, 0);
-      ctx.restore();
-    }
-    // flying ice bags
-    if (G.parts) for (const p of G.parts) {
-      ctx.save(); ctx.translate(p.x, p.y); ctx.rotate(p.rot);
-      ctx.fillStyle = '#1a2a3a'; ctx.fillRect(-7, -6, 14, 12); ctx.fillStyle = '#eef8ff'; ctx.fillRect(-6, -5, 12, 10); ctx.fillStyle = '#9fd0ee'; ctx.fillRect(-6, 2, 12, 3); ctx.fillStyle = '#3b74c4'; ctx.fillRect(-3, -3, 6, 3);
-      ctx.restore();
     }
     // ice melt drips
     if (G.mode === 'play' && G.ice < 45 && Math.floor(G.t * 6) % 3 === 0) { ctx.fillStyle = 'rgba(200,235,255,0.9)'; ctx.fillRect(cx - 20 + (G.t * 50) % 40, by - 60 + (G.t * 90) % 50, 2, 3); }

@@ -4,7 +4,7 @@
   const FILES = ['bg','bike','portrait','taxi','taxi_orange','taxi_blue','taxi_green','sedan','sedan_black','sedan_red',
     'green','green_yellow','green_purple','bus','tuktuk','seven','signs','ckrd','spirit','thatien','yen','vendor',
     'noodle','storepanel','sangchai','thongbai','redsign','chedi',
-    'facade0','facade1','facade2','facade3','facade4','facade5','towers0','towers1','towers2','title','wreck','rider'];
+    'facade0','facade1','facade2','facade3','facade4','facade5','towers0','towers1','towers2','title','atlas'];
   const IMG = {};
   OB.IMG = IMG;
 
@@ -453,7 +453,10 @@
   OB.buildSprites = function () {
     const S = OB.SPR;
     const rng = OB.rng(1986);
-    const add = (name, img, w, extra) => { S[name] = Object.assign({ img, w, h: w * img.height / img.width }, extra || {}); return S[name]; };
+    const add = (name, img, w, extra) => { S[name] = Object.assign({ img, w, h: w * img.height / img.width, name }, extra || {}); return S[name]; };
+    // a frame of the sprite atlas as its own canvas (for sprites that go through the static sprite path)
+    const FC = (n) => { const r = OB.FRAMES[n], c = mk(r[2], r[3]); c.getContext('2d').drawImage(IMG.atlas, r[0], r[1], r[2], r[3], 0, 0, r[2], r[3]); return c; };
+    OB.frameCanvas = FC;
     // vehicles
     add('bike', IMG.bike, 480);
     ['taxi', 'taxi_orange', 'taxi_blue', 'taxi_green'].forEach(n => add(n, IMG[n], 940, { car: true }));
@@ -461,6 +464,8 @@
     ['green', 'green_yellow', 'green_purple'].forEach(n => add(n, IMG[n], 800, { car: true }));
     add('bus', IMG.bus, 1240, { car: true, oncoming: true });
     add('tuktuk', IMG.tuktuk, 900, { car: true, oncoming: true });
+    add('truck', FC('TRUCK'), 1150, { car: true }); add('pickup', FC('PICKUP'), 960, { car: true }); add('pickup_w', FC('PICKUP_W'), 960, { car: true });
+    add('songthaew', FC('SONGTHAEW'), 1100, { car: true, oncoming: true });
     // roadside (from reference)
     add('tuktuk_parked', IMG.tuktuk, 900, { solid: true });
     add('spirit', IMG.spirit, 640, { solid: true });

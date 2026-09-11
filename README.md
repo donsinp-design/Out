@@ -15,7 +15,20 @@ and the route forks after every stage.
 Controls: `← →` steer, `↑` gas, `↓` brake, `Shift` (or a quick double tap of the steering arrow) while turning hard drifts, `Enter`/`Space` start, `M` mute music, `P` pause.
 After the music select, a course select lets you start from any of the seven areas (Full Run starts at Charoen Krung). The countdown is three seconds; the controls are shown during it, not on the title screen.
 On touch devices there are no buttons: the bike accelerates by itself, a finger left or right of centre steers (further out steers harder), holding a second finger brakes, a quick double tap while steering hard drifts, and menus are tapped.
-A drift turns in sharper, resists the curve's push and scrubs speed, with tyre smoke and a rubber trail. Hitting oncoming traffic, a roadside object or the back of a car at speed throws the bike into an OutRun-style barrel roll across the road while the rider is flung off; you lose a couple of seconds and some health, then ride on.
+A drift turns in sharper, resists the curve's push and scrubs speed, with tyre smoke and a rubber trail. Hitting oncoming traffic, a roadside object or the back of a car at speed throws the rider off (the sheet's fall-left / fall-right frames, then the get-up frames): lose control, eject, airborne, ground hit, slide, stop, recover in about two seconds; the ice becomes bags and cubes bouncing down the road.
+
+## The living street (sprite sheet)
+
+`assets/atlas.png` is packed from the ICE MAN sprite sheet (`src/atlas_frames.js` holds every frame's source rectangle; `scratchpad/extract_sheet.py` in the session did the cutting). `src/world.js` drives it:
+
+* Rider: six-frame riding loop (faster at speed), three lean frames each way, accelerate / brake / bump poses. The ice stack is drawn as separate bag rows and halves: they vibrate at speed, shift outward in corners, lift on knocks, compress on hard landings and shrink as the ICE meter drops.
+* Pedestrians are pooled state machines (idle → walk → notice → react → jump / run / step → recover → walk) with per-person notice distance, risk radius and delay. Nine characters, each using only its own frames. Monks step aside; the tourist takes photos; a pair may stand talking.
+* Dogs sleep, idle and bark, wander, cross the road with a running cycle (and sprint for the nearest kerb when the bike is close), or briefly chase a slow bike. Cats stay roadside and bolt. Monitor lizards are rare, slow and freeze when you pass.
+* Destructibles: fruit stalls (idle → hit → wrecked, fruit and crates as separate bouncing debris, the vendor comes out shaking a fist), food carts (pots everywhere), chairs cartwheel, cones spin, boxes burst, signs wobble and fall. Stalls and carts cost a little health and speed; the rest are spectacle.
+* Traffic: brake lights when a car slows, indicators (on the side it will move to) with a small drift for 0.7 s before a lane change; trucks, pickups and songthaews join the pool; a bus or truck passing close gives a whoosh, a flinch and a tiny nudge.
+* Road: puddles (splash when you drive through), manholes, cracks, leaves that scatter, speed bumps that hop the bike (a hard landing compresses the stack, at speed it spills a cube).
+* Ambient: cooking smoke from stalls and carts, exhaust puffs, drips from the shophouse air-cons, a few lit signs that flicker on their own phase.
+* Speed: radial streaks from the vanishing point near top speed, a subtle zoom-out, the rider crouches, wind rises; short camera cues for acceleration, corners, landings and crashes.
 
 ## Route map
 

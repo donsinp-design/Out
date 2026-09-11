@@ -15,7 +15,7 @@ assets = {}
 for f in sorted((ROOT / 'assets').glob('*.png')):
     assets[f.stem] = b64('assets/' + f.name, 'image/png')
 css = (ROOT / 'src/style.css').read_text()
-js = '\n'.join((ROOT / 'src' / n).read_text() for n in ['util.js', 'assets.js', 'audio.js', 'track.js', 'render.js', 'game.js'])
+js = '\n'.join((ROOT / 'src' / n).read_text() for n in ['util.js', 'assets.js', 'atlas_frames.js', 'audio.js', 'track.js', 'world.js', 'render.js', 'game.js'])
 assets_js = 'window.__ASSETS__=' + '{' + ','.join('%s:"%s"' % (k, v) for k, v in assets.items()) + '};'
 html = (ROOT / 'index.html').read_text()
 # strip doctype/html/head/body wrappers: the artifact host supplies them; keep a standalone-friendly file too

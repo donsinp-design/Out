@@ -10,14 +10,21 @@
     forkHint: null, wallCd: 0, countdown: 0, overReason: null, result: null, seed: 20240808, paused: false, route: [], cur: null, nextInfo: null, nextKey: null,
     muted: false, drawShift: -200, playerDX: 0, course: 0, touchMode: false,
     wipe: 0, wipeDir: 1, parts: [], skidCd: 0, ranking: [], pendingRecord: null, nameEntry: null, smoke: [], smokeAcc: 0,
-    flip: null, rider: null, drift: 0, driftDir: 1, driftK: 0, marks: [], goT: 0
+    flip: null, rider: null, drift: 0, driftDir: 1, driftK: 0, marks: [], goT: 0,
+    // sprite-driven rider / world state
+    crash: null, bumpT: 0, braking: false, crouch: false, riderT: 0, vxLat: 0, flutter: 0,
+    hopY: 0, hopV: 0, stackY: 0, stackV: 0, stackC: 0, splashT: 0, splashSide: 1,
+    cam: { pitch: 0, lean: 0, squash: 0, zoom: 1 }
   };
   OB.G = G;
+  const WD = OB.world;
+  // a knock to the ice stack: it lifts, then settles (and compresses if it lands hard)
+  G.stackKick = function (k) { G.stackV -= 70 * k; };
   G.cameraDepth = 1 / Math.tan((G.fov / 2) * Math.PI / 180);
   G.playerZ = G.cameraDepth * G.cameraH * K / (457 - OB.HORIZON);
   const PLAYER_W = 480 / T.roadW;
-  const CARS = ['taxi', 'taxi', 'taxi_orange', 'taxi_blue', 'taxi_green', 'sedan', 'sedan', 'sedan_black', 'sedan_red', 'green', 'green_yellow', 'green_purple'];
-  const ONCOMING = ['bus', 'tuktuk', 'tuktuk'];
+  const CARS = ['taxi', 'taxi', 'taxi_orange', 'taxi_blue', 'taxi_green', 'sedan', 'sedan', 'sedan_black', 'sedan_red', 'green', 'green_yellow', 'green_purple', 'truck', 'pickup', 'pickup_w'];
+  const ONCOMING = ['bus', 'tuktuk', 'tuktuk', 'songthaew'];
   const store = { get(k, d) { try { const v = localStorage.getItem(k); return v === null ? d : JSON.parse(v); } catch (e) { return d; } }, set(k, v) { try { localStorage.setItem(k, JSON.stringify(v)); } catch (e) { } } };
   G.ranking = store.get('ob_ranking', []); if (!Array.isArray(G.ranking)) G.ranking = [];
   { const legacy = parseInt(store.get('ob_hiscore', 0)) || 0; if (legacy > 0 && !G.ranking.length) G.ranking.push({ name: 'ICE', score: legacy, route: '' }); }
@@ -96,10 +103,12 @@
   // ---------- game setup ----------
   function buildStage(key, no) {
     const info = T.buildStage(key, no, G.seed);
+    WD.populate(info.from, info.to, T.STAGES[key].theme, G.seed + no * 101 + key.length);
     return info;
   }
   function newGame(key, stageNo) {
-    T.reset();
+    T.reset(); WD.clear();
+    G.crash = null; G.bumpT = 0; G.hopY = 0; G.hopV = 0; G.stackY = 0; G.stackV = 0; G.stackC = 0; G.splashT = 0; G.flutter = 0; G.cam.pitch = 0; G.cam.lean = 0; G.cam.squash = 0; G.cam.zoom = 1;
     G.stageNo = stageNo || 1; G.stageKey = key || 'charoenkrung'; G.route = [G.stageKey]; G.nextKey = null; G.nextInfo = null;
     G.cur = buildStage(G.stageKey, G.stageNo);
     G.light = T.THEMES[T.STAGES[G.stageKey].theme].light;
@@ -176,34 +185,32 @@
     const cx = W / 2 + (G.drawShift || 0) + (G.playerDX || 0), cy = 457 - 105;
     for (let i = 0; i < n; i++) G.parts.push({ x: cx + (Math.random() - 0.5) * 50, y: cy + (Math.random() - 0.5) * 30, vx: (Math.random() - 0.5) * 420, vy: -(220 + Math.random() * 260), rot: Math.random() * 6, vr: (Math.random() - 0.5) * 12, life: 1.5 });
   }
-  // OutRun-style crash: the bike is thrown up and barrel-rolls across the road, bouncing lower each time, while the
-  // rider is flung off and lands sitting on the tarmac. Everything is in screen space around the bike's normal spot.
-  function wipeout(n) {
-    if (G.flip) return;
-    const dir = G.playerX > 0 ? -1 : 1; // tumbles back toward the middle of the road
-    G.flip = { t: 0, dir, x: 0, y: 0, vx: dir * 110, vy: -720, rot: 0, vr: dir * 9.5, bounces: 0, rest: 0 };
-    G.rider = { x: 0, y: -40, vx: -dir * 70 + (Math.random() - 0.5) * 40, vy: -480, rot: 0, vr: -dir * 7, down: false };
-    G.drift = 0; G.driftK = 0; G.invuln = 4; G.steer = 0; G.lean = 0;
-    spawnParts(n); A.sfx('wipe'); A.sfx('flip');
+  // Crash, with the sheet's fall frames: IMPACT -> LOSE CONTROL -> EJECT -> AIRBORNE -> GROUND HIT -> SLIDE -> STOP -> RECOVER,
+  // about 1.9 s. Direction follows lateral momentum, else the side of the impact. Rider and bike are separate
+  // screen-space objects around the bike's normal spot; the ice becomes world-space debris.
+  function wipeout(n, hitX) {
+    if (G.crash) return;
+    const v = G.vxLat || 0;
+    const dir = Math.abs(v) > 0.12 ? Math.sign(v) : (hitX !== undefined && hitX !== null ? (hitX > G.playerX ? 1 : -1) : (G.playerX > 0 ? -1 : 1));
+    G.crash = { t: 0, dir, phase: 'lose', rider: { x: 0, y: 0, vx: dir * 150, vy: -440 }, bike: { x: 0, vx: dir * 150 }, spilled: false, groundT: 0, recT: 0 };
+    G.drift = 0; G.driftK = 0; G.invuln = 3.5; G.steer = 0; G.lean = dir * 0.95; G.bumpT = 0;
+    spawnParts(n); A.sfx('wipe'); A.sfx('flip'); G.shake = 1.4; G.shakeFast = true;
   }
-  function updateFlip(dt) {
-    const f = G.flip; if (!f) return;
-    f.t += dt;
-    f.vy += 1500 * dt; f.x += f.vx * dt; f.y += f.vy * dt; f.rot += f.vr * dt;
-    if (f.y >= 0) {
-      f.y = 0;
-      if (f.vy > 60) { // bounce: lower, slower, less spin; a puff of dust each time
-        f.bounces++; f.vy = -f.vy * 0.5; f.vx *= 0.65; f.vr *= 0.6; G.shake = Math.max(G.shake, 0.6); A.sfx('bump');
-        for (let i = 0; i < 10; i++) emitSmoke(i % 2 ? 1 : -1, f.x);
-      } else { // down: skids to a stop lying on its side (nearest +-90 degrees), kicking up dust while it still slides
-        f.vy = 0; f.vx *= Math.max(0, 1 - 3 * dt);
-        const side = Math.round((f.rot - Math.PI / 2) / Math.PI) * Math.PI + Math.PI / 2; f.rot += (side - f.rot) * Math.min(1, dt * 10); f.rest += dt;
-        if (Math.abs(f.vx) > 15 && Math.random() < 0.6) emitSmoke(Math.sign(f.vx), f.x);
-      }
+  const pxToRoad = () => 1 / ((G.cameraDepth / G.playerZ) * K * T.roadW);
+  function updateCrash(dt) {
+    const c = G.crash; if (!c) return; c.t += dt;
+    const pz = G.position + G.playerZ, k = pxToRoad();
+    if (c.phase === 'lose' && c.t >= 0.15) c.phase = c.dir < 0 ? 'eject' : 'air';
+    if (c.phase === 'eject' && c.t >= 0.32) c.phase = 'air';
+    if (c.phase === 'air' || c.phase === 'eject') {
+      if (!c.spilled) { c.spilled = true; WD.spillIce(pz - 120, G.playerX, 5, 10, G.speed, c.dir); WD.dust(pz - 80, G.playerX, 'L'); A.sfx('clink'); }
+      if (c.phase === 'air') { c.rider.vy += 1500 * dt; c.rider.x += c.rider.vx * dt; c.rider.y += c.rider.vy * dt;
+        if (c.rider.y >= 0 && c.rider.vy > 0) { c.rider.y = 0; c.phase = 'ground'; c.groundT = 0; A.sfx('thud'); G.shake = Math.max(G.shake, 0.5); WD.dust(pz - 100, G.playerX + c.rider.x * k, 'M'); } }
     }
-    const r = G.rider;
-    if (r && !r.down) { r.vy += 1400 * dt; r.x += r.vx * dt; r.y += r.vy * dt; r.rot += r.vr * dt; if (r.y >= 0 && r.vy > 0) { r.y = 0; r.down = true; r.rot = 0; } }
-    if (f.rest > 1.0 || f.t > 3.6) { G.flip = null; G.rider = null; G.invuln = 1.6; } // reset: rider back on the bike, which blinks while getting going
+    if (c.t > 0.15) { c.bike.x += c.bike.vx * dt; c.bike.vx *= Math.max(0, 1 - 2.4 * dt); if (Math.abs(c.bike.vx) > 40 && Math.random() < dt * 9) WD.dust(pz - 120, G.playerX + c.bike.x * k, 'S', { alpha: 0.6 }); }
+    if (c.phase === 'ground') { c.groundT += dt; c.rider.x += c.rider.vx * dt; c.rider.vx *= Math.max(0, 1 - 3.5 * dt); if (Math.abs(c.rider.vx) > 30 && Math.random() < dt * 8) WD.dust(pz - 100, G.playerX + c.rider.x * k, 'S', { alpha: 0.5 }); if (c.groundT > 0.5) { c.phase = 'recover'; c.recT = 0; } }
+    else if (c.phase === 'recover') { c.recT += dt; if (c.recT > 0.5) c.phase = 'done'; }
+    if (c.phase === 'done' || c.t > 2.6) { G.crash = null; G.invuln = 1.5; G.lean = 0; }
   }
   function updateParts(dt) {
     for (let i = G.parts.length - 1; i >= 0; i--) { const p = G.parts[i]; p.vy += 1100 * dt; p.x += p.vx * dt; p.y += p.vy * dt; p.rot += p.vr * dt; p.life -= dt; if (p.life <= 0 || p.y > H + 30) G.parts.splice(i, 1); }
@@ -245,7 +252,9 @@
       if (c.z > pz) ahead++;
       // overtake bonus
       if (!c.oncoming && !c.passed && c.z < pz - 200 && G.mode === 'play') { c.passed = true; G.score += 300; }
-      // lane AI (same direction): avoid slower car ahead in same lane
+      // lane AI (same direction): avoid slower car ahead in same lane. A lane change is announced first:
+      // indicator on and a small drift toward the line for a moment, then the move.
+      if (c.brake > 0) c.brake -= dt;
       if (!c.oncoming) {
         for (const o of G.cars) {
           if (o === c || o.oncoming) continue;
@@ -255,9 +264,15 @@
             const cand = all.filter(l => Math.abs(l - c.offset) > 0.2 && !(th.oncoming > 0 && l === last));
             let best = null;
             for (const l of cand) { let free = true; for (const q of G.cars) if (q !== c && Math.abs(q.z - c.z) < 30 * segLen && Math.abs(q.offset - l) < 0.4) free = false; if (free) { best = l; break; } }
-            if (best !== null) c.targetLane = best; else c.speed = Math.max(o.speed * 0.95, G.maxSpeed * 0.15);
+            if (best !== null) { if (!c.intent) c.intent = { lane: best, t: 0 }; }
+            else { if (c.speed > o.speed * 0.95) c.brake = 0.5; c.speed = Math.max(o.speed * 0.95, G.maxSpeed * 0.15); }
           }
         }
+        if (c.intent) {
+          c.intent.t += dt; c.ind = Math.sign(c.intent.lane - c.offset);
+          if (c.intent.t < 0.7) c.offset += c.ind * 0.03 * dt; // reading the intention
+          else { c.targetLane = c.intent.lane; if (Math.abs(c.targetLane - c.offset) < 0.01) { c.intent = null; c.ind = 0; } }
+        } else c.ind = 0;
         if (Math.abs(c.targetLane - c.offset) > 0.005) c.offset += Math.sign(c.targetLane - c.offset) * Math.min(Math.abs(c.targetLane - c.offset), dt * 0.5);
       }
     }
@@ -271,17 +286,18 @@
     A.sfx(kind === 'wall' || kind === 'median' ? 'bump' : 'crash');
     G.shake = 1; G.invuln = 1.3; G.bounce = 4;
     if (kind === 'car') {
-      if (car.oncoming) { G.speed = 0; G.health -= 18; G.ice -= 8; wipeout(8); }
-      else if (G.speed - car.speed > G.maxSpeed * 0.55) { G.speed = 0; G.health -= 16; G.ice -= 7; wipeout(6); } // rear-ended at speed: over the bars
-      else { G.speed = Math.min(G.speed, Math.max(0, car.speed * 0.45)); G.health -= 12; G.ice -= 5; spawnParts(2); }
-      G.playerX += (G.playerX >= car.offset ? 1 : -1) * 0.12;
-    } else if (kind === 'sprite') { G.speed = 0; G.health -= 20; G.ice -= 10; G.playerX += (G.playerX > 0 ? -1 : 1) * 0.18; wipeout(8); }
+      const carX = car.offset * T.findSegment(car.z).rw;
+      if (car.oncoming) { G.speed = 0; G.health -= 18; G.ice -= 8; wipeout(3, carX); }
+      else if (G.speed - car.speed > G.maxSpeed * 0.55) { G.speed = 0; G.health -= 16; G.ice -= 7; wipeout(2, carX); } // rear-ended at speed: over the bars
+      else { G.speed = Math.min(G.speed, Math.max(0, car.speed * 0.45)); G.health -= 12; G.ice -= 5; G.bumpT = 0.35; G.stackKick(0.8); WD.spillIce(G.position + G.playerZ, G.playerX, 0, 3, G.speed, G.playerX >= carX ? 1 : -1); }
+      G.playerX += (G.playerX >= carX ? 1 : -1) * 0.12;
+    } else if (kind === 'sprite') { G.speed = 0; G.health -= 20; G.ice -= 10; wipeout(3, car); G.playerX += (G.playerX > 0 ? -1 : 1) * 0.18; }
     else if (kind === 'wall') { G.speed *= 0.4; G.health -= 8; G.ice -= 3; }
     else if (kind === 'median') { G.speed *= 0.3; G.health -= 8; G.ice -= 4; }
     if (G.health <= 0) { G.health = 0; gameOver('wreck'); }
   }
   function checkCollisions(seg) {
-    if (G.flip) return; // tumbling: nothing else can hit the bike
+    if (G.crash) return; // down already: nothing else can hit the bike
     const pz = G.position + G.playerZ, rw = seg.rw, RW = T.roadW;
     // hard edges: the pavement is rideable, but the railing / shopfront line at its outer edge is a wall (never into the river)
     const EDGE = 1.03; // bike centre; its outer side then just touches the railing, never beyond it
@@ -299,7 +315,7 @@
         const sw = (s.w / RW) * (s.thin || 1);
         let cx = sp.offset; const full = s.w / RW; const anchor = sp.anchor || 'center';
         if (anchor === 'left') cx = sp.offset - full / 2; else if (anchor === 'right') cx = sp.offset + full / 2;
-        if (OB.overlap(G.playerX, PLAYER_W, cx, sw, 0.9)) { crash('sprite'); return; }
+        if (OB.overlap(G.playerX, PLAYER_W, cx, sw, 0.9)) { crash('sprite', cx); return; }
       }
     }
     // cars
@@ -307,6 +323,11 @@
       const dz = c.z - pz;
       if (dz < -segLen * 0.6 || dz > segLen * 1.4) continue;
       const cseg = T.findSegment(c.z);
+      // a bus or truck thundering past: whoosh, a flinch, a nudge (never enough to throw you off line)
+      if (c.spr.w >= 1100 && !c.whooshed && Math.abs(dz) < segLen * 1.2) {
+        const gap = Math.abs(G.playerX - c.offset * cseg.rw) - (PLAYER_W + c.spr.w / RW) / 2;
+        if (gap > 0 && gap < 0.2 && Math.abs(G.speed - c.speed) > G.maxSpeed * 0.25) { c.whooshed = true; A.sfx('whoosh'); G.shake = Math.max(G.shake, 0.3); G.bumpT = 0.35; G.flutter = 1; G.playerX += (G.playerX >= c.offset * cseg.rw ? 1 : -1) * 0.03; G.stackKick(0.5); }
+      }
       if (OB.overlap(G.playerX, PLAYER_W, c.offset * cseg.rw, c.spr.w / RW, 0.8)) {
         if (c.oncoming) { crash('car', c); c.z = pz + segLen * 2; return; }
         if (G.speed > c.speed) {
@@ -364,8 +385,22 @@
     if (G.wipe > 0) G.wipe -= dt / 0.7;
     if (G.skidCd > 0) G.skidCd -= dt;
     if (G.goT > 0) G.goT -= dt;
-    updateParts(dt); updateSmoke(dt); updateFlip(dt);
+    if (G.bumpT > 0) G.bumpT -= dt;
+    if (G.splashT > 0) G.splashT -= dt;
+    if (G.flutter > 0) G.flutter -= dt * 1.5;
+    updateParts(dt); updateSmoke(dt); updateCrash(dt);
+    if (G.mode !== 'loading') WD.update(dt, G);
     G.bounce *= 0.8;
+    // ice stack: a spring that lifts on knocks and compresses on landings; hop of the whole bike over bumps
+    G.stackV += (-G.stackY * 260 - G.stackV * 9) * dt; G.stackY += G.stackV * dt;
+    if (G.stackY > 2.5) { G.stackY = 2.5; if (G.stackV > 40) { G.stackC = Math.min(1, G.stackV / 120); G.stackV *= -0.35; } else G.stackV = 0; }
+    if (G.stackC > 0) G.stackC = Math.max(0, G.stackC - dt * 6);
+    if (G.hopV > 0 || G.hopY > 0) { G.hopY += G.hopV * dt; G.hopV -= 900 * dt; if (G.hopY <= 0) { G.hopY = 0; if (G.hopV < -120) { G.stackC = 1; G.cam.squash = 1; G.shake = Math.max(G.shake, 0.25); A.sfx('bump'); if (G.hopV < -250) { G.stackKick(0.6); WD.dust(G.position + G.playerZ - 40, G.playerX, 'S', { alpha: 0.6 }); } } G.hopV = 0; } }
+    // camera: everything short-lived
+    const cam = G.cam, pctNow = G.speed / G.maxSpeed;
+    cam.zoom += ((1 - 0.035 * OB.clamp((pctNow - 0.8) / 0.2, 0, 1)) - cam.zoom) * Math.min(1, dt * 3);
+    cam.squash = Math.max(0, cam.squash - dt * 9);
+    if (G.shake > 0 && G.shakeFast) { G.shake = Math.max(0, G.shake - dt * 10); if (G.shake <= 0) G.shakeFast = false; }
     const wantDrift = driftReq; driftReq = false;
     const mode = G.mode;
     if (mode === 'loading') return;
@@ -403,7 +438,7 @@
     const seg = T.findSegment(G.position + G.playerZ);
     const pct = G.speed / G.maxSpeed;
     const usingTouch = G.touchMode && touch.active;
-    const flipping = !!G.flip;
+    const flipping = !!G.crash;
     if (touch.fingers >= 2) touch.twoT += dt; else touch.twoT = 0; // a held second finger brakes; quick taps do not
     const gas = mode === 'play' && !flipping ? (keys.gas || (G.touchMode && touch.twoT < 0.18)) : false;
     const brake = mode === 'play' && !flipping ? (keys.brake || (G.touchMode && touch.twoT >= 0.18)) : true;
@@ -422,13 +457,23 @@
     G.playerX += G.steer * dx * (offroad ? 0.75 : 1) * (1 + 0.35 * G.driftK);
     G.playerX -= dx * pct * seg.curve * 0.25 * (1 - 0.55 * G.driftK);
     updateMarks(dt, (G.playerX - prevX) * T.roadW * 0.8 * (G.cameraDepth / G.playerZ) * K); // the road (and rubber on it) slides the other way as the camera follows
+    G.vxLat += ((G.playerX - prevX) / dt - G.vxLat) * Math.min(1, dt * 12);
+    // rider pose inputs and short camera cues
+    const speedPrev = G.speed;
+    G.braking = brake && pct > 0.04 && !flipping;
+    G.riderT += dt * (3 + 9 * pct + 6 * Math.max(0, G.flutter));
+    G.cam.lean += ((-G.steer * 3) - G.cam.lean) * Math.min(1, dt * 6);
     if (flipping) G.speed = Math.max(0, G.speed - G.maxSpeed * 2 * dt);
     else if (gas) G.speed += (G.maxSpeed / 3.4) * (1.2 - pct * 0.85) * dt;
     else if (brake) G.speed -= G.maxSpeed * 0.85 * dt;
     else G.speed -= G.maxSpeed / 7 * dt;
     if (drifting) G.speed -= G.maxSpeed * 0.12 * dt; else if (pct > 0.8 && Math.abs(G.steer) > 0.85) G.speed -= G.maxSpeed * 0.04 * dt; // tyres scrub speed
-    if (offroad) { if (G.speed > G.maxSpeed * 0.45) G.speed -= G.maxSpeed * 0.7 * dt; if (pct > 0.1) G.bounce = (Math.random() - 0.5) * 4 * pct; }
+    if (offroad) { if (G.speed > G.maxSpeed * 0.45) G.speed -= G.maxSpeed * 0.7 * dt; if (pct > 0.1) { G.bounce = (Math.random() - 0.5) * 4 * pct; if (Math.random() < dt * 3) { G.bumpT = 0.2; G.stackKick(0.4 * pct); } } }
     G.speed = OB.clamp(G.speed, 0, G.maxSpeed);
+    const accel = (G.speed - speedPrev) / dt;
+    G.crouch = !flipping && ((gas && accel > G.maxSpeed * 0.12 && pct < 0.5) || pct > 0.9);
+    G.cam.pitch += (((gas && accel > G.maxSpeed * 0.1 && pct < 0.7) ? 2 : 0) - G.cam.pitch) * Math.min(1, dt * 8);
+    if (pct > 0.45 && Math.random() < dt * (0.4 + 4 * Math.pow(pct, 3))) G.stackV += (Math.random() - 0.5) * 6 * pct; // road buzz through the stack
     // tyre smoke + rubber: burnout off the line and drifting lay marks; a hard corner at speed only smokes a little
     const burnout = mode === 'play' && !flipping && gas && pct < 0.3, corner = mode === 'play' && !flipping && !drifting && pct > 0.6 && Math.abs(G.steer) > 0.85;
     if (burnout) G.smokeAcc += dt * 520; else if (drifting) G.smokeAcc += dt * 460; else if (corner) G.smokeAcc += dt * 90;
@@ -491,12 +536,12 @@
   window.addEventListener('keydown', e => { if ((e.key === 'Enter' || e.key === ' ') && G.mode === 'over') leaveOver(); });
 
   // debug/testing hook: jump straight into a given stage
-  OB.debugCrash = function () { wipeout(8); }; OB.debugDrift = function () { driftReq = true; };
+  OB.debugCrash = function (hx) { wipeout(3, hx); }; OB.debugDrift = function () { driftReq = true; };
   OB.debugStage = function (key, no) {
-    T.reset(); G.stageNo = no || 2; G.stageKey = key; G.route = ['charoenkrung', key]; G.nextKey = null; G.nextInfo = null;
+    T.reset(); WD.clear(); G.stageNo = no || 2; G.stageKey = key; G.route = ['charoenkrung', key]; G.nextKey = null; G.nextInfo = null;
     G.cur = buildStage(key, G.stageNo); G.light = T.THEMES[T.STAGES[key].theme].light;
     G.position = 0; G.playerX = -0.3; G.speed = G.maxSpeed * 0.5; G.cars = []; G.time = 90; G.mode = 'play'; G.drawShift = 0; G.smoke = []; G.parts = [];
-    G.flip = null; G.rider = null; G.drift = 0; G.driftK = 0; G.marks = []; markLast = -1; G.goT = 0;
+    G.flip = null; G.rider = null; G.drift = 0; G.driftK = 0; G.marks = []; markLast = -1; G.goT = 0; G.crash = null;
     for (let i = 0; i < 8; i++) spawnCar(40 + i * 45);
   };
   // ---------- boot ----------

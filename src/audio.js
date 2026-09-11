@@ -127,7 +127,10 @@
     o1.connect(lp); o2.connect(lp); lp.connect(g); g.connect(sfxBus); o1.start(); o2.start();
     const rn = noise(); rn.loop = true; const rf = ctx.createBiquadFilter(); rf.type = 'lowpass'; rf.frequency.value = 220; const rg = ctx.createGain(); rg.gain.value = 0;
     rn.connect(rf); rf.connect(rg); rg.connect(sfxBus); rn.start();
-    engine = { o1, o2, lp, g, rg };
+    // wind: filtered noise that only really shows up near top speed
+    const wn = noise(); wn.loop = true; const whp = ctx.createBiquadFilter(); whp.type = 'highpass'; whp.frequency.value = 400; const wlp = ctx.createBiquadFilter(); wlp.type = 'lowpass'; wlp.frequency.value = 900; const wg = ctx.createGain(); wg.gain.value = 0;
+    wn.connect(whp); whp.connect(wlp); wlp.connect(wg); wg.connect(sfxBus); wn.start();
+    engine = { o1, o2, lp, g, rg, wg, wlp };
   };
   A.unlock = function () { // call from a real user gesture (touchend / click / keydown)
     A.init(); if (!ctx) return;
@@ -148,6 +151,7 @@
     engine.lp.frequency.setTargetAtTime(300 + 1400 * pct, t, 0.1);
     engine.g.gain.setTargetAtTime(on ? (0.012 + 0.035 * pct + (throttle ? 0.008 : 0)) : 0, t, 0.1);
     engine.rg.gain.setTargetAtTime(on && offroad ? 0.1 * Math.min(1, pct * 2) : 0, t, 0.05);
+    engine.wg.gain.setTargetAtTime(on ? 0.11 * pct * pct * pct : 0, t, 0.15); engine.wlp.frequency.setTargetAtTime(500 + 2600 * pct, t, 0.2);
   };
   A.setMusicVolume = (v) => { if (musicBus) musicBus.gain.setTargetAtTime(v, ctx.currentTime, 0.2); };
 
@@ -316,6 +320,19 @@
         g.gain.setValueAtTime(0.001, t); g.gain.exponentialRampToValueAtTime(0.22, t + 0.1); g.gain.exponentialRampToValueAtTime(0.001, t + 0.8); n.connect(f); f.connect(g); g.connect(sfxBus); n.start(t); n.stop(t + 0.85); break; }
       case 'wipe': { for (let i = 0; i < 4; i++) tone('square', 900 - i * 180, t + i * 0.07, 0.08, 0.08, sfxBus, { slide: 400 - i * 60 }); break; }
       case 'name': tone('square', 1200, t, 0.05, 0.08, sfxBus); break;
+      case 'whoosh': { const n = noise(), f = ctx.createBiquadFilter(), g = ctx.createGain(); f.type = 'bandpass'; f.Q.value = 0.9; f.frequency.setValueAtTime(900, t); f.frequency.exponentialRampToValueAtTime(180, t + 0.5);
+        g.gain.setValueAtTime(0.001, t); g.gain.exponentialRampToValueAtTime(0.32, t + 0.06); g.gain.exponentialRampToValueAtTime(0.001, t + 0.5); n.connect(f); f.connect(g); g.connect(sfxBus); n.start(t); n.stop(t + 0.55); break; }
+      case 'splash': { const n = noise(), f = ctx.createBiquadFilter(), g = ctx.createGain(); f.type = 'highpass'; f.frequency.value = 1400; g.gain.setValueAtTime(0.3, t); g.gain.exponentialRampToValueAtTime(0.001, t + 0.28); n.connect(f); f.connect(g); g.connect(sfxBus); n.start(t); n.stop(t + 0.3);
+        tone('sine', 320, t, 0.1, 0.12, sfxBus, { slide: 110 }); break; }
+      case 'crunch': { const n = noise(), f = ctx.createBiquadFilter(), g = ctx.createGain(); f.type = 'lowpass'; f.frequency.setValueAtTime(1600, t); f.frequency.exponentialRampToValueAtTime(300, t + 0.3); g.gain.setValueAtTime(0.45, t); g.gain.exponentialRampToValueAtTime(0.001, t + 0.35); n.connect(f); f.connect(g); g.connect(sfxBus); n.start(t); n.stop(t + 0.4);
+        tone('square', 95, t, 0.14, 0.14, sfxBus, { slide: 50 }); break; }
+      case 'plastic': hit(t, 0.09, 0.28, 'bandpass', 2300, 1.2, sfxBus); tone('square', 640, t, 0.05, 0.06, sfxBus, { slide: 300 }); break;
+      case 'box': hit(t, 0.16, 0.3, 'lowpass', 650, 0.8, sfxBus); break;
+      case 'clank': tone('square', 1900, t, 0.09, 0.08, sfxBus, { slide: 900 }); tone('triangle', 2500, t + 0.02, 0.12, 0.07, sfxBus); break;
+      case 'clunk': hit(t, 0.12, 0.35, 'lowpass', 260, 0.8, sfxBus); tone('sine', 85, t, 0.12, 0.2, sfxBus, { slide: 50 }); break;
+      case 'thud': hit(t, 0.2, 0.4, 'lowpass', 190, 0.8, sfxBus); tone('sine', 62, t, 0.2, 0.25, sfxBus, { slide: 35 }); break;
+      case 'bark': tone('square', 340, t, 0.07, 0.11, sfxBus, { slide: 230, filter: 1300 }); tone('square', 360, t + 0.11, 0.07, 0.11, sfxBus, { slide: 220, filter: 1300 }); break;
+      case 'clink': [2600, 3300, 4100].forEach((f, i) => tone('sine', f, t + i * 0.035, 0.06, 0.1, sfxBus)); break;
       case 'beep': tone('square', 880, t, 0.12, 0.12, sfxBus); break;
       case 'go': tone('square', 1760, t, 0.5, 0.12, sfxBus); tone('square', 1320, t, 0.5, 0.06, sfxBus); break;
       case 'check': [0, 4, 7, 12, 16].forEach((n, i) => tone('square', hz(72 + n), t + i * 0.08, 0.18, 0.1, sfxBus)); break;
