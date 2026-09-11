@@ -363,6 +363,17 @@
 
   // ---------- shophouse composer: reference ground floor + drawn upper storeys + swappable shop modules ----------
   const FAC_WALLS = ['#d9cdb1', '#d9cdb1', '#e3d8c0', '#cfd6c4', '#d8c9c1', '#c9d2d8'];
+  // 24 7 convenience-store fascia: white board, three horizontal stripes, the name; used on shophouses and on the pole sign
+  function store247(o, W, y0, h) {
+    px(o, 0, y0, W, h, '#f6f6f2'); px(o, 0, y0, W, 2, '#ffffff'); px(o, 0, y0 + h - 3, W, 3, '#6b6b66'); px(o, W - 6, y0, 6, h, '#d9d9d3');
+    const sy = y0 + Math.round(h * 0.3);
+    px(o, 0, sy, W, 10, '#f47a20'); px(o, 0, sy + 10, W, 10, '#00843d'); px(o, 0, sy + 20, W, 10, '#e4002b');
+    o.save(); o.textAlign = 'center'; o.textBaseline = 'middle'; o.font = '700 ' + Math.round(h * 0.34) + 'px "Kanit"';
+    const ty = sy + 30 + (y0 + h - (sy + 30)) / 2;
+    o.fillStyle = '#00843d'; o.fillText('24', W / 2 - Math.round(h * 0.2), ty); o.fillStyle = '#e4002b'; o.fillText('7', W / 2 + Math.round(h * 0.22), ty);
+    o.restore();
+  }
+  function sign247() { const c = mk(120, 70), g = c.getContext('2d'); store247(g, 120, 0, 70); px(g, 0, 0, 120, 70, 'rgba(0,0,0,0)'); return c; }
   function composeFacade(rng, opt) {
     const base = IMG[opt.cart ? 'facade0' : 'facade1'];
     const W = 260, floors = opt.floors, FH = 64, PAR = 14, TOP = 22, upperH = PAR + floors * FH;
@@ -407,16 +418,24 @@
     g.drawImage(U, 0, 0); g.drawImage(base, 0, TOP + upperH);
     // ground-floor modules
     const O = mk(W, 300), o = O.getContext('2d'); let any = false; o.imageSmoothingEnabled = false;
-    { const band = opt.band === 'sign' || opt.band === 'wall' ? opt.band : (rng.chance(0.6) ? 'sign' : 'wall');
-      px(o, 0, 0, W, 98, wall); px(o, 0, 36, W, 2, light); px(o, W - 6, 0, 6, 98, dark); any = true;
+    { const band = opt.band === 'store' ? 'store' : (opt.band === 'sign' || opt.band === 'wall' ? opt.band : (rng.chance(0.6) ? 'sign' : 'wall'));
+      any = true;
+      if (band === 'store') store247(o, W, 0, 150); // fascia covers the band and the awning strip
+      else { px(o, 0, 0, W, 98, wall); px(o, 0, 36, W, 2, light); px(o, W - 6, 0, 6, 98, dark); }
       if (band === 'sign') {
         const sc = opt.signCol || rng.pick(SIGNCOL), txt = opt.text || rng.pick(SIGNTXT);
         px(o, 14, 44, W - 34, 46, sc[0]); px(o, 14, 44, W - 34, 3, shade(sc[0], 1.3)); px(o, 14, 87, W - 34, 3, shade(sc[0], 0.6)); px(o, 14, 44, 3, 46, shade(sc[0], 0.6)); px(o, W - 23, 44, 3, 46, shade(sc[0], 0.6));
         o.fillStyle = sc[1]; o.font = '700 30px "Kanit"'; o.textAlign = 'center'; o.textBaseline = 'middle'; o.fillText(txt, W / 2 - 4, 67);
       } else { for (let k = 0; k < 3; k++) { px(o, 30 + k * 70, 48, 40, 34, frame); px(o, 32 + k * 70, 50, 36, 30, winC); px(o, 33 + k * 70, 51, 14, 8, '#5c7797'); } }
     }
-    const it = opt.interior;
-    if (it === 'shutter') {
+    const it = opt.band === 'store' ? 'store' : opt.interior;
+    if (it === 'store') { // lit glass shopfront: door in the middle, two fridges, low shelves; everything level
+      px(o, 6, 150, W - 16, 150, '#dfe9e4'); px(o, 6, 150, W - 16, 4, '#9aa8a2');
+      px(o, 12, 158, W - 28, 130, '#eef8f3'); px(o, 12, 158, W - 28, 2, '#ffffff');
+      for (let k = 0; k < 2; k++) { const fx = k ? W - 96 : 24; px(o, fx, 170, 60, 110, '#bcd6e8'); px(o, fx + 3, 173, 54, 104, '#d9eaf5'); px(o, fx + 29, 173, 2, 104, '#8aa0b4'); for (let r = 0; r < 4; r++) px(o, fx + 5, 190 + r * 22, 50, 2, '#a9c1d3'); }
+      px(o, W / 2 - 26, 176, 52, 110, '#8aa0b4'); px(o, W / 2 - 23, 179, 46, 104, '#cfe3ee'); px(o, W / 2 - 1, 179, 2, 104, '#8aa0b4'); px(o, W / 2 + 6, 232, 6, 3, '#333'); px(o, W / 2 - 12, 232, 6, 3, '#333');
+      px(o, 6, 286, W - 16, 14, '#b8b4aa'); any = true;
+    } else if (it === 'shutter') {
       px(o, 6, 150, W - 16, 150, '#9aa0a8'); for (let yy = 154; yy < 300; yy += 4) px(o, 6, yy, W - 16, 1, '#6f757d'); px(o, 6, 150, W - 16, 4, '#4a4f56'); px(o, 6, 294, W - 16, 6, '#5a5f66');
       px(o, W / 2 - 12, 262, 24, 10, '#4a4f56'); const pc = rng.pick(['#c8322b', '#1f4fa3', '#e0b030']); px(o, 30, 185, 56, 70, pc); px(o, 34, 189, 48, 62, shade(pc, 1.25)); any = true;
     } else if (it === 'gold') {
@@ -472,7 +491,7 @@
     add('spirit_small', IMG.spirit, 300, { solid: true }); // fits on the river walkway
     add('vendor', IMG.vendor, 640, { solid: true });
     add('yen', IMG.yen, 330, { solid: true });
-    add('seven_pole', onPole(IMG.seven, 240, 1, 6), 1000, { solid: true, thin: 0.25 });
+    add('seven_pole', onPole(sign247(), 240, 1, 6), 1000, { solid: true, thin: 0.25 });
     add('signs_pole', onPole(IMG.signs, 300, 1, 8), 1300, { solid: true, thin: 0.2 });
     add('ckrd_pole', onPole(IMG.ckrd, 190, 1, 5), 900, { solid: true, thin: 0.2 });
     add('thatien_pole', onPole(IMG.thatien, 150, 1, 5), 700, { solid: true, thin: 0.2 });
@@ -489,7 +508,7 @@
     const facades = [], cnFacades = [], backFacades = [];
     for (let i = 0; i < 14; i++) {
       const cart = i % 5 === 0;
-      const opt = { cart, floors: rng.chance(0.55) ? 1 : 2, band: cart ? 'stripes' : rng.pick(['stripes', 'sign', 'sign', 'wall']), interior: cart ? 'keep' : rng.pick(INT), awning: rng.pick(AWN) };
+      const opt = { cart, floors: rng.chance(0.55) ? 1 : 2, band: cart ? 'sign' : rng.pick(['store', 'sign', 'sign', 'wall', 'store']), interior: cart ? 'keep' : rng.pick(INT), awning: rng.pick(AWN) };
       facades.push({ c: composeFacade(rng, opt), cart });
     }
     const CNTXT = ['ร้านทอง', 'ฮั่วเซ่งเฮง', 'หูฉลาม', 'เป็ดย่าง', 'ตั้งโต๊ะกัง', 'บะหมี่เกี๊ยว', 'ร้านชาจีน', 'เยาวราช'];
@@ -499,7 +518,7 @@
       cnFacades.push({ c: composeFacade(rng, opt), cart: i === 3 });
     }
     for (let i = 0; i < 6; i++) {
-      const opt = { cart: false, floors: 3, band: rng.pick(['sign', 'wall', 'stripes']), interior: rng.pick(INT), awning: rng.pick(AWN), wall: rng.pick(FAC_WALLS) };
+      const opt = { cart: false, floors: 3, band: rng.pick(['sign', 'wall', 'store']), interior: rng.pick(INT), awning: rng.pick(AWN), wall: rng.pick(FAC_WALLS) };
       backFacades.push({ c: composeFacade(rng, opt), cart: false });
     }
     // Street blocks: three different shophouses side by side on one card. Blocks are much wider than their
