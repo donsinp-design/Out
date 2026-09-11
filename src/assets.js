@@ -363,15 +363,20 @@
 
   // ---------- shophouse composer: reference ground floor + drawn upper storeys + swappable shop modules ----------
   const FAC_WALLS = ['#d9cdb1', '#d9cdb1', '#e3d8c0', '#cfd6c4', '#d8c9c1', '#c9d2d8'];
-  // 7-Eleven fascia: white board (goes through the painterly texture pass) + the real logo sprite (IMG.seven)
-  // stamped on top afterwards, untouched, so the cut-out photo art stays crisp; used on shophouses and the pole sign.
-  function store247Board(o, W, y0, h) {
-    px(o, 0, y0, W, h, '#f6f6f2'); px(o, 0, y0, W, 2, '#ffffff'); px(o, 0, y0 + h - 3, W, 3, '#6b6b66'); px(o, W - 6, y0, 6, h, '#d9d9d3');
-  }
-  function store247Logos(g, W, y0, h) {
-    const logo = IMG.seven, lh = Math.round(h * 0.8), lw = Math.round(lh * logo.width / logo.height);
+  // 7-Eleven storefront, straight from the reference photo. facade1's stripe band was cut in three pieces that sit at
+  // three different heights, so one clean piece (lintel, eave shadow, the three stripes, awning top) is repeated
+  // level across the shop, mirrored every other time so the joins meet, and the photo's own logo panel goes on top.
+  // Drawn after the texture pass so the photo pixels are left alone.
+  const STORE_TILE = { x: 14, w: 52, h: 108 };
+  function storeBand(g, W, y0) {
+    const src = IMG.facade1, logo = IMG.seven, t = STORE_TILE;
     g.save(); g.imageSmoothingEnabled = false;
-    g.drawImage(logo, (W - lw) / 2, y0 + (h - lh) / 2, lw, lh);
+    for (let i = 0, x = 0; x < W; i++, x += t.w) {
+      const w = Math.min(t.w, W - x);
+      if (i % 2) { g.save(); g.translate(x + w, y0); g.scale(-1, 1); g.drawImage(src, t.x + t.w - w, 0, w, t.h, 0, 0, w, t.h); g.restore(); }
+      else g.drawImage(src, t.x, 0, w, t.h, x, y0, w, t.h);
+    }
+    g.drawImage(logo, Math.round((W - logo.width) / 2), y0 + 30);
     g.restore();
   }
   function sign247() { const logo = IMG.seven, s = 2.2, w = Math.round(logo.width * s), h = Math.round(logo.height * s), c = mk(w, h), g = c.getContext('2d'); g.imageSmoothingEnabled = false; g.drawImage(logo, 0, 0, w, h); return c; }
@@ -421,15 +426,14 @@
     const O = mk(W, 300), o = O.getContext('2d'); let any = false; o.imageSmoothingEnabled = false;
     { const band = opt.band === 'store' ? 'store' : (opt.band === 'sign' || opt.band === 'wall' ? opt.band : (rng.chance(0.6) ? 'sign' : 'wall'));
       any = true;
-      if (band === 'store') store247Board(o, W, 0, 150); // fascia board covers the band and the awning strip
-      else { px(o, 0, 0, W, 98, wall); px(o, 0, 36, W, 2, light); px(o, W - 6, 0, 6, 98, dark); }
+      if (band !== 'store') { px(o, 0, 0, W, 98, wall); px(o, 0, 36, W, 2, light); px(o, W - 6, 0, 6, 98, dark); } // the store band is stamped from the photo after the texture pass
       if (band === 'sign') {
         const sc = opt.signCol || rng.pick(SIGNCOL), txt = opt.text || rng.pick(SIGNTXT);
         px(o, 14, 44, W - 34, 46, sc[0]); px(o, 14, 44, W - 34, 3, shade(sc[0], 1.3)); px(o, 14, 87, W - 34, 3, shade(sc[0], 0.6)); px(o, 14, 44, 3, 46, shade(sc[0], 0.6)); px(o, W - 23, 44, 3, 46, shade(sc[0], 0.6));
         o.fillStyle = sc[1]; o.font = '700 30px "Kanit"'; o.textAlign = 'center'; o.textBaseline = 'middle'; o.fillText(txt, W / 2 - 4, 67);
       } else { for (let k = 0; k < 3; k++) { px(o, 30 + k * 70, 48, 40, 34, frame); px(o, 32 + k * 70, 50, 36, 30, winC); px(o, 33 + k * 70, 51, 14, 8, '#5c7797'); } }
     }
-    const it = opt.band === 'store' ? 'store' : opt.interior;
+    const it = opt.band === 'store' ? 'keep' : opt.interior; // the 7-Eleven keeps the photo's own shelves under the awning
     if (it === 'store') { // lit glass shopfront: door in the middle, two fridges, low shelves; everything level
       px(o, 6, 150, W - 16, 150, '#dfe9e4'); px(o, 6, 150, W - 16, 4, '#9aa8a2');
       px(o, 12, 158, W - 28, 130, '#eef8f3'); px(o, 12, 158, W - 28, 2, '#ffffff');
@@ -455,7 +459,7 @@
       any = true;
     }
     if (any) { texturize(O, { amp: 0.08 }); g.drawImage(O, 0, TOP + upperH); }
-    if (opt.band === 'store') store247Logos(g, W, TOP + upperH, 150); // stamp the real logo crisp, after the texture pass
+    if (opt.band === 'store') storeBand(g, W, TOP + upperH);
     if (opt.awning) { g.save(); g.globalCompositeOperation = 'color'; g.fillStyle = opt.awning; g.fillRect(0, TOP + upperH + 96, W, 54); g.restore(); }
     return c;
   }

@@ -55,8 +55,12 @@
     if ((e.key === 'p' || e.key === 'P' || e.key === 'Escape') && (G.mode === 'play')) { G.paused = true; G.menuSel = 0; }
   });
   // ---------- full screen + pause menu ----------
+  // launched from the home screen (standalone web app): already edge to edge, so the full screen controls go away
+  const STANDALONE = !!(navigator.standalone || (window.matchMedia && (matchMedia('(display-mode: standalone)').matches || matchMedia('(display-mode: fullscreen)').matches)));
+  OB.standalone = STANDALONE;
   let fsFailed = false;
   function toggleFullscreen(quiet) {
+    if (STANDALONE) return;
     const el = document.documentElement;
     try {
       if (document.fullscreenElement || document.webkitFullscreenElement) { (document.exitFullscreen || document.webkitExitFullscreen).call(document); return; }
@@ -66,16 +70,17 @@
     } catch (e) { if (!quiet) fsUnavailable(); }
   }
   function fsUnavailable() { fsFailed = true; say('FULL SCREEN NOT AVAILABLE HERE', 'iPhone: เพิ่มไปยังหน้าจอโฮม / ใช้แนวนอน', 2.6, '#ffd800', 10); }
-  OB.isFullscreen = () => !!(document.fullscreenElement || document.webkitFullscreenElement);
-  const MENU = ['RESUME', 'RESTART', 'MUSIC', 'FULL SCREEN', 'QUIT TO TITLE'];
+  OB.isFullscreen = () => STANDALONE || !!(document.fullscreenElement || document.webkitFullscreenElement);
+  const MENU = STANDALONE ? ['RESUME', 'RESTART', 'MUSIC', 'QUIT TO TITLE'] : ['RESUME', 'RESTART', 'MUSIC', 'FULL SCREEN', 'QUIT TO TITLE'];
   OB.MENU = MENU;
   function menuAction(i) {
     A.sfx('select');
-    if (i === 0) G.paused = false;
-    else if (i === 1) { G.paused = false; startRun(); }
-    else if (i === 2) { G.muted = !G.muted; A.setMusicVolume(G.muted ? 0 : A.MUSIC_VOL); }
-    else if (i === 3) toggleFullscreen();
-    else if (i === 4) { G.paused = false; A.stopMusic(); G.mode = 'title'; newGame(); }
+    const m = MENU[i];
+    if (m === 'RESUME') G.paused = false;
+    else if (m === 'RESTART') { G.paused = false; startRun(); }
+    else if (m === 'MUSIC') { G.muted = !G.muted; A.setMusicVolume(G.muted ? 0 : A.MUSIC_VOL); }
+    else if (m === 'FULL SCREEN') toggleFullscreen();
+    else if (m === 'QUIT TO TITLE') { G.paused = false; A.stopMusic(); G.mode = 'title'; newGame(); }
   }
   function pauseKey(e) {
     const n = MENU.length, k = e.key;

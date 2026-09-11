@@ -197,11 +197,13 @@
     }
     // ---- sprite pass (back to front): every projected slice, clipped by the crest line, so nothing pops ----
     const poles = { L: [], R: [] };
+    let lastPole = null;
     for (let n = projected.length - 1; n >= 0; n--) {
       const seg = projected[n];
       const th = T.THEMES[seg.theme];
       if (seg.rail && !seg.hidden) renderRail(seg, pal);
       const scale = seg.p1.screen.scale, sx = seg.p1.screen.x, sy = seg.p1.screen.y;
+      let newPole = null;
       for (const sp of seg.sprites) {
         const s = sp.spr, img = s.img;
         const destW = s.w * scale * K, destH = destW * img.height / img.width;
@@ -210,13 +212,16 @@
         if (anchor === 'center') destX -= destW / 2; else if (anchor === 'left') destX -= destW;
         let destY = sy - destH;
         if (sp.water) destY += scale * WATER_DROP * K;
+        // pole tops are kept even off screen, so in a corner the wires leave the frame toward the real next pole
+        if (sp.pole && s.poleTop) { const top = { x: destX + destW * s.poleTop.x, y: destY + destH * s.poleTop.y, w: destW, seg: seg.index }; poles[sp.pole].push(top); if (sp.pole === 'L') newPole = top; }
         if (destX > W || destX + destW < 0) continue;
         if (sp.flick) { const ph = (G.t * 6 + sp.flick * 1.7) % 4; if (ph < 0.07 || (ph > 0.5 && ph < 0.54)) ctx.globalAlpha = 0.45; } // a lit sign with a bad tube
         drawSprite(img, destX, destY, destW, destH, seg.clip, sp.flip);
         ctx.globalAlpha = 1;
-        if (sp.pole && s.poleTop) poles[sp.pole].push({ x: destX + destW * s.poleTop.x, y: destY + destH * s.poleTop.y, w: destW, seg: seg.index });
         if (sp.pillar) { /* pillars carry the deck */ }
       }
+      // the wire span that ends at this segment's pole is drawn now, so nearer shophouses paint over it
+      if (newPole) { if (lastPole) wireSpan(lastPole, newPole); lastPole = newPole; }
       if (seg.deck && !seg.hidden) renderDeck(seg, pal);
       const cars = carsBySeg.get(seg.index);
       if (cars) for (const c of cars) {
@@ -236,8 +241,8 @@
     }
     // speed streaks radiate from the road's vanishing point (only near top speed)
     if (WD.streaks.n) WD.drawStreaks(ctx, G, W / 2 + (G.drawShift || 0) + (G.playerDX || 0), 457 - 95);
-    // ---- wires (left-hand power lines only, as in the reference frame) ----
-    drawWires(poles.L, G, -1, baseSeg, camX, camY, camZ, playerSeg);
+    // ---- wires: the last span carries on toward the pole beside the camera (left-hand lines only, as in the reference) ----
+    wireTail(poles.L, G, -1, baseSeg, camX, camY, camZ);
     // ---- player ----
     drawPlayer(G);
     ctx.restore();
@@ -246,28 +251,40 @@
     else if (G.light === 'dusk') { ctx.globalCompositeOperation = 'multiply'; ctx.fillStyle = '#d9a8c8'; ctx.fillRect(0, 0, W, H); ctx.globalCompositeOperation = 'screen'; ctx.fillStyle = 'rgba(120,40,90,0.18)'; ctx.fillRect(0, 0, W, H); ctx.globalCompositeOperation = 'source-over'; }
   };
 
-  function drawWires(list, G, side, baseSeg, camX, camY, camZ, playerSeg) {
-    if (!list.length) return;
-    // virtual pole near the camera so wires run off the top corner like the reference
-    const seg = baseSeg; const p = { world: { x: 0, y: seg.p1.world.y, z: (seg.index + 1) * OB.track.segLen }, camera: {}, screen: {} };
-    project(p, camX, camY, camZ, G.cameraDepth, seg.rw);
-    const nearScale = p.screen.scale, nearW = OB.SPR.pole.w * nearScale * K;
-    const near = { x: p.screen.x + nearScale * side * 1.2 * seg.rw * OB.track.roadW * K, y: p.screen.y - nearW * (300 / 40) * 0.96, w: nearW };
-    const pts = list.slice(); pts.push(near);
+  // one bundle of five sagging lines between two pole tops (a farther, b nearer)
+  function wireSpan(a, b) {
+    if (b.w < a.w) return;
     ctx.save(); ctx.strokeStyle = 'rgba(18,18,22,0.85)';
-    for (let i = 0; i < pts.length - 1; i++) {
-      const a = pts[i], b = pts[i + 1];
-      if (b.w < a.w) continue; // must be nearer
-      const lw = OB.clamp(b.w * 0.05, 0.8, 2.2); ctx.lineWidth = lw;
-      const d = Math.hypot(b.x - a.x, b.y - a.y);
-      for (let k = 0; k < 5; k++) {
-        const oa = (k - 2) * a.w * 0.16, ob = (k - 2) * b.w * 0.16;
-        const ya = a.y + (k % 2) * a.w * 0.12, yb = b.y + (k % 2) * b.w * 0.12;
-        const sag = d * (0.08 + k * 0.012);
-        ctx.beginPath(); ctx.moveTo(a.x + oa, ya); ctx.quadraticCurveTo((a.x + b.x) / 2 + (oa + ob) / 2, (ya + yb) / 2 + sag, b.x + ob, yb); ctx.stroke();
-      }
+    ctx.lineWidth = OB.clamp(b.w * 0.05, 0.8, 2.2);
+    const d = Math.hypot(b.x - a.x, b.y - a.y);
+    for (let k = 0; k < 5; k++) {
+      const oa = (k - 2) * a.w * 0.16, ob = (k - 2) * b.w * 0.16;
+      const ya = a.y + (k % 2) * a.w * 0.12, yb = b.y + (k % 2) * b.w * 0.12;
+      const sag = d * (0.08 + k * 0.012);
+      ctx.beginPath(); ctx.moveTo(a.x + oa, ya); ctx.quadraticCurveTo((a.x + b.x) / 2 + (oa + ob) / 2, (ya + yb) / 2 + sag, b.x + ob, yb); ctx.stroke();
     }
     ctx.restore();
+  }
+  // Past the nearest pole the line keeps going where the poles were heading: the next pole sits one spacing closer,
+  // so its screen step is the last step scaled by the perspective ratio r/(2-r) (r = size ratio of the last two).
+  // That follows the kerb round a corner instead of always shooting to the top corner of the frame.
+  function wireTail(list, G, side, baseSeg, camX, camY, camZ) {
+    if (!list.length) return;
+    if (list.length === 1) { // only one pole in view: a stand-in pole beside the camera
+      const seg = baseSeg; const p = { world: { x: 0, y: seg.p1.world.y, z: (seg.index + 1) * OB.track.segLen }, camera: {}, screen: {} };
+      project(p, camX, camY, camZ, G.cameraDepth, seg.rw);
+      const nearScale = p.screen.scale, nearW = OB.SPR.pole.w * nearScale * K;
+      wireSpan(list[0], { x: p.screen.x + nearScale * side * 1.2 * seg.rw * OB.track.roadW * K, y: p.screen.y - nearW * (300 / 40) * 0.96, w: nearW });
+      return;
+    }
+    let a = list[list.length - 2], b = list[list.length - 1];
+    for (let k = 0; k < 3; k++) {
+      const r = Math.min(b.w / Math.max(a.w, 1e-6), 1.9), g = 1 / (2 - r);
+      const c = { x: b.x + (b.x - a.x) * r * g, y: b.y + (b.y - a.y) * r * g, w: b.w * g };
+      wireSpan(b, c);
+      if (c.x < -40 || c.x > W + 40 || c.y < -40 || c.y > H + 40) break;
+      a = b; b = c;
+    }
   }
   function drawLanterns(poles) {
     const L = poles.L, Rr = poles.R; if (!L.length || !Rr.length) return;
@@ -537,8 +554,9 @@
         for (let i = 0; i < 3; i++) { const r = rk[i]; if (!r) break; TXT(ctx, (i + 1) + ['ST', 'ND', 'RD'][i] + ' ' + (r.name + '   ').slice(0, 3) + ' ' + OB.pad(r.score, 7), rx, ry + 16 + i * 14, { size: 6, sy: 1.4, fill: i === 0 ? '#ffd800' : '#fff', outline: '#000', outlineW: 3 }); }
       }
     }
-    // full screen toggle, top-right (F on a keyboard)
-    { const bx = W - 44, by = 10, s = 30; ctx.fillStyle = 'rgba(0,0,0,0.5)'; ctx.fillRect(bx, by, s, s); ctx.fillStyle = '#fff';
+    // full screen toggle, top-right (F on a keyboard); not needed when launched from the home screen
+    R.hit.fs = null;
+    if (!OB.standalone) { const bx = W - 44, by = 10, s = 30; ctx.fillStyle = 'rgba(0,0,0,0.5)'; ctx.fillRect(bx, by, s, s); ctx.fillStyle = '#fff';
       for (const [cx, cy] of [[0, 0], [1, 0], [0, 1], [1, 1]]) { const px = bx + 6 + cx * (s - 12 - 3), py = by + 6 + cy * (s - 12 - 3); ctx.fillRect(px, py + (cy ? 6 : 0), 9, 3); ctx.fillRect(px + (cx ? 6 : 0), py, 3, 9); }
       R.hit.fs = { x: bx - 8, y: by - 8, w: s + 16, h: s + 16 }; }
     if (false) TXT(ctx, 'ROTATE YOUR PHONE FOR FULL SCREEN', W / 2, 16, { size: 7, sy: 1.4, fill: '#ffd800', outline: '#000', outlineW: 3, align: 'center' });
