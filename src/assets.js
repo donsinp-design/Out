@@ -363,17 +363,19 @@
 
   // ---------- shophouse composer: reference ground floor + drawn upper storeys + swappable shop modules ----------
   const FAC_WALLS = ['#d9cdb1', '#d9cdb1', '#e3d8c0', '#cfd6c4', '#d8c9c1', '#c9d2d8'];
-  // 24 7 convenience-store fascia: white board, three horizontal stripes, the name; used on shophouses and on the pole sign
-  function store247(o, W, y0, h) {
+  // 7-Eleven fascia: white board (goes through the painterly texture pass) + the real logo sprite (IMG.seven)
+  // stamped on top afterwards, untouched, so the cut-out photo art stays crisp; used on shophouses and the pole sign.
+  function store247Board(o, W, y0, h) {
     px(o, 0, y0, W, h, '#f6f6f2'); px(o, 0, y0, W, 2, '#ffffff'); px(o, 0, y0 + h - 3, W, 3, '#6b6b66'); px(o, W - 6, y0, 6, h, '#d9d9d3');
-    const sy = y0 + Math.round(h * 0.3);
-    px(o, 0, sy, W, 10, '#f47a20'); px(o, 0, sy + 10, W, 10, '#00843d'); px(o, 0, sy + 20, W, 10, '#e4002b');
-    o.save(); o.textAlign = 'center'; o.textBaseline = 'middle'; o.font = '700 ' + Math.round(h * 0.34) + 'px "Kanit"';
-    const ty = sy + 30 + (y0 + h - (sy + 30)) / 2;
-    o.fillStyle = '#00843d'; o.fillText('24', W / 2 - Math.round(h * 0.2), ty); o.fillStyle = '#e4002b'; o.fillText('7', W / 2 + Math.round(h * 0.22), ty);
-    o.restore();
   }
-  function sign247() { const c = mk(120, 70), g = c.getContext('2d'); store247(g, 120, 0, 70); px(g, 0, 0, 120, 70, 'rgba(0,0,0,0)'); return c; }
+  function store247Logos(g, W, y0, h) {
+    const logo = IMG.seven, lh = Math.round(h * 0.74), lw = Math.round(lh * logo.width / logo.height);
+    const n = Math.max(1, Math.floor(W / (lw + 24))), gap = (W - n * lw) / (n + 1);
+    g.save(); g.imageSmoothingEnabled = false;
+    for (let i = 0; i < n; i++) g.drawImage(logo, gap + i * (lw + gap), y0 + (h - lh) / 2, lw, lh);
+    g.restore();
+  }
+  function sign247() { const logo = IMG.seven, s = 2.2, w = Math.round(logo.width * s), h = Math.round(logo.height * s), c = mk(w, h), g = c.getContext('2d'); g.imageSmoothingEnabled = false; g.drawImage(logo, 0, 0, w, h); return c; }
   function composeFacade(rng, opt) {
     const base = IMG[opt.cart ? 'facade0' : 'facade1'];
     const W = 260, floors = opt.floors, FH = 64, PAR = 14, TOP = 22, upperH = PAR + floors * FH;
@@ -420,7 +422,7 @@
     const O = mk(W, 300), o = O.getContext('2d'); let any = false; o.imageSmoothingEnabled = false;
     { const band = opt.band === 'store' ? 'store' : (opt.band === 'sign' || opt.band === 'wall' ? opt.band : (rng.chance(0.6) ? 'sign' : 'wall'));
       any = true;
-      if (band === 'store') store247(o, W, 0, 150); // fascia covers the band and the awning strip
+      if (band === 'store') store247Board(o, W, 0, 150); // fascia board covers the band and the awning strip
       else { px(o, 0, 0, W, 98, wall); px(o, 0, 36, W, 2, light); px(o, W - 6, 0, 6, 98, dark); }
       if (band === 'sign') {
         const sc = opt.signCol || rng.pick(SIGNCOL), txt = opt.text || rng.pick(SIGNTXT);
@@ -454,6 +456,7 @@
       any = true;
     }
     if (any) { texturize(O, { amp: 0.08 }); g.drawImage(O, 0, TOP + upperH); }
+    if (opt.band === 'store') store247Logos(g, W, TOP + upperH, 150); // stamp the real logo crisp, after the texture pass
     if (opt.awning) { g.save(); g.globalCompositeOperation = 'color'; g.fillStyle = opt.awning; g.fillRect(0, TOP + upperH + 96, W, 54); g.restore(); }
     return c;
   }
