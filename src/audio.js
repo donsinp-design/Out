@@ -140,6 +140,8 @@
       if (!silentEl) { silentEl = document.createElement('audio'); silentEl.setAttribute('playsinline', ''); silentEl.loop = true; silentEl.volume = 0.01; silentEl.src = silentWav(); document.body.appendChild(silentEl); }
       const p = silentEl.play(); if (p && p.catch) p.catch(() => { });
     } catch (e) { }
+    // a track whose play() was blocked before the first gesture gets picked up here
+    if (TRK.want && TRK.el && TRK.el.paused) { const p = TRK.el.play(); if (p && p.catch) p.catch(() => { }); }
   };
   ['touchend', 'pointerup', 'click', 'keydown'].forEach(ev => window.addEventListener(ev, () => A.unlock(), { passive: true }));
 
@@ -153,7 +155,7 @@
     engine.rg.gain.setTargetAtTime(on && offroad ? 0.1 * Math.min(1, pct * 2) : 0, t, 0.05);
     engine.wg.gain.setTargetAtTime(on ? 0.11 * pct * pct * pct : 0, t, 0.15); engine.wlp.frequency.setTargetAtTime(500 + 2600 * pct, t, 0.2);
   };
-  A.setMusicVolume = (v) => { if (musicBus) musicBus.gain.setTargetAtTime(v, ctx.currentTime, 0.2); };
+  A.setMusicVolume = (v) => { if (TRK.el) TRK.el.volume = Math.max(0, Math.min(1, v)); if (musicBus) musicBus.gain.setTargetAtTime(v, ctx.currentTime, 0.2); };
 
   // ---------- instruments ----------
   function env(g, t0, vol, a, d, s, r, dur) { // ADSR on a gain node
@@ -297,12 +299,33 @@
     const st = A.stations[M.station], dur = 60 / st.bpm / 4;
     while (M.next < ctx.currentTime + 0.18) { scheduleStep(st, M.step, M.next); M.step++; M.next += dur; }
   }
+  // ---------- bundled track ----------
+  // When the build inlines a song (window.__TRACK__) it plays instead of the synth stations, through the same
+  // transport calls and the same music volume. The synth stays as the fallback when no track is bundled.
+  const TRK = { el: null, want: false };
+  function trackEl() {
+    if (TRK.el || !window.__TRACK__) return TRK.el;
+    const el = new Audio(); el.src = window.__TRACK__; el.loop = true; el.preload = 'auto';
+    el.setAttribute('playsinline', ''); el.volume = A.MUSIC_VOL;
+    TRK.el = el; return el;
+  }
+  A.hasTrack = () => !!window.__TRACK__;
+  function trackPlay() {
+    const el = trackEl(); if (!el) return false;
+    TRK.want = true; const p = el.play(); if (p && p.catch) p.catch(() => {}); // a blocked play retries on the next unlock
+    return true;
+  }
   A.playMusic = function (station) {
+    // the bundled song replaces the stations; keep M.playing true so callers that poll it behave the same
+    if (trackPlay()) { M.station = station; M.playing = true; if (M.timer) clearInterval(M.timer); M.timer = null; return; }
     if (!ctx) return; M.station = station; M.step = 0; M.next = ctx.currentTime + 0.06; M.playing = true; M.last = null;
     const st = A.stations[station]; if (leadDelay) leadDelay.d.delayTime.setValueAtTime(60 / st.bpm / 4 * st.delay, ctx.currentTime);
     if (M.timer) clearInterval(M.timer); M.timer = setInterval(tick, 40);
   };
-  A.stopMusic = function () { M.playing = false; if (M.timer) clearInterval(M.timer); M.timer = null; };
+  A.stopMusic = function () {
+    TRK.want = false; if (TRK.el) { TRK.el.pause(); try { TRK.el.currentTime = 0; } catch (e) {} }
+    M.playing = false; if (M.timer) clearInterval(M.timer); M.timer = null;
+  };
 
   // ---------- sfx ----------
   A.sfx = function (name) {

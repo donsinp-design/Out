@@ -220,7 +220,7 @@
         if (dz < -segLen() && dz > -3 * segLen() && !a.chased && pct < 0.45 && a.dogSeed < 0.3) { a.state = 'chase'; a.t = 0; a.chased = true; OB.audio.sfx('bark'); }
         break;
       case 'walk':
-        a.frame = ['DOG_WALK', 'DOG_IDLE'][Math.floor(a.t * 4) % 2]; a.z += a.dir * 160 * dt; a.flip = a.dir < 0 ? a.side < 0 : a.side > 0;
+        a.frame = 'DOG_WALK'; a.hop = Math.abs(Math.sin(a.t * 8)) * 0.5; a.z += a.dir * 160 * dt; a.flip = a.dir < 0 ? a.side < 0 : a.side > 0;
         if (a.t > 2.5 + (a.seed % 3)) { a.state = 'idle'; a.t = 0; }
         if (near && Math.abs(px) > rw * 0.85 && Math.sign(px) === a.side) { a.state = 'flee'; a.t = 0; }
         break;
@@ -258,11 +258,13 @@
   function catUpdate(a, dt, G, pz, px) {
     const dz = a.z - pz, rw = T.findSegment(a.z).rw; a.t += dt;
     switch (a.state) {
-      case 'idle': a.frame = 'CAT_IDLE'; if (a.t > 4 + (a.seed % 5)) { a.state = 'walk'; a.t = 0; a.dir = Math.random() < 0.5 ? 1 : -1; }
+      case 'idle': a.frame = 'CAT_IDLE'; a.hop = 0; if (a.t > 4 + (a.seed % 5)) { a.state = 'walk'; a.t = 0; a.dir = Math.random() < 0.5 ? 1 : -1; }
         if (dz > -segLen() && dz < 800 && (Math.abs(a.x - px) < 0.45)) { a.state = 'run'; a.t = 0; } break;
-      case 'walk': a.frame = ['CAT_WALK', 'CAT_IDLE'][Math.floor(a.t * 4) % 2]; a.z += a.dir * 110 * dt; a.flip = a.dir < 0 ? a.side < 0 : a.side > 0;
+      // one body per state plus a step bob: alternating between two differently shaped frames read as the cat
+      // swapping for a different animal mid-stride, the same way the pedestrians used to
+      case 'walk': a.frame = 'CAT_WALK'; a.hop = Math.abs(Math.sin(a.t * 9)) * 0.5; a.z += a.dir * 110 * dt; a.flip = a.dir < 0 ? a.side < 0 : a.side > 0;
         if (a.t > 2) { a.state = 'idle'; a.t = 0; } if (dz > -segLen() && dz < 800 && Math.abs(a.x - px) < 0.45) { a.state = 'run'; a.t = 0; } break;
-      case 'run': a.frame = ['CAT_RUN', 'CAT_WALK'][Math.floor(a.t * 12) % 2]; a.x += a.side * 0.4 * dt; a.flip = a.side < 0; if (a.t > 0.5) { a.state = 'hide'; a.t = 0; } break;
+      case 'run': a.frame = 'CAT_RUN'; a.hop = Math.abs(Math.sin(a.t * 17)) * 0.8; a.x += a.side * 0.4 * dt; a.flip = a.side < 0; if (a.t > 0.5) { a.state = 'hide'; a.t = 0; } break;
       case 'hide': a.frame = 'CAT_IDLE'; if (a.t > 3) { a.state = 'idle'; a.t = 0; } break;
     }
     if (Math.abs(a.x) > rw + 0.125) a.x = Math.sign(a.x) * (rw + 0.125);
@@ -270,7 +272,7 @@
   function lizardUpdate(a, dt, G, pz, px) {
     const dz = a.z - pz; a.t += dt;
     if (dz > -segLen() && dz < 900 && Math.abs(a.x - px) < 0.5) { a.frame = 'LIZARD_WALK'; return; } // freezes
-    a.frame = ['LIZARD_WALK', 'LIZARD_RUN'][Math.floor(a.t * 2) % 2]; a.z += a.dir * 45 * dt; a.flip = a.dir < 0 ? a.side < 0 : a.side > 0;
+    a.frame = 'LIZARD_WALK'; a.hop = Math.abs(Math.sin(a.t * 7)) * 0.35; a.z += a.dir * 45 * dt; a.flip = a.dir < 0 ? a.side < 0 : a.side > 0;
   }
   // props: what happens when the bike ploughs through them
   const PROP_W = { stall: 0.34, cart: 0.27, chair: 0.22, cone: 0.1, box: 0.2, sign: 0.14 };

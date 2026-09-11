@@ -679,12 +679,15 @@
     TXT(ctx, 'SCORE ' + OB.pad(G.score, 7) + '    STAGE ' + G.stageNo, W / 2, 276, { size: 9, sy: 1.4, fill: '#fff', outline: '#000', outlineW: 4, align: 'center' });
     R.hit.rows = [];
     if (G.pendingRecord) { if (Math.floor(G.t * 2) % 2 === 0) TXT(ctx, 'PRESS START', W / 2, 306, { size: 10, sy: 1.3, fill: '#ffd800', outline: '#000', outlineW: 4, align: 'center' }); return; }
-    ['RETRY', 'TITLE'].forEach((label, i) => {
-      const bw = 150, bh = 34, bx = W / 2 - 160 + i * 170, by = 290, sel = i === (G.overSel || 0);
+    const labels = OB.MENU_OVER || ['RETRY', 'TITLE'];
+    const bw = 150, gap = 20, total = labels.length * bw + (labels.length - 1) * gap, x0 = W / 2 - total / 2;
+    labels.forEach((label, i) => {
+      const bh = 34, bx = x0 + i * (bw + gap), by = 290, sel = i === (G.overSel || 0);
       ctx.fillStyle = sel ? '#ffd800' : '#2b2f3a'; ctx.fillRect(bx, by, bw, bh); ctx.fillStyle = sel ? '#fff' : '#4a5060'; ctx.fillRect(bx, by, bw, 2); ctx.fillRect(bx, by + bh - 2, bw, 2);
       TXT(ctx, label, bx + bw / 2, by + 22, { size: 10, sy: 1.3, fill: sel ? '#000' : '#cfd3da', align: 'center' });
       R.hit.rows.push({ x: bx, y: by, w: bw, h: bh, i });
     });
+    if (OB.savedNameLabel) TXT(ctx, 'SAVED AS ' + OB.savedNameLabel, W / 2, 344, { size: 7, sy: 1.4, fill: '#9fb2c0', outline: '#000', outlineW: 3, align: 'center' });
   };
   R.goal = function (G) {
     const r = G.result; if (!r) return;

@@ -1,0 +1,29 @@
+# Backup route: if the checked-in .xcodeproj ever gives trouble, regenerate it from this spec with XcodeGen
+# (brew install xcodegen), run `xcodegen generate` in this folder, then open ICEMAN.xcodeproj.
+name: ICEMAN
+options:
+  bundleIdPrefix: com.looktwice
+  deploymentTarget:
+    iOS: "16.0"
+  createIntermediateGroups: true
+targets:
+  ICEMAN:
+    type: application
+    platform: iOS
+    sources:
+      - path: ICEMAN
+    settings:
+      base:
+        PRODUCT_NAME: ICE MAN
+        PRODUCT_BUNDLE_IDENTIFIER: com.looktwice.iceman
+        MARKETING_VERSION: "1.0"
+        CURRENT_PROJECT_VERSION: "1"
+        ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon
+        SWIFT_VERSION: "5.0"
+        TARGETED_DEVICE_FAMILY: "1,2"
+        GENERATE_INFOPLIST_FILE: YES
+        INFOPLIST_KEY_UILaunchScreen_Generation: YES
+        INFOPLIST_KEY_UIRequiresFullScreen: YES
+        INFOPLIST_KEY_UIStatusBarHidden: YES
+        INFOPLIST_KEY_CFBundleDisplayName: ICE MAN
+        INFOPLIST_KEY_UISupportedInterfaceOrientations: "UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationLandscapeRight"

@@ -21,7 +21,10 @@ for f in sorted((ROOT / 'assets').glob('*.png')):
 css = (ROOT / 'src/style.css').read_text()
 js = '\n'.join((ROOT / 'src' / n).read_text() for n in ['util.js', 'assets.js', 'atlas_frames.js', 'audio.js', 'track.js', 'world.js', 'render.js', 'game.js'])
 build_stamp = datetime.datetime.now(datetime.timezone.utc).strftime('%Y-%m-%d %H:%M UTC')
-assets_js = 'window.__BUILD__=%s;' % json.dumps(build_stamp) + 'window.__ASSETS__=' + '{' + ','.join('%s:"%s"' % (k, v) for k, v in assets.items()) + '};'
+track = ROOT / 'audio/track.mp3'
+track_js = 'window.__TRACK__=%s;' % json.dumps(b64('audio/track.mp3', 'audio/mpeg')) if track.exists() else ''
+assets_js = ('window.__BUILD__=%s;' % json.dumps(build_stamp) + track_js
+             + 'window.__ASSETS__=' + '{' + ','.join('%s:"%s"' % (k, v) for k, v in assets.items()) + '};')
 html = (ROOT / 'index.html').read_text()
 body = re.search(r'<body>(.*)</body>', html, re.S).group(1)
 body = re.sub(r'<script src="[^"]+"></script>\s*', '', body)

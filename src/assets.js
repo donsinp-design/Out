@@ -495,7 +495,9 @@
     add('tuktuk_parked', IMG.tuktuk, 900, { solid: true });
     add('spirit', IMG.spirit, 640, { solid: true });
     add('spirit_small', IMG.spirit, 300, { solid: true }); // fits on the river walkway
-    add('vendor', IMG.vendor, 640, { solid: true });
+    // the photo cut-out of the vendor carries the shop interior behind it as opaque pixels; the sheet's stall is
+    // cut properly, so the roadside vendor uses that instead
+    add('vendor', FC('STALL_IDLE'), 700, { solid: true });
     add('yen', IMG.yen, 330, { solid: true });
     add('seven_pole', onPole(sign247(), 240, 1, 6), 1000, { solid: true, thin: 0.25 });
     add('signs_pole', onPole(IMG.signs, 300, 1, 8), 1300, { solid: true, thin: 0.2 });

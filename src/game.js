@@ -42,7 +42,7 @@
     if (G.mode === 'name') { nameKey(e); e.preventDefault(); return; }
     if (e.key === 'f' || e.key === 'F') { toggleFullscreen(); e.preventDefault(); return; }
     if (G.mode === 'play' && G.paused) { pauseKey(e); e.preventDefault(); return; }
-    if (G.mode === 'over' && (e.key === 'ArrowLeft' || e.key === 'ArrowRight' || e.key === 'a' || e.key === 'd')) { G.overSel = 1 - (G.overSel || 0); A.sfx('select'); e.preventDefault(); return; }
+    if (G.mode === 'over' && (e.key === 'ArrowLeft' || e.key === 'ArrowRight' || e.key === 'a' || e.key === 'd')) { const n = (OB.MENU_OVER || ['RETRY', 'TITLE']).length, d = (e.key === 'ArrowLeft' || e.key === 'a') ? n - 1 : 1; G.overSel = ((G.overSel || 0) + d) % n; A.sfx('select'); e.preventDefault(); return; }
     if (KEYMAP[e.key]) { keys[KEYMAP[e.key]] = true; e.preventDefault(); }
     // drift: Shift / Space while steering hard, or a quick double tap of the steering key
     const dirKey = KEYMAP[e.key] === 'left' || KEYMAP[e.key] === 'right' ? KEYMAP[e.key] : null;
@@ -89,7 +89,14 @@
     else if (k === 'Enter' || k === ' ') menuAction(G.menuSel || 0);
     else if (k === 'Escape' || k === 'p' || k === 'P') G.paused = false;
   }
-  function overAction(i) { if (G.pendingRecord) { leaveOver(); return; } A.sfx('select'); startPressed = false; if (i === 0) startRun(); else { G.mode = 'title'; newGame(); } }
+  function overAction(i) {
+    if (G.pendingRecord) { leaveOver(); return; }
+    A.sfx('select'); startPressed = false;
+    const label = (OB.MENU_OVER || [])[i];
+    if (label === 'RENAME') { store.set('ob_name', ''); OB.savedNameLabel = null; OB.MENU_OVER = ['RETRY', 'TITLE']; G.overSel = 0; }
+    else if (label === 'TITLE') { G.mode = 'title'; newGame(); }
+    else startRun();
+  }
   window.addEventListener('keyup', e => { if (KEYMAP[e.key]) { keys[KEYMAP[e.key]] = false; e.preventDefault(); } });
   // Touch: no on-screen buttons. The bike accelerates by itself; steering follows the first finger's horizontal
   // position (left of centre steers left, further out steers harder); a second finger held while steering hard drifts;
@@ -216,7 +223,19 @@
   // ---------- records / name entry ----------
   function qualifies(score) { return score >= 1000 && (G.ranking.length < 5 || score > G.ranking[G.ranking.length - 1].score); }
   function routeStr() { return G.route.map(k => T.STAGES[k].name.eng.split(' ').map(w => w[0]).join('')).join('>'); }
-  function enterName() { G.mode = 'name'; G.nameEntry = { chars: ['_', '_', '_'], pos: 0, cursor: 0, time: 30, score: G.pendingRecord.score, route: G.pendingRecord.route }; }
+  // The name is remembered between runs: once it has been entered, a new record is filed under it straight away and
+  // the entry screen is skipped, so a crash restarts immediately. Hold RENAME on the game over screen to change it.
+  function savedName() { const n = String(store.get('ob_name', '') || '').toUpperCase().replace(/[^A-Z0-9]/g, '').slice(0, 3); return n || null; }
+  function fileRecord(rec, name) {
+    G.ranking.push({ name, score: Math.floor(rec.score), route: rec.route });
+    G.ranking.sort((a, b) => b.score - a.score); G.ranking = G.ranking.slice(0, 5);
+    store.set('ob_ranking', G.ranking); G.hiScore = G.ranking[0].score; G.pendingRecord = null; G.nameEntry = null;
+  }
+  function enterName(force) {
+    const saved = savedName();
+    if (saved && !force) { fileRecord(G.pendingRecord, saved); G.mode = 'title'; newGame(); return; }
+    G.mode = 'name'; G.nameEntry = { chars: ['_', '_', '_'], pos: 0, cursor: 0, time: 30, score: G.pendingRecord.score, route: G.pendingRecord.route };
+  }
   function nameSelect(i) {
     const ne = G.nameEntry; if (!ne) return; const ch = OB.NAME_CHARS[i]; ne.cursor = i; A.sfx('name');
     if (ch === 'END') { if (ne.pos > 0) finishName(); }
@@ -236,8 +255,8 @@
   function finishName() {
     const ne = G.nameEntry; if (!ne) return;
     const name = (ne.chars.map(c => c === '_' ? '' : c).join('') || 'ICE').slice(0, 3);
-    G.ranking.push({ name, score: Math.floor(ne.score), route: ne.route }); G.ranking.sort((a, b) => b.score - a.score); G.ranking = G.ranking.slice(0, 5);
-    store.set('ob_ranking', G.ranking); G.hiScore = G.ranking[0].score; G.pendingRecord = null; G.nameEntry = null;
+    store.set('ob_name', name); // remembered, so the next record files itself and the entry screen is skipped
+    fileRecord({ score: ne.score, route: ne.route }, name);
     A.sfx('check'); G.mode = 'title'; newGame();
   }
   function leaveOver() { A.sfx('select'); startPressed = false; if (G.pendingRecord) enterName(); else { G.mode = 'title'; newGame(); } }
@@ -426,6 +445,7 @@
   function gameOver(reason) {
     if (G.mode === 'over') return;
     G.mode = 'over'; G.overReason = reason; G.forkHint = null; G.overSel = 0; A.stopMusic(); A.sfx('over'); resetInput();
+    OB.savedNameLabel = savedName(); OB.MENU_OVER = OB.savedNameLabel ? ['RETRY', 'TITLE', 'RENAME'] : ['RETRY', 'TITLE'];
     if (qualifies(G.score)) G.pendingRecord = { score: G.score, route: routeStr() };
   }
   function progress(seg) {
