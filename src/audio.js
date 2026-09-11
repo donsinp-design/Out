@@ -17,35 +17,55 @@
       if (tok === '-') { if (cur) cur.len++; } else if (tok === '.') { cur = null; } else { cur = { step, midi: midi(tok), len: 1 }; out.push(cur); }
       step++;
     }));
-    return { notes: out, steps: step };
+    // gaps of 4+ steps after a phrase get a phin answer starting from the phrase's last note
+    const answers = [];
+    for (let i = 0; i < out.length; i++) { const end = out[i].step + out[i].len, next = i + 1 < out.length ? out[i + 1].step : step, gap = next - end; if (gap >= 4) answers.push({ step: end, len: Math.min(gap, 6), from: out[i].midi }); }
+    return { notes: out, steps: step, answers };
   }
 
   // ---------- songs ----------
-  // Retro OutRun feel (latin/city-pop arcade band) with Thai pentatonic melodies, a phin-style plucked riff and a khaen drone.
+  // เพลงบ้านๆ: the Thai country-fair sound.
+  //  1) LUK THUNG SHOWER  - luk thung in sam-cha rhythm (kick 1-2-3-4-4&, congas, cowbell), keyboard brass, sung-style lead
+  //  2) MOR LAM WAVE      - mor lam sing: driving 2-beat, khaen ostinato, phin riff all the way through
+  //  3) RAMWONG BREEZE    - ramwong: relaxed hand-drum groove, ching on the off-beat, ranat ek lead
+  // Each station: chords per bar, bass root + pattern, melody A (verse) and B (hook), 16-step kit patterns,
+  // ching pattern, brass stab steps, phin riff shape, optional khaen drone, and the pentatonic scale for phin answers.
   A.stations = [
-    { name: 'LUK THUNG SHOWER', thai: 'ลูกทุ่ง ชาวเวอร์', bpm: 140, lead: 'square', delay: 3, ranatDouble: true, ching: '....o.......c...',
-      chords: [CH('A3', 'C4', 'E4', 'G4'), CH('A3', 'C4', 'E4', 'G4'), CH('D4', 'F4', 'A4', 'C5'), CH('E4', 'G4', 'B4', 'D5'), CH('A3', 'C4', 'E4', 'G4'), CH('C4', 'E4', 'G4', 'B4'), CH('F3', 'A3', 'C4', 'E4'), CH('E3', 'G#3', 'B3', 'D4')],
-      bass: ['A1', 'A1', 'D2', 'E2', 'A1', 'C2', 'F1', 'E1'], bassPat: 'x..x..5.x..x..o.',
-      melody: ['E5 - - G5 A5 - G5 E5 - - D5 - E5 - - -', 'C5 - D5 - E5 - - - G5 - E5 - D5 - C5 -', 'A4 - C5 - D5 - E5 - - - D5 - C5 - A4 -', 'G4 - - - B4 - D5 - E5 - - - - - . .',
-        'E5 - - G5 A5 - G5 E5 - - D5 - E5 - G5 -', 'A5 - - - G5 - E5 - G5 - A5 - C6 - - -', 'A5 - G5 - E5 - D5 - C5 - D5 - E5 - G5 -', 'E5 - - - - - D5 - B4 - - - . . . .'],
-      kick: 'x...x...x...x..x', snare: '....x.......x...', rim: '..r...r...r...r.', hat: 'h.h.h.o.h.h.h.o.', shaker: 'sSsSsSsSsSsSsSsS', conga: '..c.C...c..cC...', bell: 'b...b.b...b...b.',
-      stabs: [0, 6, 10], riff: [0, 1, 2, 3, 2, 1, 0, 1], drone: null },
-    { name: 'MOR LAM WAVE', thai: 'หมอลำ เวฟ', bpm: 152, lead: 'sawtooth', delay: 2, riffAlways: true, glide: true, ching: 'o...c...o...c...',
-      chords: [CH('D4', 'F4', 'A4', 'C5'), CH('D4', 'F4', 'A4', 'C5'), CH('C4', 'E4', 'G4', 'A4'), CH('D4', 'F4', 'A4', 'C5'), CH('D4', 'F4', 'A4', 'C5'), CH('F3', 'A3', 'C4', 'D4'), CH('C4', 'E4', 'G4', 'A4'), CH('D4', 'F4', 'A4', 'C5')],
-      bass: ['D2', 'D2', 'C2', 'D2', 'D2', 'F1', 'C2', 'D2'], bassPat: 'x.o.x.5.x.o.x.5.',
-      melody: ['D5 - F5 G5 A5 - - - C6 - A5 - G5 - F5 -', 'D5 - - - F5 - D5 - C5 - D5 - - - . .', 'A4 - C5 D5 F5 - D5 - C5 - A4 - G4 - A4 -', 'C5 - - - D5 - - - - - - - . . . .',
-        'D5 - F5 G5 A5 - - - C6 - D6 - C6 - A5 -', 'G5 - A5 - F5 - D5 - F5 - G5 - A5 - - -', 'C6 - A5 - G5 - F5 - D5 - F5 - G5 - A5 -', 'D5 - - - - - - - - - - - . . . .'],
-      kick: 'x.x.x.x.x.x.x.x.', snare: '....x.......x..x', rim: '..r.....r.r.....', hat: 'hhhhhhhhhhhhhhhh', shaker: 'sSsSsSsSsSsSsSsS', conga: 'c.c...C.c.c...CC', bell: 'b.b.b.b.b.b.b.b.',
-      stabs: [0, 3, 8, 11], riff: [0, 2, 1, 3, 0, 2, 1, 3], drone: CH('D3', 'A3', 'D4') },
-    { name: 'CHAO PHRAYA BREEZE', thai: 'สายลมเจ้าพระยา', bpm: 128, lead: 'ranat', delay: 3, ching: '....o.......c...',
-      chords: [CH('C4', 'E4', 'G4', 'B4'), CH('A3', 'C4', 'E4', 'G4'), CH('F3', 'A3', 'C4', 'E4'), CH('G3', 'B3', 'D4', 'E4'), CH('C4', 'E4', 'G4', 'B4'), CH('E3', 'G3', 'B3', 'D4'), CH('F3', 'A3', 'C4', 'E4'), CH('G3', 'B3', 'D4', 'F4')],
+    { name: 'LUK THUNG SHOWER', thai: 'ลูกทุ่ง สามช่า', bpm: 132, lead: 'square', delay: 3, ranatDouble: true, glide: true,
+      scale: [7, 9, 11, 14, 16],
+      chords: [CH('G3', 'B3', 'D4'), CH('G3', 'B3', 'D4'), CH('C4', 'E4', 'G4'), CH('D4', 'F#4', 'A4', 'C5'), CH('G3', 'B3', 'D4'), CH('E3', 'G3', 'B3'), CH('C4', 'E4', 'G4'), CH('D4', 'F#4', 'A4', 'C5')],
+      bass: ['G1', 'G1', 'C2', 'D2', 'G1', 'E1', 'C2', 'D2'], bassPat: 'x..x..5.x...o.5.',
+      melody: ['D5 - E5 - G5 - - - E5 - D5 - B4 - - -', 'A4 - B4 - D5 - - - - - B4 - A4 - G4 -', 'E5 - - - G5 - E5 - D5 - B4 - D5 - - -', 'A4 - - - - - - - . . . . . . . .',
+        'D5 - E5 - G5 - - - A5 - G5 - E5 - - -', 'B4 - D5 - E5 - - - - - D5 - B4 - A4 -', 'G4 - A4 - B4 - D5 - E5 - D5 - B4 - A4 -', 'G4 - - - - - - - . . . . . . . .'],
+      melodyB: ['G5 - - - E5 - G5 - A5 - - - G5 - E5 -', 'D5 - - - E5 - D5 - B4 - - - . . . .', 'E5 - G5 - A5 - - - B5 - A5 - G5 - E5 -', 'D5 - - - - - - - . . . . . . . .',
+        'G5 - - - E5 - G5 - A5 - - - B5 - - -', 'A5 - G5 - E5 - D5 - E5 - - - . . . .', 'B4 - D5 - E5 - G5 - A5 - G5 - E5 - D5 -', 'G4 - - - - - - - - - - - . . . .'],
+      kick: 'x...x...x...x.x.', snare: '....x.......x...', rim: '..r...r...r.rr..', hat: 'h.h.h.h.h.h.h.h.', shaker: 'sSsSsSsSsSsSsSsS', conga: 'c.C...c.C.c.C.CC', bell: 'b..b..b.b..b..b.', ching: '....o.......c...',
+      stabs: [0, 6, 12, 14], riff: [0, 1, 2, 1, 0, 2, 1, 0], drone: null },
+    { name: 'MOR LAM WAVE', thai: 'หมอลำซิ่ง', bpm: 160, lead: 'sawtooth', delay: 2, riffAlways: true, glide: true,
+      scale: [2, 5, 7, 9, 12],
+      chords: [CH('D4', 'F4', 'A4'), CH('D4', 'F4', 'A4'), CH('C4', 'G4', 'C5'), CH('D4', 'F4', 'A4'), CH('D4', 'F4', 'A4'), CH('F3', 'A3', 'C4'), CH('C4', 'G4', 'C5'), CH('D4', 'F4', 'A4')],
+      bass: ['D2', 'D2', 'C2', 'D2', 'D2', 'F1', 'C2', 'D2'], bassPat: 'x.5.x.5.x.o.x.5.',
+      melody: ['D5 D5 D5 - F5 - D5 - C5 - D5 - - - . .', 'A4 A4 C5 - D5 - C5 - A4 - G4 - A4 - - -', 'D5 - F5 - G5 - A5 - G5 - F5 - D5 - C5 -', 'D5 - - - - - - - . . . . . . . .',
+        'A5 - - - G5 - F5 - G5 - A5 - C6 - - -', 'A5 - G5 - F5 - D5 - F5 - - - . . . .', 'C5 - D5 - F5 - G5 - A5 - G5 - F5 - D5 -', 'D5 - - - - - - - . . . . . . . .'],
+      melodyB: ['A5 A5 A5 - G5 - A5 - C6 - - - A5 - G5 -', 'F5 - D5 - F5 - G5 - F5 - D5 - C5 - - -', 'D5 D5 F5 F5 G5 - A5 - G5 - F5 - D5 - - -', 'C5 - D5 - - - - - . . . . . . . .',
+        'A5 - C6 - D6 - - - C6 - A5 - G5 - - -', 'F5 - G5 - A5 - - - G5 - F5 - D5 - - -', 'F5 - D5 - C5 - D5 - F5 - G5 - A5 - - -', 'D5 - - - - - - - . . . . . . . .'],
+      kick: 'x.x.x.x.x.x.x.x.', snare: '..x...x...x...x.', rim: '', hat: 'hhhhhhhhhhhhhhhh', shaker: 'sSsSsSsSsSsSsSsS', conga: 'c...C.c.c...C.CC', bell: 'b...b...b...b...', ching: 'o.c.o.c.o.c.o.c.',
+      stabs: [0, 8], riff: [0, 2, 1, 2, 0, 2, 1, 3], drone: CH('D3', 'A3', 'D4') },
+    { name: 'RAMWONG BREEZE', thai: 'รำวง เจ้าพระยา', bpm: 116, lead: 'ranat', delay: 3,
+      scale: [0, 2, 4, 7, 9],
+      chords: [CH('C4', 'E4', 'G4'), CH('A3', 'C4', 'E4'), CH('F3', 'A3', 'C4'), CH('G3', 'B3', 'D4'), CH('C4', 'E4', 'G4'), CH('E3', 'G3', 'B3'), CH('F3', 'A3', 'C4'), CH('G3', 'B3', 'D4')],
       bass: ['C2', 'A1', 'F1', 'G1', 'C2', 'E2', 'F1', 'G1'], bassPat: 'x.....5.x.....5.',
-      melody: ['E5 - G5 - A5 - - - G5 - E5 - D5 - - -', 'C5 - D5 - E5 - - - - - G5 - A5 - - -', 'A5 - G5 - E5 - D5 - C5 - - - D5 - E5 -', 'G5 - - - - - E5 - D5 - - - . . . .',
-        'E5 - G5 - A5 - - - C6 - A5 - G5 - - -', 'E5 - - - G5 - E5 - D5 - C5 - A4 - - -', 'C5 - D5 - E5 - G5 - A5 - G5 - E5 - D5 -', 'C5 - - - - - - - - - - - . . . .'],
-      kick: 'x..x....x..x....', snare: '....x.......x...', rim: '..r..r..r..r..r.', hat: 'h.h.h.h.h.h.h.h.', shaker: 'sSsSsSsSsSsSsSsS', conga: '..c...C...c.c.C.', bell: '',
-      stabs: [0, 6, 10], riff: [0, 1, 2, 1, 3, 2, 1, 0], drone: null }
+      melody: ['E5 - G5 - A5 - - - G5 - E5 - D5 - C5 -', 'D5 - E5 - D5 - C5 - A4 - - - . . . .', 'C5 - D5 - E5 - G5 - A5 - - - G5 - E5 -', 'G5 - - - - - - - . . . . . . . .',
+        'A5 - G5 - E5 - D5 - E5 - G5 - A5 - - -', 'C6 - A5 - G5 - E5 - G5 - - - . . . .', 'E5 - D5 - C5 - D5 - E5 - G5 - E5 - D5 -', 'C5 - - - - - - - . . . . . . . .'],
+      melodyB: ['G5 - A5 - C6 - - - A5 - G5 - E5 - - -', 'D5 - E5 - G5 - - - E5 - D5 - C5 - - -', 'A4 - C5 - D5 - E5 - G5 - - - E5 - D5 -', 'E5 - - - - - - - . . . . . . . .',
+        'G5 - E5 - D5 - C5 - D5 - E5 - G5 - - -', 'A5 - - - G5 - E5 - D5 - - - . . . .', 'C5 - D5 - E5 - G5 - A5 - G5 - E5 - D5 -', 'C5 - - - - - - - - - - - . . . .'],
+      kick: 'x.......x.......', snare: '', rim: '....r.......r...', hat: 'h...h...h...h...', shaker: 's.s.s.s.s.s.s.s.', conga: 'c..C..c.c..C..c.', bell: '', ching: 'o...c...o...c...',
+      stabs: [0, 10], riff: [0, 1, 2, 1, 0, 1, 2, 3], drone: null }
   ];
-  A.stations.forEach(s => { s.seq = parse(s.melody); });
+  A.stations.forEach(s => {
+    s.seq = parse(s.melody); s.seqB = parse(s.melodyB || s.melody);
+    s.tones = []; for (let o = 36; o <= 96; o += 12) s.scale.forEach(d => s.tones.push(d + o)); s.tones.sort((a, b) => a - b);
+  });
 
   // ---------- context / unlock ----------
   let noiseBuf = null;
@@ -150,18 +170,20 @@
       tone('sawtooth', f, t, dur, 0.038, musicBus, { detune: 6, filter: 3200, filterTo: 900, filterT: dur, attack: 0.006, release: 0.06 });
       tone('sawtooth', f, t, dur, 0.038, musicBus, { detune: -6 - i, filter: 3000, filterTo: 900, filterT: dur, attack: 0.006, release: 0.06 }); });
   }
-  function lead(t, m, dur, type, st) {
+  function lead(t, m, dur, type, st, from) {
     const f = hz(m);
     if (type === 'ranat') { ranat(t, m, dur); if (dur > 0.3) ranat(t + dur * 0.5, m, dur * 0.5, 0.06); return; }
-    // Thai ornament: a quick grace note from the pentatonic neighbour below on longer notes
-    if (dur > 0.22 && t - 0.045 > ctx.currentTime) tone(type, hz(m - 2), t - 0.045, 0.04, 0.06, musicBus, { attack: 0.004, release: 0.01, filter: 2600 });
-    const o = tone(type, f, t, dur, 0.085, musicBus, { detune: -5, attack: 0.012, release: 0.07, filter: 2600, send: leadDelay.d });
-    if (st && st.glide) { o.frequency.setValueAtTime(f * 0.94, t); o.frequency.exponentialRampToValueAtTime(f, t + 0.06); }
-    tone(type, f, t, dur, 0.055, musicBus, { detune: 6, attack: 0.012, release: 0.07, filter: 2400, send: leadDelay.d });
+    const o1 = tone(type, f, t, dur, 0.085, musicBus, { detune: -5, attack: 0.012, release: 0.07, filter: 2600, send: leadDelay.d });
+    const o2 = tone(type, f, t, dur, 0.055, musicBus, { detune: 6, attack: 0.012, release: 0.07, filter: 2400, send: leadDelay.d });
+    if (from && from !== m) { // เอื้อน: slide in from the previous note
+      const gt = Math.min(0.09, dur * 0.4);
+      [o1, o2].forEach(o => { o.frequency.setValueAtTime(hz(from), t); o.frequency.exponentialRampToValueAtTime(f, t + gt); });
+    } else if (st && st.glide) { [o1, o2].forEach(o => { o.frequency.setValueAtTime(f * 0.965, t); o.frequency.exponentialRampToValueAtTime(f, t + 0.05); }); }
+    else if (dur > 0.22 && t - 0.045 > ctx.currentTime) tone(type, hz(m - 2), t - 0.045, 0.04, 0.06, musicBus, { attack: 0.004, release: 0.01, filter: 2600 }); // grace note at a phrase start
     if (st && st.ranatDouble) ranat(t, m + 12, dur, 0.05);
-    // vibrato after a short delay
-    const lfo = ctx.createOscillator(), lg = ctx.createGain(); lfo.frequency.value = 5.6; lg.gain.setValueAtTime(0, t); lg.gain.linearRampToValueAtTime(7, t + 0.18);
-    lfo.connect(lg); lg.connect(o.detune); lfo.start(t); lfo.stop(t + dur + 0.2);
+    // late vibrato, deeper on held notes (the luk thung wobble)
+    const lfo = ctx.createOscillator(), lg = ctx.createGain(); lfo.frequency.value = 5.8; lg.gain.setValueAtTime(0, t); lg.gain.setValueAtTime(0, t + 0.12); lg.gain.linearRampToValueAtTime(dur > 0.35 ? 13 : 6, t + 0.32);
+    lfo.connect(lg); lg.connect(o1.detune); lg.connect(o2.detune); lfo.start(t); lfo.stop(t + dur + 0.2);
   }
   // Thai band voices: phin (electric Isan lute, slightly overdriven), ranat ek (xylophone), ching (small cymbals), khaen drone
   let shaper = null;
@@ -172,7 +194,7 @@
     o.connect(g); g.connect(shaper); o.start(t); o.stop(t + 0.3);
   }
   function ranat(t, m, dur, vol) {
-    const f = hz(m); vol = vol || 0.14;
+    const f = hz(m); vol = vol || 0.2;
     tone('triangle', f, t, Math.min(dur, 0.45), vol, musicBus, { attack: 0.002, decay: 0.3, sustain: 0.15, release: 0.08, send: leadDelay.d });
     tone('sine', f * 3.01, t, 0.12, vol * 0.25, musicBus, { attack: 0.001, decay: 0.08, sustain: 0.1, release: 0.03 });
     hit(t, 0.015, vol * 0.5, 'highpass', 3000);
@@ -181,12 +203,15 @@
   function drone(t, notes, dur) { notes.forEach((m, i) => { tone('square', hz(m), t, dur, 0.02, musicBus, { detune: i * 4 - 4, attack: 0.08, release: 0.15, filter: 1100 }); tone('sawtooth', hz(m), t, dur, 0.008, musicBus, { detune: 3, attack: 0.1, release: 0.15, filter: 900 }); }); }
 
   // ---------- sequencer ----------
-  const M = { playing: false, station: 0, step: 0, next: 0, timer: null };
+  const M = { playing: false, station: 0, step: 0, next: 0, timer: null, last: null };
   A.music = M;
+  function chaap(t) { hit(t, 0.45, 0.16, 'bandpass', 4200, 0.7); hit(t, 0.3, 0.08, 'highpass', 7000); }
+  function below(m, tones) { let b = tones[0]; for (const x of tones) { if (x < m) b = x; else break; } return b; }
   function scheduleStep(st, step, t) {
     const dur = 60 / st.bpm / 4, bar = Math.floor(step / 16) % 16, sub = step % 16, cbar = bar % 8, second = bar >= 8, fill = (cbar === 7);
-    const chord = st.chords[cbar];
-    // drums
+    const chord = st.chords[cbar], seq = second ? st.seqB : st.seq, ms = step % 128;
+    if (sub === 0 && cbar === 0) chaap(t);
+    // kit
     if (st.kick[sub] === 'x') drums.kick(t);
     const sn = fill ? '....x...x.x.xxxx' : st.snare;
     if (sn[sub] === 'x') drums.snare(t, fill && sub > 11 ? 0.7 + (sub - 11) * 0.1 : 1);
@@ -194,20 +219,21 @@
     const h = st.hat[sub]; if (h === 'h') drums.hat(t, false); else if (h === 'o') drums.hat(t, true);
     const sh = st.shaker[sub]; if (sh === 's' || sh === 'S') drums.shaker(t, sh === 'S');
     const cg = st.conga[sub]; if (cg === 'c') drums.conga(t, false); else if (cg === 'C') drums.conga(t, true);
-    if (st.bell && st.bell[sub] === 'b' && second) drums.bell(t);
+    if (st.bell && st.bell[sub] === 'b') drums.bell(t);
+    if (st.ching) { const c = st.ching[sub]; if (c === 'o') ching(t, true); else if (c === 'c') ching(t, false); }
     // bass
     const bp = st.bassPat[sub], root = midi(st.bass[cbar]);
     if (bp === 'x') bass(t, root, dur * 1.6); else if (bp === 'o') bass(t, root + 12, dur * 1.2); else if (bp === '5') bass(t, root + 7, dur * 1.2);
-    // ching (Thai small cymbals): open 'ching' on the weak beat, damped 'chap' on the strong beat
-    if (st.ching) { const c = st.ching[sub]; if (c === 'o') ching(t, true); else if (c === 'c') ching(t, false); }
-    // brass stabs + optional khaen drone
+    // keyboard brass + khaen
     if (st.stabs.indexOf(sub) >= 0) stab(t, chord, dur * 1.5);
     if (st.drone && sub === 0) drone(t, st.drone, dur * 16);
-    // phin riff: running 16ths over the chord (always in mor lam, second pass elsewhere)
+    // phin riff: running 16ths over the chord (all the way through in mor lam, on the hook elsewhere)
     if ((second || st.riffAlways) && sub % 2 === 0) { const idx = st.riff[(sub / 2) % st.riff.length]; const m = chord[idx % chord.length] + 12 * (idx >= chord.length ? 1 : 0) + 12; phin(t, m); }
-    // melody
-    const ms = step % st.seq.steps;
-    st.seq.notes.forEach(n => { if (n.step === ms) lead(t, n.midi, n.len * dur * 0.9, st.lead, st); });
+    // sung-style melody with เอื้อน slides between joined notes
+    seq.notes.forEach(n => { if (n.step === ms) { const from = (M.last && n.step - M.last.end <= 1 && n.step - M.last.end >= 0) ? M.last.midi : null; lead(t, n.midi, n.len * dur * 0.92, st.lead, st, from); M.last = { midi: n.midi, end: n.step + n.len }; } });
+    // phin answer-phrases in the gaps between vocal lines
+    seq.answers.forEach(a => { if (a.step === ms) { const b1 = below(a.from, st.tones), b2 = below(b1, st.tones), b3 = below(b2, st.tones); const run = [a.from, b1, b2, b1, b2, b3];
+      for (let i = 0; i < a.len; i++) phin(t + i * dur, run[i] + 12); } });
   }
   function tick() {
     if (!M.playing || !ctx) return;
@@ -215,7 +241,7 @@
     while (M.next < ctx.currentTime + 0.18) { scheduleStep(st, M.step, M.next); M.step++; M.next += dur; }
   }
   A.playMusic = function (station) {
-    if (!ctx) return; M.station = station; M.step = 0; M.next = ctx.currentTime + 0.06; M.playing = true;
+    if (!ctx) return; M.station = station; M.step = 0; M.next = ctx.currentTime + 0.06; M.playing = true; M.last = null;
     const st = A.stations[station]; if (leadDelay) leadDelay.d.delayTime.setValueAtTime(60 / st.bpm / 4 * st.delay, ctx.currentTime);
     if (M.timer) clearInterval(M.timer); M.timer = setInterval(tick, 40);
   };

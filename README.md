@@ -26,9 +26,10 @@ On touch devices there are no buttons: the bike accelerates by itself, a finger 
       └────────── 4  SANAM LUANG  /  THA TIEN (sunset)  →  GOAL: WAT PHO
 ```
 
-Three radio stations on the select screen, all synthesised live in WebAudio as an OutRun-style arcade band with a
-Thai twist (ching cymbals, phin lute riff, khaen drone, ranat xylophone): *Luk Thung Shower*, *Mor Lam Wave*,
-*Chao Phraya Breeze*. A top-5 best-riders table with OutRun-style name entry is kept in the browser.
+Three radio stations, all synthesised live in WebAudio in the Thai country-fair style (เพลงบ้านๆ): *Luk Thung Shower*
+(sam-cha rhythm, keyboard brass, sung-style lead with เอื้อน slides), *Mor Lam Wave* (lam sing drive, khaen ostinato,
+phin riff throughout) and *Ramwong Breeze* (hand-drum groove, ching, ranat ek lead). Each song has a verse and a hook,
+with phin answer-phrases in the gaps between vocal lines. A top-5 best-riders table with OutRun-style name entry is kept in the browser.
 
 ## Layout
 
