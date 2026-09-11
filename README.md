@@ -26,8 +26,9 @@ On touch devices there are no buttons: the bike accelerates by itself, a finger 
       └────────── 4  SANAM LUANG  /  THA TIEN (sunset)  →  GOAL: WAT PHO
 ```
 
-Three radio stations on the select screen: *Magical Soi Shower*, *Passing River Breeze*, *Splash Songkran*
-(procedural chiptune, WebAudio).
+Three radio stations on the select screen, all synthesised live in WebAudio as an OutRun-style arcade band with a
+Thai twist (ching cymbals, phin lute riff, khaen drone, ranat xylophone): *Luk Thung Shower*, *Mor Lam Wave*,
+*Chao Phraya Breeze*. A top-5 best-riders table with OutRun-style name entry is kept in the browser.
 
 ## Layout
 

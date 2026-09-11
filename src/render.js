@@ -271,10 +271,18 @@
     const cx = Math.round(W / 2 + (G.drawShift || 0) + (G.playerDX || 0)), by = 457 + bounce;
     // shadow
     ctx.fillStyle = 'rgba(0,0,0,0.35)'; ctx.beginPath(); ctx.ellipse(cx + 2, by - 6, bw * 0.42, 7, 0, 0, Math.PI * 2); ctx.fill();
-    ctx.save(); ctx.translate(cx, by); ctx.rotate(G.lean * 0.16); ctx.translate(-bw / 2 + G.lean * 6, -bh);
+    // wipeout: the bike kicks up and tilts hard for a moment
+    const wp = G.wipe > 0 ? Math.sin((1 - G.wipe) * Math.PI) : 0;
+    ctx.save(); ctx.translate(cx, by - wp * 34); ctx.rotate(G.lean * 0.16 + wp * 0.85 * (G.wipeDir || 1)); ctx.translate(-bw / 2 + G.lean * 6, -bh);
     if (G.invuln > 0 && Math.floor(G.t * 8) % 2 === 0) ctx.globalAlpha = 0.7;
     ctx.drawImage(img, 0, 0);
     ctx.restore();
+    // flying ice bags
+    if (G.parts) for (const p of G.parts) {
+      ctx.save(); ctx.translate(p.x, p.y); ctx.rotate(p.rot);
+      ctx.fillStyle = '#1a2a3a'; ctx.fillRect(-7, -6, 14, 12); ctx.fillStyle = '#eef8ff'; ctx.fillRect(-6, -5, 12, 10); ctx.fillStyle = '#9fd0ee'; ctx.fillRect(-6, 2, 12, 3); ctx.fillStyle = '#3b74c4'; ctx.fillRect(-3, -3, 6, 3);
+      ctx.restore();
+    }
     // ice melt drips
     if (G.mode === 'play' && G.ice < 45 && Math.floor(G.t * 6) % 3 === 0) { ctx.fillStyle = 'rgba(200,235,255,0.9)'; ctx.fillRect(cx - 20 + (G.t * 50) % 40, by - 60 + (G.t * 90) % 50, 2, 3); }
   }
@@ -346,6 +354,15 @@
   };
 
   // ---------- overlays ----------
+  // tap targets published for the input layer (rows: radio stations, nodes: course map, cells: name entry, start: START button)
+  R.hit = { rows: [], nodes: [], cells: [], start: null };
+  function button(x, y, w, h, label, thai) {
+    ctx.fillStyle = '#000'; ctx.fillRect(x - 3, y - 3, w + 6, h + 6);
+    ctx.fillStyle = '#ffd800'; ctx.fillRect(x, y, w, h); ctx.fillStyle = '#fff3a0'; ctx.fillRect(x, y, w, 3); ctx.fillStyle = '#b08a00'; ctx.fillRect(x, y + h - 3, w, 3);
+    TXT(ctx, label, x + w / 2 - (thai ? 28 : 0), y + h / 2 + 7, { size: 13, sy: 1.4, fill: '#000', align: 'center' });
+    if (thai) TXT(ctx, thai, x + w / 2 + 42, y + h / 2 + 8, { size: 18, font: 'Kanit', weight: '700', fill: '#000', align: 'center' });
+    R.hit.start = { x, y, w, h };
+  }
   function dim(a) { ctx.fillStyle = 'rgba(0,0,0,' + a + ')'; ctx.fillRect(0, 0, W, H); }
   function band(y, h, a) { ctx.fillStyle = 'rgba(0,0,0,' + (a || 0.55) + ')'; ctx.fillRect(0, y, W, h); ctx.fillStyle = '#fff'; ctx.fillRect(0, y, W, 2); ctx.fillRect(0, y + h - 2, W, 2); }
   R.logo = function (x, y, s) {
@@ -376,60 +393,95 @@
     ctx.fillStyle = '#c8102e'; ctx.fillRect(W / 2 - 170, 224, 340, 22); ctx.fillStyle = '#000'; ctx.fillRect(W / 2 - 170, 224, 340, 2); ctx.fillRect(W / 2 - 170, 244, 340, 2);
     TXT(ctx, 'HIDDEN STAGE - ICE RUN', W / 2 - 152, 240, { size: 8, sy: 1.4, fill: '#fff', align: 'left' });
     TXT(ctx, 'ภารกิจลับ', W / 2 + 152, 241, { size: 14, font: 'Kanit', weight: '500', fill: '#fff', align: 'right' });
-    if (Math.floor(G.t * 2) % 2 === 0) TXT(ctx, G.touchMode ? 'TAP TO START' : 'PRESS START', W / 2, 330, { size: 14, sy: 1.3, fill: '#fff', outline: '#000', outlineW: 5, align: 'center' });
-    TXT(ctx, 'HI-SCORE ' + OB.pad(G.hiScore, 7), W / 2, 366, { size: 9, sy: 1.4, fill: '#ffd800', outline: '#000', outlineW: 4, align: 'center' });
-    TXT(ctx, 'DELIVER THE ICE TO WAT PHO BEFORE IT MELTS', W / 2, 392, { size: 7, sy: 1.4, fill: '#bfefff', outline: '#000', outlineW: 3, align: 'center' });
-    TXT(ctx, 'ส่งน้ำแข็งให้ถึงวัดโพธิ์ก่อนละลาย', W / 2, 412, { size: 14, font: 'Kanit', weight: '500', fill: '#fff', outline: '#000', outlineW: 3, align: 'center' });
-    TXT(ctx, G.touchMode ? 'FINGER LEFT / RIGHT STEERS   TWO FINGERS BRAKE   AUTO GAS' : 'LEFT/RIGHT STEER   UP GAS   DOWN BRAKE   M MUSIC', W / 2, H - 14, { size: 7, sy: 1.3, fill: '#fff', outline: '#000', outlineW: 3, align: 'center' });
-    TXT(ctx, '1986 - 2024   A SECRET SEQUEL', W / 2, H - 30, { size: 6, sy: 1.3, fill: '#ffd800', outline: '#000', outlineW: 3, align: 'center' });
+    if (Math.floor(G.t * 2) % 2 === 0) TXT(ctx, G.touchMode ? 'TAP TO START' : 'PRESS START', W / 2, 300, { size: 14, sy: 1.3, fill: '#fff', outline: '#000', outlineW: 5, align: 'center' });
+    // best riders table
+    const rk = G.ranking || [];
+    TXT(ctx, 'BEST RIDERS', W / 2, 332, { size: 8, sy: 1.4, fill: '#ff37a8', outline: '#000', outlineW: 3, align: 'center' });
+    for (let i = 0; i < 3; i++) {
+      const r = rk[i]; const line = (i + 1) + (['ST', 'ND', 'RD'][i]) + '  ' + (r ? (r.name + '   ').slice(0, 3) : '---') + '  ' + OB.pad(r ? r.score : 0, 7) + (r && r.route ? '  ' + r.route : '');
+      TXT(ctx, line, W / 2, 350 + i * 15, { size: 7, sy: 1.4, fill: i === 0 ? '#ffd800' : '#fff', outline: '#000', outlineW: 3, align: 'center' });
+    }
+    TXT(ctx, 'DELIVER THE ICE TO WAT PHO BEFORE IT MELTS', W / 2, 408, { size: 7, sy: 1.4, fill: '#bfefff', outline: '#000', outlineW: 3, align: 'center' });
+    TXT(ctx, 'ส่งน้ำแข็งให้ถึงวัดโพธิ์ก่อนละลาย', W / 2, 428, { size: 14, font: 'Kanit', weight: '500', fill: '#fff', outline: '#000', outlineW: 3, align: 'center' });
+    TXT(ctx, G.touchMode ? 'FINGER LEFT / RIGHT STEERS   TWO FINGERS BRAKE   AUTO GAS' : 'LEFT/RIGHT STEER   UP GAS   DOWN BRAKE   M MUSIC   P PAUSE', W / 2, H - 12, { size: 7, sy: 1.3, fill: '#fff', outline: '#000', outlineW: 3, align: 'center' });
+    if (G.touchMode && window.innerHeight > window.innerWidth) TXT(ctx, 'ROTATE YOUR PHONE FOR FULL SCREEN', W / 2, 30, { size: 8, sy: 1.4, fill: '#ffd800', outline: '#000', outlineW: 4, align: 'center' });
   };
   R.radio = function (G) {
-    dim(0.35);
-    const x = W / 2 - 230, y = 110, w = 460, h = 200;
+    dim(0.35); R.hit.rows = []; R.hit.nodes = []; R.hit.cells = []; R.hit.start = null;
+    const x = W / 2 - 270, y = 44, w = 540, h = 340;
     ctx.fillStyle = '#1a1c22'; ctx.fillRect(x, y, w, h); ctx.fillStyle = '#3a3d46'; ctx.fillRect(x, y, w, 4); ctx.fillRect(x, y + h - 4, w, 4); ctx.fillRect(x, y, 4, h); ctx.fillRect(x + w - 4, y, 4, h);
-    ctx.fillStyle = '#0b3b2e'; ctx.fillRect(x + 20, y + 20, w - 40, 50); ctx.fillStyle = '#39f2b0'; ctx.fillRect(x + 24, y + 24, w - 48, 1);
-    for (let i = 0; i < 40; i++) { ctx.fillStyle = i % 5 ? '#1f7a5e' : '#39f2b0'; ctx.fillRect(x + 30 + i * 10, y + 30, 1, i % 5 ? 6 : 12); }
-    const dial = x + 40 + G.station * ((w - 80) / 2); ctx.fillStyle = '#ff3b3b'; ctx.fillRect(dial, y + 26, 3, 40);
-    TXT(ctx, 'SELECT MUSIC', W / 2, y + 60, { size: 9, sy: 1.5, fill: '#ff37a8', outline: '#000', outlineW: 4, align: 'center' });
-    OB.audio.stations.forEach((s, i) => {
-      const sel = i === G.station, yy = y + 98 + i * 30;
-      if (sel) { ctx.fillStyle = 'rgba(255,216,0,0.15)'; ctx.fillRect(x + 20, yy - 16, w - 40, 26); }
-      if (sel) arrow(x + 36, yy - 6, 1, 6, '#ffd800', '#000');
-      TXT(ctx, s.name, x + 54, yy, { size: 9, sy: 1.4, fill: sel ? '#ffd800' : '#cfd3da', outline: '#000', outlineW: 3 });
-      TXT(ctx, s.thai, x + w - 36, yy, { size: 13, font: 'Kanit', weight: '500', fill: sel ? '#fff' : '#8a8f99', align: 'right' });
-    });
-    // eq bars driven by the actual output spectrum
+    TXT(ctx, 'SELECT MUSIC', W / 2, y + 30, { size: 11, sy: 1.5, fill: '#ff37a8', outline: '#000', outlineW: 4, align: 'center' });
+    // radio display: dial + live equaliser
+    ctx.fillStyle = '#0b3b2e'; ctx.fillRect(x + 20, y + 44, w - 40, 48); ctx.fillStyle = '#39f2b0'; ctx.fillRect(x + 24, y + 48, w - 48, 1);
+    for (let i = 0; i < 36; i++) { ctx.fillStyle = i % 5 ? '#1f7a5e' : '#39f2b0'; ctx.fillRect(x + 30 + i * 9, y + 54, 1, i % 5 ? 6 : 12); }
+    const dial = x + 36 + G.station * 150; ctx.fillStyle = '#ff3b3b'; ctx.fillRect(dial, y + 50, 3, 38);
     const sp = OB.audio.spectrum(12);
-    for (let i = 0; i < 12; i++) { const hh = 3 + sp[i] * 30; ctx.fillStyle = sp[i] > 0.8 ? '#ff5a5a' : '#39f2b0'; ctx.fillRect(x + w - 150 + i * 9, y + 66 - hh, 6, hh); }
-    TXT(ctx, G.touchMode ? 'TAP LEFT / RIGHT : TUNE      TAP CENTER : START' : 'LEFT / RIGHT : TUNE      GAS / ENTER : START', W / 2, y + h + 26, { size: 8, sy: 1.4, fill: '#fff', outline: '#000', outlineW: 3, align: 'center' });
+    for (let i = 0; i < 12; i++) { const hh = 3 + sp[i] * 30; ctx.fillStyle = sp[i] > 0.8 ? '#ff5a5a' : '#39f2b0'; ctx.fillRect(x + w - 150 + i * 9, y + 88 - hh, 6, hh); }
+    // big tappable rows
+    OB.audio.stations.forEach((s, i) => {
+      const sel = i === G.station, ry = y + 104 + i * 52;
+      ctx.fillStyle = sel ? 'rgba(255,216,0,0.18)' : 'rgba(255,255,255,0.05)'; ctx.fillRect(x + 16, ry, w - 32, 46);
+      ctx.fillStyle = sel ? '#ffd800' : '#3a3d46'; ctx.fillRect(x + 16, ry, w - 32, 1); ctx.fillRect(x + 16, ry + 45, w - 32, 1);
+      if (sel) arrow(x + 38, ry + 23, 1, 7, '#ffd800', '#000');
+      TXT(ctx, s.name, x + 60, ry + 30, { size: 11, sy: 1.4, fill: sel ? '#ffd800' : '#cfd3da', outline: '#000', outlineW: 3 });
+      TXT(ctx, s.thai, x + w - 36, ry + 31, { size: 17, font: 'Kanit', weight: '500', fill: sel ? '#fff' : '#8a8f99', align: 'right' });
+      R.hit.rows.push({ x: x + 16, y: ry, w: w - 32, h: 46, i });
+    });
+    button(W / 2 - 110, y + 274, 220, 46, 'START', 'เริ่ม');
+    TXT(ctx, G.touchMode ? 'TAP A STATION, THEN START' : 'LEFT / RIGHT : TUNE      ENTER : START', W / 2, H - 12, { size: 8, sy: 1.4, fill: '#fff', outline: '#000', outlineW: 3, align: 'center' });
+  };
+  R.name = function (G) {
+    const ne = G.nameEntry; if (!ne) return;
+    dim(0.6); R.hit.rows = []; R.hit.nodes = []; R.hit.cells = []; R.hit.start = null;
+    TXT(ctx, 'NEW RECORD!  ENTER YOUR NAME', W / 2, 46, { size: 11, sy: 1.5, fill: '#ff37a8', outline: '#000', outlineW: 4, align: 'center' });
+    TXT(ctx, 'ใส่ชื่อของคุณ', W / 2, 70, { size: 16, font: 'Kanit', weight: '700', fill: '#ffd23f', outline: '#000', outlineW: 4, align: 'center' });
+    TXT(ctx, 'SCORE ' + OB.pad(ne.score, 7), W / 2 - 60, 100, { size: 10, sy: 1.4, fill: '#fff', outline: '#000', outlineW: 4, align: 'center' });
+    TXT(ctx, 'TIME ' + Math.max(0, Math.ceil(ne.time)), W / 2 + 140, 100, { size: 10, sy: 1.4, fill: ne.time < 8 ? '#ff5a5a' : '#ffd800', outline: '#000', outlineW: 4, align: 'center' });
+    for (let i = 0; i < 3; i++) {
+      const bx = W / 2 - 66 + i * 46, by = 112; ctx.fillStyle = 'rgba(0,0,0,0.6)'; ctx.fillRect(bx, by, 38, 46);
+      ctx.fillStyle = i === ne.pos ? '#ffd800' : '#4a5060'; ctx.fillRect(bx, by + 44, 38, 3);
+      const ch = ne.chars[i] === '_' ? (i === ne.pos && Math.floor(G.t * 3) % 2 === 0 ? '_' : '') : ne.chars[i];
+      TXT(ctx, ch, bx + 19, by + 36, { size: 24, sy: 1.2, fill: '#fff', outline: '#000', outlineW: 5, align: 'center' });
+    }
+    const chars = OB.NAME_CHARS, cols = 10, cw = 40, chh = 32, x0 = W / 2 - cols * cw / 2, y0 = 178;
+    chars.forEach((c, i) => {
+      const cx = x0 + (i % cols) * cw, cy = y0 + Math.floor(i / cols) * chh, sel = i === ne.cursor;
+      ctx.fillStyle = sel ? '#ffd800' : 'rgba(0,0,0,0.55)'; ctx.fillRect(cx + 2, cy + 2, cw - 4, chh - 4);
+      ctx.fillStyle = sel ? '#fff3a0' : '#3a3d46'; ctx.fillRect(cx + 2, cy + 2, cw - 4, 1);
+      TXT(ctx, c, cx + cw / 2, cy + chh / 2 + 6, { size: c.length > 1 ? 7 : 11, sy: 1.3, fill: sel ? '#000' : (c === 'END' ? '#3cff6a' : '#fff'), align: 'center' });
+      R.hit.cells.push({ x: cx, y: cy, w: cw, h: chh, i });
+    });
+    TXT(ctx, G.touchMode ? 'TAP LETTERS   -   END TO FINISH' : 'ARROWS / TYPE   -   ENTER TO PICK   -   END TO FINISH', W / 2, H - 12, { size: 7, sy: 1.4, fill: '#fff', outline: '#000', outlineW: 3, align: 'center' });
   };
   R.course = function (G) {
-    dim(0.35);
+    dim(0.35); R.hit.rows = []; R.hit.nodes = []; R.hit.cells = []; R.hit.start = null;
     const T = OB.track, C = T.COURSES, sel = G.course, cur = C[sel], st = T.STAGES[cur.key];
-    const x = W / 2 - 250, y = 78, w = 500, h = 280;
+    const x = W / 2 - 290, y = 30, w = 580, h = 320;
     ctx.fillStyle = '#1a1c22'; ctx.fillRect(x, y, w, h); ctx.fillStyle = '#3a3d46'; ctx.fillRect(x, y, w, 4); ctx.fillRect(x, y + h - 4, w, 4); ctx.fillRect(x, y, 4, h); ctx.fillRect(x + w - 4, y, 4, h);
-    TXT(ctx, 'SELECT COURSE', W / 2, y + 30, { size: 10, sy: 1.5, fill: '#ff37a8', outline: '#000', outlineW: 4, align: 'center' });
-    // route tree: rows of nodes, lines to successors
+    TXT(ctx, 'SELECT COURSE', W / 2, y + 28, { size: 11, sy: 1.5, fill: '#ff37a8', outline: '#000', outlineW: 4, align: 'center' });
+    // route tree: big tappable nodes, lines to successors
     const rows = [['charoenkrung'], ['yaowarat', 'sathorn'], ['siam', 'rattanakosin'], ['sanamluang', 'thatien']];
-    const pos = {};
-    rows.forEach((r, i) => r.forEach((k, j) => { pos[k] = { x: W / 2 + (r.length === 1 ? 0 : (j - 0.5) * 190), y: y + 70 + i * 44 }; }));
+    const pos = {}, NH = 34;
+    rows.forEach((r, i) => r.forEach((k, j) => { pos[k] = { x: W / 2 + (r.length === 1 ? 0 : (j - 0.5) * 250), y: y + 66 + i * 52 }; }));
     ctx.strokeStyle = '#4a5060'; ctx.lineWidth = 2;
-    for (const k in T.STAGES) { const nx = T.STAGES[k].next; if (!nx) continue; nx.forEach(n => { ctx.beginPath(); ctx.moveTo(pos[k].x, pos[k].y + 8); ctx.lineTo(pos[n].x, pos[n].y - 10); ctx.stroke(); }); }
-    ctx.strokeStyle = '#ffd800'; ctx.beginPath(); ctx.moveTo(pos.sanamluang.x, pos.sanamluang.y + 8); ctx.lineTo(W / 2, y + 70 + 4 * 44 - 8); ctx.moveTo(pos.thatien.x, pos.thatien.y + 8); ctx.lineTo(W / 2, y + 70 + 4 * 44 - 8); ctx.stroke();
-    TXT(ctx, 'GOAL  WAT PHO', W / 2, y + 70 + 4 * 44 + 2, { size: 7, sy: 1.4, fill: '#ffd800', outline: '#000', outlineW: 3, align: 'center' });
+    for (const k in T.STAGES) { const nx = T.STAGES[k].next; if (!nx) continue; nx.forEach(n => { ctx.beginPath(); ctx.moveTo(pos[k].x, pos[k].y + NH / 2); ctx.lineTo(pos[n].x, pos[n].y - NH / 2); ctx.stroke(); }); }
+    const gy = y + 66 + 4 * 52 - 10;
+    ctx.strokeStyle = '#ffd800'; ctx.beginPath(); ctx.moveTo(pos.sanamluang.x, pos.sanamluang.y + NH / 2); ctx.lineTo(W / 2, gy - 6); ctx.moveTo(pos.thatien.x, pos.thatien.y + NH / 2); ctx.lineTo(W / 2, gy - 6); ctx.stroke();
+    TXT(ctx, 'GOAL  WAT PHO', W / 2, gy + 6, { size: 8, sy: 1.4, fill: '#ffd800', outline: '#000', outlineW: 3, align: 'center' });
     for (const k in pos) {
       const p = pos[k], isSel = k === cur.key, nm = T.STAGES[k].name;
-      const tw = nm.eng.length * 7 + 16;
-      ctx.fillStyle = isSel ? '#ffd800' : '#2b2f3a'; ctx.fillRect(p.x - tw / 2, p.y - 10, tw, 20);
-      ctx.fillStyle = isSel ? '#fff' : '#4a5060'; ctx.fillRect(p.x - tw / 2, p.y - 10, tw, 1); ctx.fillRect(p.x - tw / 2, p.y + 9, tw, 1);
-      TXT(ctx, nm.eng, p.x, p.y + 4, { size: 7, sy: 1.4, fill: isSel ? '#000' : '#cfd3da', align: 'center' });
+      const tw = Math.max(150, nm.eng.length * 9 + 30);
+      ctx.fillStyle = isSel ? '#ffd800' : '#2b2f3a'; ctx.fillRect(p.x - tw / 2, p.y - NH / 2, tw, NH);
+      ctx.fillStyle = isSel ? '#fff' : '#4a5060'; ctx.fillRect(p.x - tw / 2, p.y - NH / 2, tw, 2); ctx.fillRect(p.x - tw / 2, p.y + NH / 2 - 2, tw, 2);
+      TXT(ctx, nm.eng, p.x, p.y + 5, { size: 9, sy: 1.4, fill: isSel ? '#000' : '#cfd3da', align: 'center' });
+      R.hit.nodes.push({ x: p.x - tw / 2, y: p.y - NH / 2, w: tw, h: NH, key: k });
     }
-    // selection caption
-    const capY = y + h + 22;
-    arrow(W / 2 - 220, capY - 6, -1, 8, '#ffd800', '#000'); arrow(W / 2 + 220, capY - 6, 1, 8, '#ffd800', '#000');
-    TXT(ctx, (cur.label ? cur.label + '  -  ' : 'STAGE ' + cur.stageNo + '  -  ') + st.name.eng, W / 2, capY, { size: 9, sy: 1.5, fill: '#fff', outline: '#000', outlineW: 4, align: 'center' });
-    TXT(ctx, st.name.thai, W / 2, capY + 24, { size: 16, font: 'Kanit', weight: '700', fill: '#ffd23f', outline: '#000', outlineW: 4, align: 'center' });
-    TXT(ctx, G.touchMode ? 'TAP LEFT / RIGHT : COURSE      TAP CENTER : START' : 'LEFT / RIGHT : COURSE      GAS / ENTER : START', W / 2, H - 14, { size: 7, sy: 1.4, fill: '#fff', outline: '#000', outlineW: 3, align: 'center' });
+    // caption + START
+    const capY = y + h - 26;
+    TXT(ctx, (cur.label ? cur.label + '  -  ' : 'STAGE ' + cur.stageNo + '  -  ') + st.name.eng, W / 2 - 100, capY, { size: 9, sy: 1.5, fill: '#fff', outline: '#000', outlineW: 4, align: 'center' });
+    TXT(ctx, st.name.thai, W / 2 + 140, capY + 1, { size: 17, font: 'Kanit', weight: '700', fill: '#ffd23f', outline: '#000', outlineW: 4, align: 'center' });
+    button(W / 2 - 110, y + h + 12, 220, 44, 'START', 'เริ่ม');
+    TXT(ctx, G.touchMode ? 'TAP A COURSE, THEN START' : 'LEFT / RIGHT : COURSE      ENTER : START', W / 2, H - 10, { size: 7, sy: 1.4, fill: '#fff', outline: '#000', outlineW: 3, align: 'center' });
   };
   R.countdown = function (G) {
     const n = Math.ceil(G.countdown);

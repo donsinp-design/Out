@@ -23,21 +23,21 @@
   // ---------- songs ----------
   // Retro OutRun feel (latin/city-pop arcade band) with Thai pentatonic melodies, a phin-style plucked riff and a khaen drone.
   A.stations = [
-    { name: 'MAGICAL SOI SHOWER', thai: 'เมจิคัล ซอย ชาวเวอร์', bpm: 140, lead: 'square', delay: 3,
+    { name: 'LUK THUNG SHOWER', thai: 'ลูกทุ่ง ชาวเวอร์', bpm: 140, lead: 'square', delay: 3, ranatDouble: true, ching: '....o.......c...',
       chords: [CH('A3', 'C4', 'E4', 'G4'), CH('A3', 'C4', 'E4', 'G4'), CH('D4', 'F4', 'A4', 'C5'), CH('E4', 'G4', 'B4', 'D5'), CH('A3', 'C4', 'E4', 'G4'), CH('C4', 'E4', 'G4', 'B4'), CH('F3', 'A3', 'C4', 'E4'), CH('E3', 'G#3', 'B3', 'D4')],
       bass: ['A1', 'A1', 'D2', 'E2', 'A1', 'C2', 'F1', 'E1'], bassPat: 'x..x..5.x..x..o.',
       melody: ['E5 - - G5 A5 - G5 E5 - - D5 - E5 - - -', 'C5 - D5 - E5 - - - G5 - E5 - D5 - C5 -', 'A4 - C5 - D5 - E5 - - - D5 - C5 - A4 -', 'G4 - - - B4 - D5 - E5 - - - - - . .',
         'E5 - - G5 A5 - G5 E5 - - D5 - E5 - G5 -', 'A5 - - - G5 - E5 - G5 - A5 - C6 - - -', 'A5 - G5 - E5 - D5 - C5 - D5 - E5 - G5 -', 'E5 - - - - - D5 - B4 - - - . . . .'],
       kick: 'x...x...x...x..x', snare: '....x.......x...', rim: '..r...r...r...r.', hat: 'h.h.h.o.h.h.h.o.', shaker: 'sSsSsSsSsSsSsSsS', conga: '..c.C...c..cC...', bell: 'b...b.b...b...b.',
       stabs: [0, 6, 10], riff: [0, 1, 2, 3, 2, 1, 0, 1], drone: null },
-    { name: 'MOR LAM WAVE', thai: 'หมอลำ เวฟ', bpm: 152, lead: 'sawtooth', delay: 2,
+    { name: 'MOR LAM WAVE', thai: 'หมอลำ เวฟ', bpm: 152, lead: 'sawtooth', delay: 2, riffAlways: true, glide: true, ching: 'o...c...o...c...',
       chords: [CH('D4', 'F4', 'A4', 'C5'), CH('D4', 'F4', 'A4', 'C5'), CH('C4', 'E4', 'G4', 'A4'), CH('D4', 'F4', 'A4', 'C5'), CH('D4', 'F4', 'A4', 'C5'), CH('F3', 'A3', 'C4', 'D4'), CH('C4', 'E4', 'G4', 'A4'), CH('D4', 'F4', 'A4', 'C5')],
       bass: ['D2', 'D2', 'C2', 'D2', 'D2', 'F1', 'C2', 'D2'], bassPat: 'x.o.x.5.x.o.x.5.',
       melody: ['D5 - F5 G5 A5 - - - C6 - A5 - G5 - F5 -', 'D5 - - - F5 - D5 - C5 - D5 - - - . .', 'A4 - C5 D5 F5 - D5 - C5 - A4 - G4 - A4 -', 'C5 - - - D5 - - - - - - - . . . .',
         'D5 - F5 G5 A5 - - - C6 - D6 - C6 - A5 -', 'G5 - A5 - F5 - D5 - F5 - G5 - A5 - - -', 'C6 - A5 - G5 - F5 - D5 - F5 - G5 - A5 -', 'D5 - - - - - - - - - - - . . . .'],
       kick: 'x.x.x.x.x.x.x.x.', snare: '....x.......x..x', rim: '..r.....r.r.....', hat: 'hhhhhhhhhhhhhhhh', shaker: 'sSsSsSsSsSsSsSsS', conga: 'c.c...C.c.c...CC', bell: 'b.b.b.b.b.b.b.b.',
       stabs: [0, 3, 8, 11], riff: [0, 2, 1, 3, 0, 2, 1, 3], drone: CH('D3', 'A3', 'D4') },
-    { name: 'PASSING RIVER BREEZE', thai: 'สายลมเจ้าพระยา', bpm: 128, lead: 'triangle', delay: 3,
+    { name: 'CHAO PHRAYA BREEZE', thai: 'สายลมเจ้าพระยา', bpm: 128, lead: 'ranat', delay: 3, ching: '....o.......c...',
       chords: [CH('C4', 'E4', 'G4', 'B4'), CH('A3', 'C4', 'E4', 'G4'), CH('F3', 'A3', 'C4', 'E4'), CH('G3', 'B3', 'D4', 'E4'), CH('C4', 'E4', 'G4', 'B4'), CH('E3', 'G3', 'B3', 'D4'), CH('F3', 'A3', 'C4', 'E4'), CH('G3', 'B3', 'D4', 'F4')],
       bass: ['C2', 'A1', 'F1', 'G1', 'C2', 'E2', 'F1', 'G1'], bassPat: 'x.....5.x.....5.',
       melody: ['E5 - G5 - A5 - - - G5 - E5 - D5 - - -', 'C5 - D5 - E5 - - - - - G5 - A5 - - -', 'A5 - G5 - E5 - D5 - C5 - - - D5 - E5 -', 'G5 - - - - - E5 - D5 - - - . . . .',
@@ -150,16 +150,35 @@
       tone('sawtooth', f, t, dur, 0.038, musicBus, { detune: 6, filter: 3200, filterTo: 900, filterT: dur, attack: 0.006, release: 0.06 });
       tone('sawtooth', f, t, dur, 0.038, musicBus, { detune: -6 - i, filter: 3000, filterTo: 900, filterT: dur, attack: 0.006, release: 0.06 }); });
   }
-  function lead(t, m, dur, type) {
+  function lead(t, m, dur, type, st) {
     const f = hz(m);
-    const o = tone(type, f, t, dur, type === 'triangle' ? 0.16 : 0.085, musicBus, { detune: -5, attack: 0.012, release: 0.07, filter: 2600, send: leadDelay.d });
-    tone(type === 'triangle' ? 'sine' : type, f, t, dur, type === 'triangle' ? 0.05 : 0.055, musicBus, { detune: 6, attack: 0.012, release: 0.07, filter: 2400, send: leadDelay.d });
+    if (type === 'ranat') { ranat(t, m, dur); if (dur > 0.3) ranat(t + dur * 0.5, m, dur * 0.5, 0.06); return; }
+    // Thai ornament: a quick grace note from the pentatonic neighbour below on longer notes
+    if (dur > 0.22 && t - 0.045 > ctx.currentTime) tone(type, hz(m - 2), t - 0.045, 0.04, 0.06, musicBus, { attack: 0.004, release: 0.01, filter: 2600 });
+    const o = tone(type, f, t, dur, 0.085, musicBus, { detune: -5, attack: 0.012, release: 0.07, filter: 2600, send: leadDelay.d });
+    if (st && st.glide) { o.frequency.setValueAtTime(f * 0.94, t); o.frequency.exponentialRampToValueAtTime(f, t + 0.06); }
+    tone(type, f, t, dur, 0.055, musicBus, { detune: 6, attack: 0.012, release: 0.07, filter: 2400, send: leadDelay.d });
+    if (st && st.ranatDouble) ranat(t, m + 12, dur, 0.05);
     // vibrato after a short delay
     const lfo = ctx.createOscillator(), lg = ctx.createGain(); lfo.frequency.value = 5.6; lg.gain.setValueAtTime(0, t); lg.gain.linearRampToValueAtTime(7, t + 0.18);
     lfo.connect(lg); lg.connect(o.detune); lfo.start(t); lfo.stop(t + dur + 0.2);
   }
-  function pluck(t, m) { tone('sawtooth', hz(m), t, 0.16, 0.06, musicBus, { filter: 3800, filterTo: 600, filterT: 0.14, attack: 0.002, decay: 0.12, sustain: 0.2, release: 0.04 }); }
-  function drone(t, notes, dur) { notes.forEach((m, i) => tone('square', hz(m), t, dur, 0.022, musicBus, { detune: i * 4 - 4, attack: 0.08, release: 0.15, filter: 1100 })); }
+  // Thai band voices: phin (electric Isan lute, slightly overdriven), ranat ek (xylophone), ching (small cymbals), khaen drone
+  let shaper = null;
+  function phin(t, m) {
+    if (!shaper) { shaper = ctx.createWaveShaper(); const n = 256, curve = new Float32Array(n); for (let i = 0; i < n; i++) { const x = i / (n - 1) * 2 - 1; curve[i] = Math.tanh(x * 2.2) / Math.tanh(2.2); } shaper.curve = curve; const lp = ctx.createBiquadFilter(); lp.type = 'lowpass'; lp.frequency.value = 3200; shaper.connect(lp); lp.connect(musicBus); }
+    const o = ctx.createOscillator(), g = ctx.createGain(); o.type = 'sawtooth'; o.frequency.setValueAtTime(hz(m) * 0.985, t); o.frequency.exponentialRampToValueAtTime(hz(m), t + 0.03);
+    g.gain.setValueAtTime(0, t); g.gain.linearRampToValueAtTime(0.11, t + 0.003); g.gain.exponentialRampToValueAtTime(0.02, t + 0.18); g.gain.linearRampToValueAtTime(0, t + 0.26);
+    o.connect(g); g.connect(shaper); o.start(t); o.stop(t + 0.3);
+  }
+  function ranat(t, m, dur, vol) {
+    const f = hz(m); vol = vol || 0.14;
+    tone('triangle', f, t, Math.min(dur, 0.45), vol, musicBus, { attack: 0.002, decay: 0.3, sustain: 0.15, release: 0.08, send: leadDelay.d });
+    tone('sine', f * 3.01, t, 0.12, vol * 0.25, musicBus, { attack: 0.001, decay: 0.08, sustain: 0.1, release: 0.03 });
+    hit(t, 0.015, vol * 0.5, 'highpass', 3000);
+  }
+  function ching(t, open) { const d = open ? 0.32 : 0.06; tone('sine', 3150, t, d, 0.05, musicBus, { attack: 0.001, decay: d, sustain: 0.05, release: 0.02 }); tone('sine', 4720, t, d, 0.03, musicBus, { attack: 0.001, decay: d, sustain: 0.05, release: 0.02 }); hit(t, 0.02, 0.05, 'highpass', 6000); }
+  function drone(t, notes, dur) { notes.forEach((m, i) => { tone('square', hz(m), t, dur, 0.02, musicBus, { detune: i * 4 - 4, attack: 0.08, release: 0.15, filter: 1100 }); tone('sawtooth', hz(m), t, dur, 0.008, musicBus, { detune: 3, attack: 0.1, release: 0.15, filter: 900 }); }); }
 
   // ---------- sequencer ----------
   const M = { playing: false, station: 0, step: 0, next: 0, timer: null };
@@ -179,14 +198,16 @@
     // bass
     const bp = st.bassPat[sub], root = midi(st.bass[cbar]);
     if (bp === 'x') bass(t, root, dur * 1.6); else if (bp === 'o') bass(t, root + 12, dur * 1.2); else if (bp === '5') bass(t, root + 7, dur * 1.2);
+    // ching (Thai small cymbals): open 'ching' on the weak beat, damped 'chap' on the strong beat
+    if (st.ching) { const c = st.ching[sub]; if (c === 'o') ching(t, true); else if (c === 'c') ching(t, false); }
     // brass stabs + optional khaen drone
     if (st.stabs.indexOf(sub) >= 0) stab(t, chord, dur * 1.5);
     if (st.drone && sub === 0) drone(t, st.drone, dur * 16);
-    // phin-style riff on the second pass, quiet, running 16ths
-    if (second && sub % 2 === 0) { const idx = st.riff[(sub / 2) % st.riff.length]; const m = chord[idx % chord.length] + 12 * (idx >= chord.length ? 1 : 0) + 12; pluck(t, m); }
+    // phin riff: running 16ths over the chord (always in mor lam, second pass elsewhere)
+    if ((second || st.riffAlways) && sub % 2 === 0) { const idx = st.riff[(sub / 2) % st.riff.length]; const m = chord[idx % chord.length] + 12 * (idx >= chord.length ? 1 : 0) + 12; phin(t, m); }
     // melody
     const ms = step % st.seq.steps;
-    st.seq.notes.forEach(n => { if (n.step === ms) lead(t, n.midi, n.len * dur * 0.9, st.lead); });
+    st.seq.notes.forEach(n => { if (n.step === ms) lead(t, n.midi, n.len * dur * 0.9, st.lead, st); });
   }
   function tick() {
     if (!M.playing || !ctx) return;
@@ -209,6 +230,9 @@
         tone('sine', 110, t, 0.35, 0.5, sfxBus, { slide: 30 }); break; }
       case 'bump': { const n = noise(), f = ctx.createBiquadFilter(), g = ctx.createGain(); f.type = 'lowpass'; f.frequency.value = 400; g.gain.setValueAtTime(0.25, t); g.gain.exponentialRampToValueAtTime(0.001, t + 0.15); n.connect(f); f.connect(g); g.connect(sfxBus); n.start(t); n.stop(t + 0.2); break; }
       case 'horn': tone('square', 415, t, 0.35, 0.08, sfxBus); tone('square', 350, t, 0.35, 0.08, sfxBus); break;
+      case 'skid': hit(t, 0.35, 0.16, 'bandpass', 2600, 2.5, sfxBus); break;
+      case 'wipe': { for (let i = 0; i < 4; i++) tone('square', 900 - i * 180, t + i * 0.07, 0.08, 0.08, sfxBus, { slide: 400 - i * 60 }); break; }
+      case 'name': tone('square', 1200, t, 0.05, 0.08, sfxBus); break;
       case 'beep': tone('square', 880, t, 0.12, 0.12, sfxBus); break;
       case 'go': tone('square', 1760, t, 0.5, 0.12, sfxBus); tone('square', 1320, t, 0.5, 0.06, sfxBus); break;
       case 'check': [0, 4, 7, 12, 16].forEach((n, i) => tone('square', hz(72 + n), t + i * 0.08, 0.18, 0.1, sfxBus)); break;

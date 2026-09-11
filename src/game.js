@@ -8,7 +8,8 @@
     speed: 0, maxSpeed: 12000, steer: 0, lean: 0, bgOffset: 0, bgShift: 0, cars: [], health: 100, ice: 100, time: 80, score: 0,
     stageNo: 1, stageKey: 'charoenkrung', light: 'day', station: 0, hiScore: 0, msg: null, shake: 0, invuln: 0, bounce: 0,
     forkHint: null, wallCd: 0, countdown: 0, overReason: null, result: null, seed: 20240808, paused: false, route: [], cur: null, nextInfo: null, nextKey: null,
-    muted: false, drawShift: -200, playerDX: 0, course: 0, touchMode: false
+    muted: false, drawShift: -200, playerDX: 0, course: 0, touchMode: false,
+    wipe: 0, wipeDir: 1, parts: [], skidCd: 0, ranking: [], pendingRecord: null, nameEntry: null
   };
   OB.G = G;
   G.cameraDepth = 1 / Math.tan((G.fov / 2) * Math.PI / 180);
@@ -16,7 +17,12 @@
   const PLAYER_W = 480 / T.roadW;
   const CARS = ['taxi', 'taxi', 'taxi_orange', 'taxi_blue', 'taxi_green', 'sedan', 'sedan', 'sedan_black', 'sedan_red', 'green', 'green_yellow', 'green_purple'];
   const ONCOMING = ['bus', 'tuktuk', 'tuktuk'];
-  try { G.hiScore = parseInt(localStorage.getItem('ob_hiscore') || '0') || 0; } catch (e) { }
+  const store = { get(k, d) { try { const v = localStorage.getItem(k); return v === null ? d : JSON.parse(v); } catch (e) { return d; } }, set(k, v) { try { localStorage.setItem(k, JSON.stringify(v)); } catch (e) { } } };
+  G.ranking = store.get('ob_ranking', []); if (!Array.isArray(G.ranking)) G.ranking = [];
+  { const legacy = parseInt(store.get('ob_hiscore', 0)) || 0; if (legacy > 0 && !G.ranking.length) G.ranking.push({ name: 'ICE', score: legacy, route: '' }); }
+  G.hiScore = G.ranking.length ? G.ranking[0].score : 0;
+  G.station = Math.min(2, Math.max(0, store.get('ob_station', 0) | 0)); G.course = Math.min(6, Math.max(0, store.get('ob_course', 0) | 0));
+  OB.NAME_CHARS = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789'.split('').concat(['<', 'END']);
 
   // ---------- input ----------
   const keys = { left: false, right: false, gas: false, brake: false };
@@ -25,6 +31,7 @@
   window.addEventListener('keydown', e => {
     if (e.repeat) { if (KEYMAP[e.key]) e.preventDefault(); return; }
     A.init(); A.unlock();
+    if (G.mode === 'name') { nameKey(e); e.preventDefault(); return; }
     if (KEYMAP[e.key]) { keys[KEYMAP[e.key]] = true; e.preventDefault(); }
     if (e.key === 'Enter' || e.key === ' ') { startPressed = true; e.preventDefault(); }
     if (e.key === 'ArrowLeft' || e.key === 'a') tuneDir = -1; if (e.key === 'ArrowRight' || e.key === 'd') tuneDir = 1;
@@ -47,18 +54,32 @@
       const r = cv.getBoundingClientRect(), rel = (sx / pointers.size - r.left) / r.width - 0.5;
       touch.steer = OB.clamp(rel / 0.3, -1, 1); touch.active = true;
     };
+    let swipeX = null;
     cv.addEventListener('pointerdown', e => {
       A.init(); A.unlock();
-      const r = cv.getBoundingClientRect(), fx = (e.clientX - r.left) / r.width;
+      const r = cv.getBoundingClientRect(), ix = (e.clientX - r.left) / r.width * W, iy = (e.clientY - r.top) / r.height * H;
+      const inBox = (b) => !!b && ix >= b.x && ix <= b.x + b.w && iy >= b.y && iy <= b.y + b.h;
       if (e.pointerType !== 'mouse') G.touchMode = true;
       if (G.mode === 'play' || G.mode === 'countdown') { if (e.pointerType !== 'mouse') { pointers.set(e.pointerId, e.clientX); upd(); } }
-      else if (G.mode === 'radio' || G.mode === 'course') { if (fx < 0.35) tuneDir = -1; else if (fx > 0.65) tuneDir = 1; else startPressed = true; }
-      else if (G.mode === 'over') { A.sfx('select'); G.mode = 'title'; newGame(); startPressed = false; }
+      else if (G.mode === 'radio') { // tap a station row (tap the selected one again to start), START button, or swipe
+        swipeX = ix;
+        if (inBox(R.hit.start)) startPressed = true;
+        else { const row = R.hit.rows.find(inBox); if (row) { if (row.i === G.station) startPressed = true; else { G.station = row.i; store.set('ob_station', G.station); A.playMusic(G.station); A.sfx('select'); } } }
+      } else if (G.mode === 'course') {
+        swipeX = ix;
+        if (inBox(R.hit.start)) startPressed = true;
+        else { const nd = R.hit.nodes.find(inBox); if (nd) { const ci = T.COURSES.findIndex(c => c.key === nd.key); if (ci === G.course) startPressed = true; else if (ci >= 0) { G.course = ci; store.set('ob_course', ci); A.sfx('select'); } } }
+      } else if (G.mode === 'name') { const cell = R.hit.cells.find(inBox); if (cell) nameSelect(cell.i); }
+      else if (G.mode === 'over') leaveOver();
       else startPressed = true;
       e.preventDefault();
     });
     cv.addEventListener('pointermove', e => { if (pointers.has(e.pointerId)) { pointers.set(e.pointerId, e.clientX); upd(); } });
-    const end = e => { if (pointers.has(e.pointerId)) { pointers.delete(e.pointerId); upd(); } };
+    const end = e => {
+      if (pointers.has(e.pointerId)) { pointers.delete(e.pointerId); upd(); }
+      if (swipeX !== null && (G.mode === 'radio' || G.mode === 'course')) { const r = cv.getBoundingClientRect(), ix = (e.clientX - r.left) / r.width * W; if (Math.abs(ix - swipeX) > 70) tuneDir = ix > swipeX ? 1 : -1; }
+      swipeX = null;
+    };
     cv.addEventListener('pointerup', end); cv.addEventListener('pointercancel', end); cv.addEventListener('pointerleave', end);
   }
 
@@ -75,7 +96,45 @@
     G.position = 0; G.playerX = 0; G.speed = 0; G.steer = 0; G.lean = 0; G.bgOffset = 0;
     G.health = 100; G.ice = 100; G.score = 0; G.time = T.STAGES[G.stageKey].time + (G.stageNo > 1 ? 10 : 0);
     G.cars = []; G.msg = null; G.shake = 0; G.invuln = 0; G.forkHint = null; G.result = null; G.overReason = null; G.paused = false;
+    G.wipe = 0; G.parts = []; G.skidCd = 0;
     for (let i = 0; i < 8; i++) spawnCar(60 + i * 40);
+  }
+  // ---------- records / name entry ----------
+  function qualifies(score) { return score >= 1000 && (G.ranking.length < 5 || score > G.ranking[G.ranking.length - 1].score); }
+  function routeStr() { return G.route.map(k => T.STAGES[k].name.eng.split(' ').map(w => w[0]).join('')).join('>'); }
+  function enterName() { G.mode = 'name'; G.nameEntry = { chars: ['_', '_', '_'], pos: 0, cursor: 0, time: 30, score: G.pendingRecord.score, route: G.pendingRecord.route }; }
+  function nameSelect(i) {
+    const ne = G.nameEntry; if (!ne) return; const ch = OB.NAME_CHARS[i]; ne.cursor = i; A.sfx('name');
+    if (ch === 'END') { if (ne.pos > 0) finishName(); }
+    else if (ch === '<') { if (ne.pos > 0) { ne.pos--; ne.chars[ne.pos] = '_'; } }
+    else if (ne.pos < 3) { ne.chars[ne.pos] = ch; ne.pos++; if (ne.pos >= 3) finishName(); }
+  }
+  function nameKey(e) {
+    const ne = G.nameEntry; if (!ne) return; const k = e.key, n = OB.NAME_CHARS.length;
+    if (k === 'ArrowLeft') ne.cursor = (ne.cursor + n - 1) % n;
+    else if (k === 'ArrowRight') ne.cursor = (ne.cursor + 1) % n;
+    else if (k === 'ArrowUp') ne.cursor = Math.max(0, ne.cursor - 10);
+    else if (k === 'ArrowDown') ne.cursor = Math.min(n - 1, ne.cursor + 10);
+    else if (k === 'Enter' || k === ' ') nameSelect(ne.cursor);
+    else if (k === 'Backspace') nameSelect(OB.NAME_CHARS.indexOf('<'));
+    else if (/^[a-zA-Z0-9]$/.test(k)) nameSelect(OB.NAME_CHARS.indexOf(k.toUpperCase()));
+  }
+  function finishName() {
+    const ne = G.nameEntry; if (!ne) return;
+    const name = (ne.chars.map(c => c === '_' ? '' : c).join('') || 'ICE').slice(0, 3);
+    G.ranking.push({ name, score: Math.floor(ne.score), route: ne.route }); G.ranking.sort((a, b) => b.score - a.score); G.ranking = G.ranking.slice(0, 5);
+    store.set('ob_ranking', G.ranking); G.hiScore = G.ranking[0].score; G.pendingRecord = null; G.nameEntry = null;
+    A.sfx('check'); G.mode = 'title'; newGame();
+  }
+  function leaveOver() { A.sfx('select'); startPressed = false; if (G.pendingRecord) enterName(); else { G.mode = 'title'; newGame(); } }
+  // ---------- wipeout ----------
+  function spawnParts(n) {
+    const cx = W / 2 + (G.drawShift || 0) + (G.playerDX || 0), cy = 457 - 105;
+    for (let i = 0; i < n; i++) G.parts.push({ x: cx + (Math.random() - 0.5) * 50, y: cy + (Math.random() - 0.5) * 30, vx: (Math.random() - 0.5) * 420, vy: -(220 + Math.random() * 260), rot: Math.random() * 6, vr: (Math.random() - 0.5) * 12, life: 1.5 });
+  }
+  function wipeout(n) { G.wipe = 1; G.wipeDir = G.playerX > 0 ? -1 : 1; spawnParts(n); A.sfx('wipe'); }
+  function updateParts(dt) {
+    for (let i = G.parts.length - 1; i >= 0; i--) { const p = G.parts[i]; p.vy += 1100 * dt; p.x += p.vx * dt; p.y += p.vy * dt; p.rot += p.vr * dt; p.life -= dt; if (p.life <= 0 || p.y > H + 30) G.parts.splice(i, 1); }
   }
   function say(text, sub, dur, fill, size) { G.msg = { text, sub, t: dur || 2, dur: dur || 2, fill, size }; }
   const segLen = T.segLen;
@@ -138,10 +197,10 @@
     A.sfx(kind === 'wall' || kind === 'median' ? 'bump' : 'crash');
     G.shake = 1; G.invuln = 1.3; G.bounce = 4;
     if (kind === 'car') {
-      if (car.oncoming) { G.speed *= 0.12; G.health -= 18; G.ice -= 8; }
-      else { G.speed = Math.min(G.speed, Math.max(0, car.speed * 0.45)); G.health -= 12; G.ice -= 5; }
+      if (car.oncoming) { G.speed *= 0.12; G.health -= 18; G.ice -= 8; wipeout(6); }
+      else { G.speed = Math.min(G.speed, Math.max(0, car.speed * 0.45)); G.health -= 12; G.ice -= 5; spawnParts(2); }
       G.playerX += (G.playerX >= car.offset ? 1 : -1) * 0.12;
-    } else if (kind === 'sprite') { G.speed *= 0.18; G.health -= 20; G.ice -= 10; G.playerX += (G.playerX > 0 ? -1 : 1) * 0.18; }
+    } else if (kind === 'sprite') { G.speed *= 0.18; G.health -= 20; G.ice -= 10; G.playerX += (G.playerX > 0 ? -1 : 1) * 0.18; wipeout(5); }
     else if (kind === 'wall') { G.speed *= 0.4; G.health -= 8; G.ice -= 3; }
     else if (kind === 'median') { G.speed *= 0.3; G.health -= 8; G.ice -= 4; }
     if (G.health <= 0) { G.health = 0; gameOver('wreck'); }
@@ -187,7 +246,7 @@
   function gameOver(reason) {
     if (G.mode === 'over') return;
     G.mode = 'over'; G.overReason = reason; G.forkHint = null; A.stopMusic(); A.sfx('over');
-    if (G.score > G.hiScore) { G.hiScore = G.score; try { localStorage.setItem('ob_hiscore', String(G.hiScore)); } catch (e) { } }
+    if (qualifies(G.score)) G.pendingRecord = { score: G.score, route: routeStr() };
   }
   function progress(seg) {
     const cur = G.cur; if (!cur) return;
@@ -213,7 +272,7 @@
       cur.goalDone = true; G.mode = 'goal'; G.forkHint = null; A.sfx('goal'); G.goalT = 0;
       const timeBonus = Math.ceil(G.time) * 3000, iceBonus = Math.round(G.ice) * 5000;
       const total = G.score + timeBonus + iceBonus;
-      const newHi = total > G.hiScore; if (newHi) { G.hiScore = total; try { localStorage.setItem('ob_hiscore', String(total)); } catch (e) { } }
+      const newHi = qualifies(total); if (newHi) G.pendingRecord = { score: total, route: routeStr() };
       G.result = { timeBonus, iceBonus, route: G.route.map(k => T.STAGES[k].name.eng).join(' > '), total, reveal: -1, newHi, base: G.score };
     }
   }
@@ -225,11 +284,15 @@
     if (G.shake > 0) G.shake = Math.max(0, G.shake - dt * 3);
     if (G.invuln > 0) G.invuln -= dt;
     if (G.wallCd > 0) G.wallCd -= dt;
+    if (G.wipe > 0) G.wipe -= dt / 0.7;
+    if (G.skidCd > 0) G.skidCd -= dt;
+    updateParts(dt);
     G.bounce *= 0.8;
     const mode = G.mode;
     if (mode === 'loading') return;
     if (mode === 'over' || (mode === 'play' && G.paused)) { G.speed = Math.max(0, G.speed - G.maxSpeed * dt * 0.6); if (mode === 'over') advance(dt, false); A.setEngine(0, false, false, false); return; }
-    if (mode === 'title' || mode === 'radio' || mode === 'course') {
+    if (mode === 'title' || mode === 'radio' || mode === 'course' || mode === 'name') {
+      if (mode === 'name') { G.nameEntry.time -= dt; if (G.nameEntry.time <= 0) { finishName(); return; } startPressed = false; tuneDir = 0; }
       G.drawShift += ((mode === 'title' ? -200 : 0) - G.drawShift) * Math.min(1, dt * 3);
       const target = mode === 'title' ? G.maxSpeed * 0.28 : G.maxSpeed * 0.12;
       G.speed += (target - G.speed) * Math.min(1, dt * 0.8);
@@ -243,8 +306,8 @@
         if (mode === 'title') { G.mode = 'radio'; A.playMusic(G.station); A.setMusicVolume(G.muted ? 0 : A.MUSIC_VOL); }
         else if (mode === 'radio') { G.mode = 'course'; }
         else { startRun(); } }
-      if (mode === 'radio' && tuneDir) { G.station = (G.station + tuneDir + 3) % 3; A.playMusic(G.station); A.sfx('select'); }
-      if (mode === 'course' && tuneDir) { const n = T.COURSES.length; G.course = (G.course + tuneDir + n) % n; A.sfx('select'); }
+      if (mode === 'radio' && tuneDir) { G.station = (G.station + tuneDir + 3) % 3; store.set('ob_station', G.station); A.playMusic(G.station); A.sfx('select'); }
+      if (mode === 'course' && tuneDir) { const n = T.COURSES.length; G.course = (G.course + tuneDir + n) % n; store.set('ob_course', G.course); A.sfx('select'); }
       tuneDir = 0;
       A.setEngine(G.speed / G.maxSpeed, false, false, A.ready());
       return;
@@ -275,6 +338,7 @@
     const offroad = Math.abs(G.playerX) > 1.0 * seg.rw;
     if (offroad) { if (G.speed > G.maxSpeed * 0.45) G.speed -= G.maxSpeed * 0.7 * dt; if (pct > 0.1) G.bounce = (Math.random() - 0.5) * 4 * pct; }
     G.speed = OB.clamp(G.speed, 0, G.maxSpeed);
+    if (mode === 'play' && pct > 0.55 && Math.abs(G.steer) > 0.85 && G.skidCd <= 0) { A.sfx('skid'); G.skidCd = 0.6; }
     if (mode === 'play') checkCollisions(seg);
     advance(dt, true);
     if (mode === 'play') {
@@ -287,7 +351,7 @@
     } else if (mode === 'goal') {
       G.goalT += dt;
       if (G.goalT > 1.2) { G.result.reveal = Math.min(4, Math.floor((G.goalT - 1.2) / 0.7)); if (G.result.reveal >= 3) G.score = G.result.total; }
-      if (G.goalT > 4.5 && startPressed) { startPressed = false; A.stopMusic(); G.mode = 'title'; newGame(); }
+      if (G.goalT > 4.5 && startPressed) { startPressed = false; A.stopMusic(); if (G.pendingRecord) enterName(); else { G.mode = 'title'; newGame(); } }
     }
     A.setEngine(pct, gas, offroad, true);
     startPressed = false;
@@ -319,6 +383,7 @@
       case 'title': R.title(G); break;
       case 'radio': R.radio(G); break;
       case 'course': R.course(G); break;
+      case 'name': R.name(G); break;
       case 'countdown': R.hud(G); R.countdown(G); break;
       case 'play': R.hud(G); if (G.paused) { OB.text(R.ctx || document.getElementById('screen').getContext('2d'), 'PAUSE', W / 2, 200, { size: 24, sy: 1.3, fill: '#fff', outline: '#000', outlineW: 6, align: 'center' }); } break;
       case 'goal': R.hud(G); R.goal(G); break;
@@ -326,7 +391,7 @@
     }
   }
   // start-press handling for 'over'
-  window.addEventListener('keydown', e => { if ((e.key === 'Enter' || e.key === ' ') && G.mode === 'over') { A.sfx('select'); G.mode = 'title'; newGame(); startPressed = false; } });
+  window.addEventListener('keydown', e => { if ((e.key === 'Enter' || e.key === ' ') && G.mode === 'over') leaveOver(); });
 
   // debug/testing hook: jump straight into a given stage
   OB.debugStage = function (key, no) {

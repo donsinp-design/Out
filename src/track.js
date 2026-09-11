@@ -16,7 +16,7 @@
 
   // env types: shop | water | city | temple | park
   T.THEMES = {
-    riverside: { left: 'shop', right: 'water', light: 'day', curv: 0.9, hills: 0.3, traffic: { density: 9, min: 0.28, max: 0.62, oncoming: 0.25 } },
+    riverside: { left: 'shop', right: 'water', light: 'day', curv: 1.6, hills: 0.3, straight: 0.12, traffic: { density: 9, min: 0.28, max: 0.62, oncoming: 0.25 } },
     chinatown: { left: 'shop', right: 'shop', light: 'day', curv: 1.1, hills: 0.2, traffic: { density: 13, min: 0.22, max: 0.55, oncoming: 0.35 } },
     city: { left: 'city', right: 'city', light: 'day', curv: 1.0, hills: 0.6, traffic: { density: 11, min: 0.35, max: 0.7, oncoming: 0.1 } },
     siam: { left: 'city', right: 'city', light: 'golden', curv: 1.15, hills: 0.5, traffic: { density: 12, min: 0.3, max: 0.68, oncoming: 0.15 }, skytrain: true },
@@ -52,12 +52,12 @@
     const diff = 1 + stageNo * 0.18;
     addRoad(0, 60, 0, 0, 0, stage);
     while (T.segments.length - start < len - 80) {
-      const r = rng();
+      const r = rng(), pStraight = th.straight === undefined ? 0.28 : th.straight;
       const c = (rng.chance(0.5) ? -1 : 1) * rng.range(1.6, 3.2) * th.curv * diff;
-      if (r < 0.28) addRoad(rng.int(40) + 30, rng.int(60) + 30, rng.int(40) + 30, 0, 0, stage);
-      else if (r < 0.6) addRoad(50, rng.int(80) + 40, 50, c, 0, stage);
-      else if (r < 0.75) { addRoad(40, 40, 40, c, 0, stage); addRoad(40, 40, 40, -c, 0, stage); }
-      else if (r < 0.88 && th.hills > 0.25) addRoad(50, 30, 50, c * 0.5, rng.range(8, 20) * th.hills, stage), addRoad(40, 20, 40, 0, -rng.range(8, 20) * th.hills, stage);
+      if (r < pStraight) addRoad(rng.int(40) + 30, rng.int(60) + 30, rng.int(40) + 30, 0, 0, stage);
+      else if (r < pStraight + 0.32) addRoad(50, rng.int(80) + 40, 50, c, 0, stage);
+      else if (r < pStraight + 0.5) { addRoad(40, 40, 40, c, 0, stage); addRoad(40, 40, 40, -c, 0, stage); }
+      else if (r < pStraight + 0.62 && th.hills > 0.25) addRoad(50, 30, 50, c * 0.5, rng.range(8, 20) * th.hills, stage), addRoad(40, 20, 40, 0, -rng.range(8, 20) * th.hills, stage);
       else addRoad(30, 60, 30, c * 1.4, 0, stage);
     }
     while (T.segments.length - start < len) addSegment(0, T.lastY(), stage);
