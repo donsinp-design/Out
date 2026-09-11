@@ -484,9 +484,38 @@
     OB.frameCanvas = FC;
     // vehicles
     add('bike', IMG.bike, 480);
-    ['taxi', 'taxi_orange', 'taxi_blue', 'taxi_green'].forEach(n => add(n, IMG[n], 940, { car: true }));
-    ['sedan', 'sedan_black', 'sedan_red'].forEach(n => add(n, IMG[n], 880, { car: true }));
-    ['green', 'green_yellow', 'green_purple'].forEach(n => add(n, IMG[n], 800, { car: true }));
+    // Same-direction traffic comes from the sprite sheet's rear views. The old photo cut-outs of the cars were
+    // sliced by the crop (the taxi lost the bottom of its wheels and the top of its roof), which is what read as
+    // cars being cut off; the sheet versions are whole. Colour variants are hue-rotated copies of the one taxi so
+    // the traffic still varies.
+    const hueShift = (src, deg, light) => {
+      const c = mk(src.width, src.height), g = c.getContext('2d');
+      g.drawImage(src, 0, 0);
+      const d = g.getImageData(0, 0, c.width, c.height), p = d.data, rad = deg * Math.PI / 180, cs = Math.cos(rad), sn = Math.sin(rad);
+      for (let i = 0; i < p.length; i += 4) {
+        if (p[i + 3] < 8) continue;
+        const r = p[i], gr = p[i + 1], b = p[i + 2];
+        // rotate around the luma axis, then optionally lift or drop the whole thing
+        const lum = 0.213 * r + 0.715 * gr + 0.072 * b;
+        const nr = lum + cs * (r - lum) + sn * (0.143 * r + 0.140 * gr - 0.283 * b);
+        const ng = lum + cs * (gr - lum) + sn * (-0.136 * r + 0.030 * gr + 0.106 * b);
+        const nb = lum + cs * (b - lum) + sn * (0.787 * r - 0.715 * gr - 0.072 * b);
+        const k = light || 1;
+        p[i] = OB.clamp(nr * k, 0, 255); p[i + 1] = OB.clamp(ng * k, 0, 255); p[i + 2] = OB.clamp(nb * k, 0, 255);
+      }
+      g.putImageData(d, 0, 0); return c;
+    };
+    { const taxi = FC('CAR_TAXI');
+      add('taxi', taxi, 940, { car: true });
+      add('taxi_orange', hueShift(taxi, -28, 1.05), 940, { car: true });
+      add('taxi_blue', hueShift(taxi, 150), 940, { car: true });
+      add('taxi_green', hueShift(taxi, 95), 940, { car: true });
+      add('sedan', hueShift(taxi, 0, 0.42), 900, { car: true });        // dark grey saloon
+      add('sedan_black', hueShift(taxi, 0, 0.22), 900, { car: true });
+      add('sedan_red', hueShift(taxi, -12, 0.85), 900, { car: true });
+      add('green', hueShift(taxi, 110, 0.9), 880, { car: true });
+      add('green_yellow', hueShift(taxi, 60, 1.1), 880, { car: true });
+      add('green_purple', hueShift(taxi, 205, 0.8), 880, { car: true }); }
     add('bus', IMG.bus, 1240, { car: true, oncoming: true });
     add('tuktuk', IMG.tuktuk, 900, { car: true, oncoming: true });
     add('truck', FC('TRUCK'), 1150, { car: true }); add('pickup', FC('PICKUP'), 960, { car: true }); add('pickup_w', FC('PICKUP_W'), 960, { car: true });
