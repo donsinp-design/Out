@@ -181,8 +181,8 @@
   function wipeout(n) {
     if (G.flip) return;
     const dir = G.playerX > 0 ? -1 : 1; // tumbles back toward the middle of the road
-    G.flip = { t: 0, dir, x: 0, y: 0, vx: dir * 170, vy: -720, rot: 0, vr: dir * 9.5, bounces: 0, rest: 0 };
-    G.rider = { x: 0, y: -40, vx: -dir * 130 + (Math.random() - 0.5) * 50, vy: -480, rot: 0, vr: -dir * 7, down: false };
+    G.flip = { t: 0, dir, x: 0, y: 0, vx: dir * 110, vy: -720, rot: 0, vr: dir * 9.5, bounces: 0, rest: 0 };
+    G.rider = { x: 0, y: -40, vx: -dir * 70 + (Math.random() - 0.5) * 40, vy: -480, rot: 0, vr: -dir * 7, down: false };
     G.drift = 0; G.driftK = 0; G.invuln = 4; G.steer = 0; G.lean = 0;
     spawnParts(n); A.sfx('wipe'); A.sfx('flip');
   }
@@ -195,11 +195,15 @@
       if (f.vy > 60) { // bounce: lower, slower, less spin; a puff of dust each time
         f.bounces++; f.vy = -f.vy * 0.5; f.vx *= 0.65; f.vr *= 0.6; G.shake = Math.max(G.shake, 0.6); A.sfx('bump');
         for (let i = 0; i < 10; i++) emitSmoke(i % 2 ? 1 : -1, f.x);
-      } else { f.vy = 0; f.vx *= Math.max(0, 1 - 4 * dt); const up = Math.round(f.rot / (Math.PI * 2)) * Math.PI * 2; f.rot += (up - f.rot) * Math.min(1, dt * 10); f.rest += dt; }
+      } else { // down: skids to a stop lying on its side (nearest +-90 degrees), kicking up dust while it still slides
+        f.vy = 0; f.vx *= Math.max(0, 1 - 3 * dt);
+        const side = Math.round((f.rot - Math.PI / 2) / Math.PI) * Math.PI + Math.PI / 2; f.rot += (side - f.rot) * Math.min(1, dt * 10); f.rest += dt;
+        if (Math.abs(f.vx) > 15 && Math.random() < 0.6) emitSmoke(Math.sign(f.vx), f.x);
+      }
     }
     const r = G.rider;
     if (r && !r.down) { r.vy += 1400 * dt; r.x += r.vx * dt; r.y += r.vy * dt; r.rot += r.vr * dt; if (r.y >= 0 && r.vy > 0) { r.y = 0; r.down = true; r.rot = 0; } }
-    if (f.rest > 0.7 || f.t > 3.2) { G.flip = null; G.rider = null; G.invuln = 1.6; } // rider hops back on, bike blinks while getting going
+    if (f.rest > 1.0 || f.t > 3.6) { G.flip = null; G.rider = null; G.invuln = 1.6; } // reset: rider back on the bike, which blinks while getting going
   }
   function updateParts(dt) {
     for (let i = G.parts.length - 1; i >= 0; i--) { const p = G.parts[i]; p.vy += 1100 * dt; p.x += p.vx * dt; p.y += p.vy * dt; p.rot += p.vr * dt; p.life -= dt; if (p.life <= 0 || p.y > H + 30) G.parts.splice(i, 1); }
