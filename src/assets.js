@@ -189,7 +189,7 @@
       g.fillStyle = sc[1]; g.font = '700 18px "Kanit"'; g.textAlign = 'center'; g.textBaseline = 'middle';
       g.fillText(txt, (W - 6) / 2, gy - 8);
     }
-    if (opt.seven) { px(g, 3, ay - 12, W - 12, 12, '#f5f5f2'); px(g, 3, ay - 12, W - 12, 4, '#f47a20'); px(g, 3, ay - 8, W - 12, 4, '#00843d'); px(g, 3, ay - 4, W - 12, 4, '#e4002b'); }
+    if (false) { px(g, 3, ay - 12, W - 12, 12, '#f5f5f2'); px(g, 3, ay - 12, W - 12, 4, '#f47a20'); px(g, 3, ay - 8, W - 12, 4, '#00843d'); px(g, 3, ay - 4, W - 12, 4, '#e4002b'); }
     // AC units on facade
     for (let i = 0; i < rng.int(3); i++) { const x = 20 + rng.int(W - 50), y = 30 + rng.int(Math.max(1, H - 110)); px(g, x, y, 12, 9, '#d0d3d6'); px(g, x + 1, y + 1, 10, 5, '#8d9296'); px(g, x + 3, y + 7, 6, 1, '#6e7276'); }
     return c;

@@ -71,13 +71,14 @@
   function renderGround(seg, pal, th) {
     const p1 = seg.p1.screen, p2 = seg.p2.screen;
     const x1 = p1.x, y1 = p1.y, w1 = p1.w, x2 = p2.x, y2 = p2.y, w2 = p2.w;
-    const sw1 = w1 * SIDEWALK, sw2 = w2 * SIDEWALK, alt = Math.floor(seg.index / 3) % 2;
+    const swR = th.right === 'water' ? 0.3 : SIDEWALK;
+    const sw1 = w1 * SIDEWALK, sw2 = w2 * SIDEWALK, swr1 = w1 * swR, swr2 = w2 * swR, alt = Math.floor(seg.index / 3) % 2;
     const envL = pal[th.left] || pal.shop, envR = pal[th.right] || pal.shop;
     poly(0, y1, x1 - w1 - sw1, y1, x2 - w2 - sw2, y2, 0, y2, envL[alt]);
     if (th.right === 'water') {
       // river surface sits below road level: embankment wall face + lowered water plane
       const d1 = seg.p1.screen.scale * WATER_DROP * K, d2 = seg.p2.screen.scale * WATER_DROP * K;
-      const ox1 = x1 + w1 + sw1, ox2 = x2 + w2 + sw2;
+      const ox1 = x1 + w1 + swr1, ox2 = x2 + w2 + swr2;
       poly(ox1, y1 + d1, W, y1 + d1, W, y2 + d2, ox2, y2 + d2, envR[alt]);
       if (alt === 0 && seg.index % 12 === 0) poly(ox1 + sw1 * 1.5, y1 + d1, W, y1 + d1, W, y2 + d2, ox2 + sw2 * 1.5, y2 + d2, pal.water[1]);
       poly(ox1, y1, ox1, y1 + d1, ox2, y2 + d2, ox2, y2, pal.wall);
@@ -85,7 +86,7 @@
     } else poly(x1 + w1 + sw1, y1, W, y1, W, y2, x2 + w2 + sw2, y2, envR[alt]);
     // sidewalks
     poly(x1 - w1 - sw1, y1, x1 - w1, y1, x2 - w2, y2, x2 - w2 - sw2, y2, pal.side[alt]);
-    poly(x1 + w1, y1, x1 + w1 + sw1, y1, x2 + w2 + sw2, y2, x2 + w2, y2, pal.side[alt]);
+    poly(x1 + w1, y1, x1 + w1 + swr1, y1, x2 + w2 + swr2, y2, x2 + w2, y2, pal.side[alt]);
     // paving joints
     if (seg.index % 6 === 0 && (y1 - y2) > 2) { ctx.fillStyle = pal.curb; ctx.globalAlpha = 0.35; poly(x1 - w1 - sw1, y1, x1 - w1, y1, x1 - w1, y1 - 1, x1 - w1 - sw1, y1 - 1, pal.curb); poly(x1 + w1, y1, x1 + w1 + sw1, y1, x1 + w1 + sw1, y1 - 1, x1 + w1, y1 - 1, pal.curb); ctx.globalAlpha = 1; }
     // curbs
@@ -93,7 +94,7 @@
     poly(x1 - w1 - c1, y1, x1 - w1, y1, x2 - w2, y2, x2 - w2 - c2, y2, pal.curb);
     poly(x1 + w1, y1, x1 + w1 + c1, y1, x2 + w2 + c2, y2, x2 + w2, y2, pal.curb);
     // embankment parapet edge (water side)
-    if (th.right === 'water') poly(x1 + w1 + sw1 - c1, y1, x1 + w1 + sw1 + c1, y1, x2 + w2 + sw2 + c2, y2, x2 + w2 + sw2 - c2, y2, pal.curbTop);
+    if (th.right === 'water') poly(x1 + w1 + swr1 - c1, y1, x1 + w1 + swr1 + c1, y1, x2 + w2 + swr2 + c2, y2, x2 + w2 + swr2 - c2, y2, pal.curbTop);
     // road
     poly(x1 - w1, y1, x1 + w1, y1, x2 + w2, y2, x2 - w2, y2, pal.road[alt]);
     // lane markings
@@ -129,7 +130,7 @@
 
   function renderRail(seg, pal) {
     const p1 = seg.p1.screen, p2 = seg.p2.screen;
-    const rx1 = p1.x + p1.w + p1.w * SIDEWALK, rx2 = p2.x + p2.w + p2.w * SIDEWALK;
+    const rx1 = p1.x + p1.w + p1.w * 0.3, rx2 = p2.x + p2.w + p2.w * 0.3;
     const h1 = p1.scale * 420 * K, h2 = p2.scale * 420 * K;
     if (h1 < 1) return;
     const t1 = Math.max(1, h1 * 0.07), t2 = Math.max(1, h2 * 0.07);
