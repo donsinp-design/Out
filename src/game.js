@@ -21,7 +21,7 @@
   G.ranking = store.get('ob_ranking', []); if (!Array.isArray(G.ranking)) G.ranking = [];
   { const legacy = parseInt(store.get('ob_hiscore', 0)) || 0; if (legacy > 0 && !G.ranking.length) G.ranking.push({ name: 'ICE', score: legacy, route: '' }); }
   G.hiScore = G.ranking.length ? G.ranking[0].score : 0;
-  G.station = Math.min(2, Math.max(0, store.get('ob_station', 0) | 0)); G.course = Math.min(6, Math.max(0, store.get('ob_course', 0) | 0));
+  G.station = Math.min(A.stations.length - 1, Math.max(0, store.get('ob_station', 0) | 0)); G.course = Math.min(6, Math.max(0, store.get('ob_course', 0) | 0));
   OB.NAME_CHARS = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789'.split('').concat(['<', 'END']);
 
   // ---------- input ----------
@@ -327,7 +327,7 @@
         if (mode === 'title') { G.mode = 'radio'; A.playMusic(G.station); A.setMusicVolume(G.muted ? 0 : A.MUSIC_VOL); }
         else if (mode === 'radio') { G.mode = 'course'; }
         else { startRun(); } }
-      if (mode === 'radio' && tuneDir) { G.station = (G.station + tuneDir + 3) % 3; store.set('ob_station', G.station); A.playMusic(G.station); A.sfx('select'); }
+      if (mode === 'radio' && tuneDir) { const ns = A.stations.length; G.station = (G.station + tuneDir + ns) % ns; store.set('ob_station', G.station); A.playMusic(G.station); A.sfx('select'); }
       if (mode === 'course' && tuneDir) { const n = T.COURSES.length; G.course = (G.course + tuneDir + n) % n; store.set('ob_course', G.course); A.sfx('select'); }
       tuneDir = 0;
       A.setEngine(G.speed / G.maxSpeed, false, false, A.ready());

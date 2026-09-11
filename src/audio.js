@@ -60,7 +60,18 @@
       melodyB: ['G5 - A5 - C6 - - - A5 - G5 - E5 - - -', 'D5 - E5 - G5 - - - E5 - D5 - C5 - - -', 'A4 - C5 - D5 - E5 - G5 - - - E5 - D5 -', 'E5 - - - - - - - . . . . . . . .',
         'G5 - E5 - D5 - C5 - D5 - E5 - G5 - - -', 'A5 - - - G5 - E5 - D5 - - - . . . .', 'C5 - D5 - E5 - G5 - A5 - G5 - E5 - D5 -', 'C5 - - - - - - - - - - - . . . .'],
       kick: 'x.......x.......', snare: '', rim: '....r.......r...', hat: 'h...h...h...h...', shaker: 's.s.s.s.s.s.s.s.', conga: 'c..C..c.c..C..c.', bell: '', ching: 'o...c...o...c...',
-      stabs: [0, 10], riff: [0, 1, 2, 1, 0, 1, 2, 3], drone: null }
+      stabs: [0, 10], riff: [0, 1, 2, 1, 0, 1, 2, 3], drone: null },
+    //  4) SOI TRAP - Thai hip hop: half-time trap beat, sliding 808s, hat rolls, a flipped mor lam phin riff as the hook
+    { name: 'SOI TRAP', thai: 'ซอยแทร็ป ฮิปฮอปไทย', bpm: 140, lead: 'phinlead', delay: 3, trap: true,
+      scale: [4, 7, 9, 11, 14],
+      chords: [CH('E3', 'G3', 'B3'), CH('E3', 'G3', 'B3'), CH('C3', 'E3', 'G3'), CH('D3', 'F#3', 'A3'), CH('E3', 'G3', 'B3'), CH('E3', 'G3', 'B3'), CH('C3', 'E3', 'G3'), CH('D3', 'F#3', 'A3')],
+      bass: ['E1', 'E1', 'C1', 'D1', 'E1', 'E1', 'C1', 'D1'], bassPat: 'x.....x...x...5.',
+      melody: ['E5 - - - G5 - E5 - D5 - - - B4 - - -', '. . . . E5 - G5 - A5 - - - G5 - E5 -', 'D5 - - - E5 - D5 - B4 - - - . . . .', 'A4 - B4 - D5 - - - - - - - . . . .',
+        'E5 - - - G5 - E5 - D5 - - - B4 - - -', '. . . . E5 - G5 - A5 - - - B5 - - -', 'A5 - G5 - E5 - D5 - E5 - - - . . . .', 'B4 - - - - - - - . . . . . . . .'],
+      melodyB: ['B5 - - - A5 - G5 - E5 - - - G5 - A5 -', 'B5 - A5 - G5 - E5 - D5 - - - . . . .', 'E5 - G5 - A5 - - - B5 - D6 - B5 - A5 -', 'G5 - - - E5 - - - . . . . . . . .',
+        'B5 - - - A5 - G5 - E5 - - - G5 - A5 -', 'B5 - D6 - B5 - A5 - G5 - - - . . . .', 'E5 - D5 - B4 - D5 - E5 - G5 - E5 - D5 -', 'E5 - - - - - - - . . . . . . . .'],
+      kick: 'x.....x...x...x.', snare: '', clap: '........x.......', rim: '', hat: 'h.h.h.h.h.h.RRh.', hatB: 'h.hhh.h.RRh.hRRR', shaker: '', conga: '', bell: '', ching: '....o.......o...',
+      stabs: [], chop: [0, 10], riff: [0, 2, 1, 2, 0, 2, 1, 0], drone: null, droneB: CH('E3', 'B3', 'E4') }
   ];
   A.stations.forEach(s => {
     s.seq = parse(s.melody); s.seqB = parse(s.melodyB || s.melody);
@@ -165,6 +176,19 @@
     tone('square', hz(m), t, dur, 0.16, musicBus, { filter: 1400, filterTo: 500, filterT: 0.12, release: 0.04 });
     tone('triangle', hz(m), t, dur, 0.26, musicBus, { release: 0.04 });
   }
+  function bass808(t, m, dur) { // sliding sub with a knock and a saturated harmonic so it carries on phone speakers
+    const f = hz(m), o = ctx.createOscillator(), g = ctx.createGain(); o.type = 'sine';
+    o.frequency.setValueAtTime(f * 2.2, t); o.frequency.exponentialRampToValueAtTime(f, t + 0.07);
+    g.gain.setValueAtTime(0, t); g.gain.linearRampToValueAtTime(0.55, t + 0.006); g.gain.setValueAtTime(0.55, t + 0.05); g.gain.exponentialRampToValueAtTime(0.001, t + dur);
+    o.connect(g); g.connect(musicBus); o.start(t); o.stop(t + dur + 0.05);
+    tone('triangle', f * 2, t, dur * 0.6, 0.09, musicBus, { attack: 0.005, release: 0.1, filter: 900 });
+    hit(t, 0.02, 0.2, 'lowpass', 900);
+  }
+  function clap(t) { for (let i = 0; i < 3; i++) hit(t + i * 0.011, 0.05, 0.22, 'bandpass', 1500, 0.9); hit(t + 0.03, 0.2, 0.25, 'bandpass', 1300, 0.6); }
+  function chop(t, m) { // vocal-chop style stab
+    tone('sawtooth', hz(m), t, 0.14, 0.12, musicBus, { filter: 1000, ftype: 'bandpass', q: 5, attack: 0.005, release: 0.05 });
+    tone('sawtooth', hz(m) * 1.01, t, 0.14, 0.08, musicBus, { filter: 2400, ftype: 'bandpass', q: 6, attack: 0.005, release: 0.05 });
+  }
   function stab(t, notes, dur) { // brass section: two detuned saws per voice with a snappy filter envelope
     notes.forEach((m, i) => { const f = hz(m + 12);
       tone('sawtooth', f, t, dur, 0.038, musicBus, { detune: 6, filter: 3200, filterTo: 900, filterT: dur, attack: 0.006, release: 0.06 });
@@ -173,6 +197,7 @@
   function lead(t, m, dur, type, st, from) {
     const f = hz(m);
     if (type === 'ranat') { ranat(t, m, dur); if (dur > 0.3) ranat(t + dur * 0.5, m, dur * 0.5, 0.06); return; }
+    if (type === 'phinlead') { phin(t, m); if (dur > 0.2) tone('triangle', f, t, dur, 0.07, musicBus, { attack: 0.02, release: 0.08, send: leadDelay.d }); return; }
     const o1 = tone(type, f, t, dur, 0.085, musicBus, { detune: -5, attack: 0.012, release: 0.07, filter: 2600, send: leadDelay.d });
     const o2 = tone(type, f, t, dur, 0.055, musicBus, { detune: 6, attack: 0.012, release: 0.07, filter: 2400, send: leadDelay.d });
     if (from && from !== m) { // เอื้อน: slide in from the previous note
@@ -216,17 +241,22 @@
     const sn = fill ? '....x...x.x.xxxx' : st.snare;
     if (sn[sub] === 'x') drums.snare(t, fill && sub > 11 ? 0.7 + (sub - 11) * 0.1 : 1);
     if (st.rim[sub] === 'r' && !fill) drums.rim(t);
-    const h = st.hat[sub]; if (h === 'h') drums.hat(t, false); else if (h === 'o') drums.hat(t, true);
+    if (st.clap && st.clap[sub] === 'x') clap(t);
+    const h = (second && st.hatB ? st.hatB : st.hat)[sub];
+    if (h === 'h') drums.hat(t, false); else if (h === 'o') drums.hat(t, true); else if (h === 'R') { drums.hat(t, false); drums.hat(t + dur / 2, false); }
     const sh = st.shaker[sub]; if (sh === 's' || sh === 'S') drums.shaker(t, sh === 'S');
     const cg = st.conga[sub]; if (cg === 'c') drums.conga(t, false); else if (cg === 'C') drums.conga(t, true);
     if (st.bell && st.bell[sub] === 'b') drums.bell(t);
     if (st.ching) { const c = st.ching[sub]; if (c === 'o') ching(t, true); else if (c === 'c') ching(t, false); }
     // bass
     const bp = st.bassPat[sub], root = midi(st.bass[cbar]);
-    if (bp === 'x') bass(t, root, dur * 1.6); else if (bp === 'o') bass(t, root + 12, dur * 1.2); else if (bp === '5') bass(t, root + 7, dur * 1.2);
-    // keyboard brass + khaen
+    if (st.trap) { if (bp === 'x') bass808(t, root, dur * 6); else if (bp === '5') bass808(t, root + 7, dur * 3); else if (bp === 'o') bass808(t, root + 12, dur * 3); }
+    else { if (bp === 'x') bass(t, root, dur * 1.6); else if (bp === 'o') bass(t, root + 12, dur * 1.2); else if (bp === '5') bass(t, root + 7, dur * 1.2); }
+    // keyboard brass + khaen (+ vocal chops and a khaen pad on the hook for the trap station)
     if (st.stabs.indexOf(sub) >= 0) stab(t, chord, dur * 1.5);
     if (st.drone && sub === 0) drone(t, st.drone, dur * 16);
+    if (second && st.droneB && sub === 0) drone(t, st.droneB, dur * 16);
+    if (second && st.chop && st.chop.indexOf(sub) >= 0) chop(t, chord[0] + 12);
     // phin riff: running 16ths over the chord (all the way through in mor lam, on the hook elsewhere)
     if ((second || st.riffAlways) && sub % 2 === 0) { const idx = st.riff[(sub / 2) % st.riff.length]; const m = chord[idx % chord.length] + 12 * (idx >= chord.length ? 1 : 0) + 12; phin(t, m); }
     // sung-style melody with เอื้อน slides between joined notes

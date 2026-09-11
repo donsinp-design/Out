@@ -429,26 +429,27 @@
   };
   R.radio = function (G) {
     dim(0.35); R.hit.rows = []; R.hit.nodes = []; R.hit.cells = []; R.hit.start = null;
-    const x = W / 2 - 270, y = 44, w = 540, h = 340;
+    const stations = OB.audio.stations, n = stations.length, RH = 44;
+    const x = W / 2 - 270, y = 22, w = 540, h = 100 + n * RH + 66;
     ctx.fillStyle = '#1a1c22'; ctx.fillRect(x, y, w, h); ctx.fillStyle = '#3a3d46'; ctx.fillRect(x, y, w, 4); ctx.fillRect(x, y + h - 4, w, 4); ctx.fillRect(x, y, 4, h); ctx.fillRect(x + w - 4, y, 4, h);
-    TXT(ctx, 'SELECT MUSIC', W / 2, y + 30, { size: 11, sy: 1.5, fill: '#ff37a8', outline: '#000', outlineW: 4, align: 'center' });
+    TXT(ctx, 'SELECT MUSIC', W / 2, y + 28, { size: 11, sy: 1.5, fill: '#ff37a8', outline: '#000', outlineW: 4, align: 'center' });
     // radio display: dial + live equaliser
-    ctx.fillStyle = '#0b3b2e'; ctx.fillRect(x + 20, y + 44, w - 40, 48); ctx.fillStyle = '#39f2b0'; ctx.fillRect(x + 24, y + 48, w - 48, 1);
-    for (let i = 0; i < 36; i++) { ctx.fillStyle = i % 5 ? '#1f7a5e' : '#39f2b0'; ctx.fillRect(x + 30 + i * 9, y + 54, 1, i % 5 ? 6 : 12); }
-    const dial = x + 36 + G.station * 150; ctx.fillStyle = '#ff3b3b'; ctx.fillRect(dial, y + 50, 3, 38);
+    ctx.fillStyle = '#0b3b2e'; ctx.fillRect(x + 20, y + 40, w - 40, 46); ctx.fillStyle = '#39f2b0'; ctx.fillRect(x + 24, y + 44, w - 48, 1);
+    for (let i = 0; i < 36; i++) { ctx.fillStyle = i % 5 ? '#1f7a5e' : '#39f2b0'; ctx.fillRect(x + 30 + i * 9, y + 50, 1, i % 5 ? 6 : 12); }
+    const dial = x + 36 + G.station * ((w - 230) / Math.max(1, n - 1)); ctx.fillStyle = '#ff3b3b'; ctx.fillRect(dial, y + 46, 3, 36);
     const sp = OB.audio.spectrum(12);
-    for (let i = 0; i < 12; i++) { const hh = 3 + sp[i] * 30; ctx.fillStyle = sp[i] > 0.8 ? '#ff5a5a' : '#39f2b0'; ctx.fillRect(x + w - 150 + i * 9, y + 88 - hh, 6, hh); }
+    for (let i = 0; i < 12; i++) { const hh = 3 + sp[i] * 28; ctx.fillStyle = sp[i] > 0.8 ? '#ff5a5a' : '#39f2b0'; ctx.fillRect(x + w - 150 + i * 9, y + 82 - hh, 6, hh); }
     // big tappable rows
-    OB.audio.stations.forEach((s, i) => {
-      const sel = i === G.station, ry = y + 104 + i * 52;
-      ctx.fillStyle = sel ? 'rgba(255,216,0,0.18)' : 'rgba(255,255,255,0.05)'; ctx.fillRect(x + 16, ry, w - 32, 46);
-      ctx.fillStyle = sel ? '#ffd800' : '#3a3d46'; ctx.fillRect(x + 16, ry, w - 32, 1); ctx.fillRect(x + 16, ry + 45, w - 32, 1);
-      if (sel) arrow(x + 38, ry + 23, 1, 7, '#ffd800', '#000');
-      TXT(ctx, s.name, x + 60, ry + 30, { size: 11, sy: 1.4, fill: sel ? '#ffd800' : '#cfd3da', outline: '#000', outlineW: 3 });
-      TXT(ctx, s.thai, x + w - 36, ry + 31, { size: 17, font: 'Kanit', weight: '500', fill: sel ? '#fff' : '#8a8f99', align: 'right' });
-      R.hit.rows.push({ x: x + 16, y: ry, w: w - 32, h: 46, i });
+    stations.forEach((s, i) => {
+      const sel = i === G.station, ry = y + 96 + i * RH;
+      ctx.fillStyle = sel ? 'rgba(255,216,0,0.18)' : 'rgba(255,255,255,0.05)'; ctx.fillRect(x + 16, ry, w - 32, RH - 4);
+      ctx.fillStyle = sel ? '#ffd800' : '#3a3d46'; ctx.fillRect(x + 16, ry, w - 32, 1); ctx.fillRect(x + 16, ry + RH - 5, w - 32, 1);
+      if (sel) arrow(x + 38, ry + RH / 2 - 2, 1, 7, '#ffd800', '#000');
+      TXT(ctx, s.name, x + 60, ry + RH / 2 + 5, { size: 11, sy: 1.4, fill: sel ? '#ffd800' : '#cfd3da', outline: '#000', outlineW: 3 });
+      TXT(ctx, s.thai, x + w - 36, ry + RH / 2 + 6, { size: 16, font: 'Kanit', weight: '500', fill: sel ? '#fff' : '#8a8f99', align: 'right' });
+      R.hit.rows.push({ x: x + 16, y: ry, w: w - 32, h: RH - 4, i });
     });
-    button(W / 2 - 110, y + 274, 220, 46, 'START', 'เริ่ม');
+    button(W / 2 - 110, y + 100 + n * RH + 8, 220, 44, 'START', 'เริ่ม');
     TXT(ctx, G.touchMode ? 'TAP A STATION, THEN START' : 'LEFT / RIGHT : TUNE      ENTER : START', W / 2, H - 12, { size: 8, sy: 1.4, fill: '#fff', outline: '#000', outlineW: 3, align: 'center' });
   };
   R.name = function (G) {
