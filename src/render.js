@@ -408,24 +408,30 @@
     ctx.restore();
   };
   R.title = function (G) {
-    R.logo(W / 2, 150, 1);
-    TXT(ctx, 'กรุงเทพมหานคร', W / 2, 212, { size: 20, font: 'Kanit', weight: '700', fill: '#ffd23f', outline: '#000', outlineW: 5, align: 'center' });
-    // ribbon
-    ctx.fillStyle = '#c8102e'; ctx.fillRect(W / 2 - 170, 224, 340, 22); ctx.fillStyle = '#000'; ctx.fillRect(W / 2 - 170, 224, 340, 2); ctx.fillRect(W / 2 - 170, 244, 340, 2);
-    TXT(ctx, 'HIDDEN STAGE - ICE RUN', W / 2 - 152, 240, { size: 8, sy: 1.4, fill: '#fff', align: 'left' });
-    TXT(ctx, 'ภารกิจลับ', W / 2 + 152, 241, { size: 14, font: 'Kanit', weight: '500', fill: '#fff', align: 'right' });
-    if (Math.floor(G.t * 2) % 2 === 0) TXT(ctx, G.touchMode ? 'TAP TO START' : 'PRESS START', W / 2, 300, { size: 14, sy: 1.3, fill: '#fff', outline: '#000', outlineW: 5, align: 'center' });
-    // best riders table
+    // ICE MAN key art on black, fitted to the frame height; the art's own black ground fills the sides
+    const art = OB.IMG.title;
+    ctx.fillStyle = '#000'; ctx.fillRect(0, 0, W, H);
+    const ah = H, aw = Math.round(art.width * ah / art.height), ax = Math.round((W - aw) / 2);
+    ctx.imageSmoothingEnabled = true; ctx.drawImage(art, ax, 0, aw, ah); ctx.imageSmoothingEnabled = false;
+    // flashing start prompt between the wheel and the credit line
+    if (Math.floor(G.t * 2.5) % 2 === 0) TXT(ctx, G.touchMode ? 'TAP TO START' : 'PRESS START', W / 2, 434, { size: 14, sy: 1.3, fill: '#fff', outline: '#000', outlineW: 6, align: 'center' });
+    // best riders in the right margin
     const rk = G.ranking || [];
-    TXT(ctx, 'BEST RIDERS', W / 2, 332, { size: 8, sy: 1.4, fill: '#ff37a8', outline: '#000', outlineW: 3, align: 'center' });
-    for (let i = 0; i < 3; i++) {
-      const r = rk[i]; const line = (i + 1) + (['ST', 'ND', 'RD'][i]) + '  ' + (r ? (r.name + '   ').slice(0, 3) : '---') + '  ' + OB.pad(r ? r.score : 0, 7) + (r && r.route ? '  ' + r.route : '');
-      TXT(ctx, line, W / 2, 350 + i * 15, { size: 7, sy: 1.4, fill: i === 0 ? '#ffd800' : '#fff', outline: '#000', outlineW: 3, align: 'center' });
+    if (rk.length) {
+      const rx = ax + aw + 14, ry = H - 120;
+      if (W - rx > 150) {
+        TXT(ctx, 'BEST RIDERS', rx, ry, { size: 7, sy: 1.4, fill: '#ff37a8', outline: '#000', outlineW: 3 });
+        for (let i = 0; i < 3; i++) { const r = rk[i]; if (!r) break; TXT(ctx, (i + 1) + ['ST', 'ND', 'RD'][i] + ' ' + (r.name + '   ').slice(0, 3) + ' ' + OB.pad(r.score, 7), rx, ry + 16 + i * 14, { size: 6, sy: 1.4, fill: i === 0 ? '#ffd800' : '#fff', outline: '#000', outlineW: 3 }); }
+      }
     }
-    TXT(ctx, 'DELIVER THE ICE TO WAT PHO BEFORE IT MELTS', W / 2, 408, { size: 7, sy: 1.4, fill: '#bfefff', outline: '#000', outlineW: 3, align: 'center' });
-    TXT(ctx, 'ส่งน้ำแข็งให้ถึงวัดโพธิ์ก่อนละลาย', W / 2, 428, { size: 14, font: 'Kanit', weight: '500', fill: '#fff', outline: '#000', outlineW: 3, align: 'center' });
-    TXT(ctx, G.touchMode ? 'FINGER LEFT / RIGHT STEERS   TWO FINGERS BRAKE   AUTO GAS' : 'LEFT/RIGHT STEER   UP GAS   DOWN BRAKE   M MUSIC   P PAUSE', W / 2, H - 12, { size: 7, sy: 1.3, fill: '#fff', outline: '#000', outlineW: 3, align: 'center' });
-    if (G.touchMode && window.innerHeight > window.innerWidth) TXT(ctx, 'ROTATE YOUR PHONE FOR FULL SCREEN', W / 2, 30, { size: 8, sy: 1.4, fill: '#ffd800', outline: '#000', outlineW: 4, align: 'center' });
+    // controls in the left margin
+    const lx = 14;
+    if (ax > 150) {
+      TXT(ctx, G.touchMode ? 'FINGER LEFT / RIGHT' : 'ARROWS STEER', lx, H - 62, { size: 6, sy: 1.4, fill: '#9fd0ee', outline: '#000', outlineW: 3 });
+      TXT(ctx, G.touchMode ? 'STEERS  -  AUTO GAS' : 'UP GAS  DOWN BRAKE', lx, H - 48, { size: 6, sy: 1.4, fill: '#9fd0ee', outline: '#000', outlineW: 3 });
+      TXT(ctx, G.touchMode ? 'TWO FINGERS BRAKE' : 'M MUSIC  P PAUSE', lx, H - 34, { size: 6, sy: 1.4, fill: '#9fd0ee', outline: '#000', outlineW: 3 });
+    }
+    if (G.touchMode && window.innerHeight > window.innerWidth) TXT(ctx, 'ROTATE YOUR PHONE FOR FULL SCREEN', W / 2, 16, { size: 7, sy: 1.4, fill: '#ffd800', outline: '#000', outlineW: 3, align: 'center' });
   };
   R.radio = function (G) {
     dim(0.35); R.hit.rows = []; R.hit.nodes = []; R.hit.cells = []; R.hit.start = null;
@@ -510,7 +516,7 @@
     const label = n > 0 ? String(n) : 'GO!';
     const k = 1 - (G.countdown % 1); const sc = n > 0 ? 1 + (1 - k) * 0.4 : 1.2;
     ctx.save(); ctx.translate(W / 2, 200); ctx.scale(sc, sc);
-    TXT(ctx, label, 0, 0, { size: 56, sy: 1.2, fill: n > 0 ? '#ffd800' : '#3cff6a', outline: '#000', outlineW: 10, align: 'center' });
+    TXT(ctx, label, 0, 0, { size: 56, sy: 1.2, fill: '#ffffff', outline: '#000', outlineW: 10, align: 'center' });
     ctx.restore();
     if (G.touchMode) TXT(ctx, 'HOLD A FINGER LEFT OR RIGHT TO STEER   TWO FINGERS TO BRAKE', W / 2, 300, { size: 7, sy: 1.4, fill: '#fff', outline: '#000', outlineW: 3, align: 'center' });
   };

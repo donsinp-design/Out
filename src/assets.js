@@ -4,7 +4,7 @@
   const FILES = ['bg','bike','portrait','taxi','taxi_orange','taxi_blue','taxi_green','sedan','sedan_black','sedan_red',
     'green','green_yellow','green_purple','bus','tuktuk','seven','signs','ckrd','spirit','thatien','yen','vendor',
     'noodle','storepanel','sangchai','thongbai','redsign','chedi',
-    'facade0','facade1','facade2','facade3','facade4','facade5','towers0','towers1','towers2'];
+    'facade0','facade1','facade2','facade3','facade4','facade5','towers0','towers1','towers2','title'];
   const IMG = {};
   OB.IMG = IMG;
 
