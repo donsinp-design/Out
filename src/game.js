@@ -34,7 +34,7 @@
     if (G.mode === 'name') { nameKey(e); e.preventDefault(); return; }
     if (KEYMAP[e.key]) { keys[KEYMAP[e.key]] = true; e.preventDefault(); }
     if (e.key === 'Enter' || e.key === ' ') { startPressed = true; e.preventDefault(); }
-    if (e.key === 'ArrowLeft' || e.key === 'a') tuneDir = -1; if (e.key === 'ArrowRight' || e.key === 'd') tuneDir = 1;
+    if (e.key === 'ArrowLeft' || e.key === 'a') tuneDir -= 1; if (e.key === 'ArrowRight' || e.key === 'd') tuneDir += 1; // accumulate so fast double presses are not lost
     if (e.key === 'ArrowUp' && (G.mode === 'radio' || G.mode === 'course')) startPressed = true;
     if (e.key === 'm' || e.key === 'M') { G.muted = !G.muted; A.setMusicVolume(G.muted ? 0 : A.MUSIC_VOL); }
     if ((e.key === 'p' || e.key === 'P' || e.key === 'Escape') && (G.mode === 'play')) G.paused = !G.paused;
@@ -327,8 +327,8 @@
         if (mode === 'title') { G.mode = 'radio'; A.playMusic(G.station); A.setMusicVolume(G.muted ? 0 : A.MUSIC_VOL); }
         else if (mode === 'radio') { G.mode = 'course'; }
         else { startRun(); } }
-      if (mode === 'radio' && tuneDir) { const ns = A.stations.length; G.station = (G.station + tuneDir + ns) % ns; store.set('ob_station', G.station); A.playMusic(G.station); A.sfx('select'); }
-      if (mode === 'course' && tuneDir) { const n = T.COURSES.length; G.course = (G.course + tuneDir + n) % n; store.set('ob_course', G.course); A.sfx('select'); }
+      if (mode === 'radio' && tuneDir) { const ns = A.stations.length; G.station = (((G.station + tuneDir) % ns) + ns) % ns; store.set('ob_station', G.station); A.playMusic(G.station); A.sfx('select'); }
+      if (mode === 'course' && tuneDir) { const n = T.COURSES.length; G.course = (((G.course + tuneDir) % n) + n) % n; store.set('ob_course', G.course); A.sfx('select'); }
       tuneDir = 0;
       A.setEngine(G.speed / G.maxSpeed, false, false, A.ready());
       return;
