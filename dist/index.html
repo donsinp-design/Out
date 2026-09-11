@@ -447,10 +447,9 @@ window.OB = window.OB || {};
     px(o, 0, y0, W, h, '#f6f6f2'); px(o, 0, y0, W, 2, '#ffffff'); px(o, 0, y0 + h - 3, W, 3, '#6b6b66'); px(o, W - 6, y0, 6, h, '#d9d9d3');
   }
   function store247Logos(g, W, y0, h) {
-    const logo = IMG.seven, lh = Math.round(h * 0.74), lw = Math.round(lh * logo.width / logo.height);
-    const n = Math.max(1, Math.floor(W / (lw + 24))), gap = (W - n * lw) / (n + 1);
+    const logo = IMG.seven, lh = Math.round(h * 0.8), lw = Math.round(lh * logo.width / logo.height);
     g.save(); g.imageSmoothingEnabled = false;
-    for (let i = 0; i < n; i++) g.drawImage(logo, gap + i * (lw + gap), y0 + (h - lh) / 2, lw, lh);
+    g.drawImage(logo, (W - lw) / 2, y0 + (h - lh) / 2, lw, lh);
     g.restore();
   }
   function sign247() { const logo = IMG.seven, s = 2.2, w = Math.round(logo.width * s), h = Math.round(logo.height * s), c = mk(w, h), g = c.getContext('2d'); g.imageSmoothingEnabled = false; g.drawImage(logo, 0, 0, w, h); return c; }
