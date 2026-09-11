@@ -56,7 +56,7 @@
 
   // ---------- projection ----------
   const roadW = () => OB.track.roadW;
-  const WATER_DROP = 380, SIDEWALK = 0.17, FOLLOW = 0.8; // camera follows the bike only partially so the road stays centred
+  const WATER_DROP = 380, SIDEWALK = 0.13, FOLLOW = 0.8; // camera follows the bike only partially so the road stays centred
   function project(p, camX, camY, camZ, depth, rw) {
     p.camera.x = p.world.x - camX; p.camera.y = p.world.y - camY; p.camera.z = p.world.z - camZ;
     p.screen.scale = depth / p.camera.z;
@@ -271,6 +271,15 @@
     const cx = Math.round(W / 2 + (G.drawShift || 0) + (G.playerDX || 0)), by = 457 + bounce;
     // shadow
     ctx.fillStyle = 'rgba(0,0,0,0.35)'; ctx.beginPath(); ctx.ellipse(cx + 2, by - 6, bw * 0.42, 7, 0, 0, Math.PI * 2); ctx.fill();
+    // tyre smoke (pixel puffs behind the rear wheel)
+    if (G.smoke) for (const p of G.smoke) {
+      const k = p.t / p.life, r = Math.round(p.r / 2) * 2, x = Math.round(p.x / 2) * 2, y = Math.round(p.y / 2) * 2;
+      ctx.globalAlpha = 0.8 * (1 - k) * (1 - k * 0.3);
+      ctx.fillStyle = k < 0.35 ? '#f4f4f6' : '#d8d8dc';
+      ctx.fillRect(x - r, y - Math.round(r * 0.6), r * 2, Math.round(r * 1.2)); ctx.fillRect(x - Math.round(r * 0.6), y - r, Math.round(r * 1.2), r * 2);
+      ctx.fillStyle = '#ffffff'; ctx.fillRect(x - Math.round(r * 0.4), y - Math.round(r * 0.5), Math.round(r * 0.6), Math.round(r * 0.5));
+    }
+    ctx.globalAlpha = 1;
     // wipeout: the bike kicks up and tilts hard for a moment
     const wp = G.wipe > 0 ? Math.sin((1 - G.wipe) * Math.PI) : 0;
     ctx.save(); ctx.translate(cx, by - wp * 34); ctx.rotate(G.lean * 0.16 + wp * 0.85 * (G.wipeDir || 1)); ctx.translate(-bw / 2 + G.lean * 6, -bh);

@@ -1,7 +1,9 @@
 // OutRun Bangkok — track segments, themes, stages and routes
 (function (OB) {
   'use strict';
-  const T = { segments: [], segLen: 200, roadW: 2000, lanes: 3 };
+  const T = { segments: [], segLen: 200, roadW: 2600, lanes: 4 };
+  T.laneX = (i) => -1 + (2 * i + 1) / T.lanes; // centre of lane i in road-half-width units
+  T.laneList = () => { const a = []; for (let i = 0; i < T.lanes; i++) a.push(T.laneX(i)); return a; };
   OB.track = T;
 
   T.STAGES = {

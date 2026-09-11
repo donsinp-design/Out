@@ -518,9 +518,10 @@
     add('wat', tx(wat(), { amp: 0.06 }), 3600, { solid: true, building: true });
     add('lantern', lanternSprite(), 80, {});
     add('median_head', median(), 500, {});
-    add('banner_start', banner('START', 'ถนนเจริญกรุง · CHAROEN KRUNG', '#d9262e'), 4400, {});
-    add('banner_check', banner('CHECK POINT', 'ต่อเวลา · EXTENDED TIME', '#1a56b8'), 4400, {});
-    add('banner_goal', banner('GOAL', 'ท่าเตียน · วัดโพธิ์ · WAT PHO', '#d9262e'), 4400, {});
-    OB.makeGantry = (l, r) => { const n = 'gantry_' + l.eng + '_' + r.eng; if (!S[n]) add(n, gantry(l, r), 4600, {}); return n; };
+    const RWm = (OB.track && OB.track.roadW) || 2000; // banners and gantries span the road whatever its width
+    add('banner_start', banner('START', 'OUTRUN BANGKOK · เอาท์รัน กรุงเทพฯ', '#d9262e'), RWm * 2.4, {});
+    add('banner_check', banner('CHECK POINT', 'ต่อเวลา · EXTENDED TIME', '#1a56b8'), RWm * 2.4, {});
+    add('banner_goal', banner('GOAL', 'ท่าเตียน · วัดโพธิ์ · WAT PHO', '#d9262e'), RWm * 2.4, {});
+    OB.makeGantry = (l, r) => { const n = 'gantry_' + l.eng + '_' + r.eng; if (!S[n]) add(n, gantry(l, r), RWm * 2.5, {}); return n; };
   };
 })(window.OB);

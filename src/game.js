@@ -9,7 +9,7 @@
     stageNo: 1, stageKey: 'charoenkrung', light: 'day', station: 0, hiScore: 0, msg: null, shake: 0, invuln: 0, bounce: 0,
     forkHint: null, wallCd: 0, countdown: 0, overReason: null, result: null, seed: 20240808, paused: false, route: [], cur: null, nextInfo: null, nextKey: null,
     muted: false, drawShift: -200, playerDX: 0, course: 0, touchMode: false,
-    wipe: 0, wipeDir: 1, parts: [], skidCd: 0, ranking: [], pendingRecord: null, nameEntry: null
+    wipe: 0, wipeDir: 1, parts: [], skidCd: 0, ranking: [], pendingRecord: null, nameEntry: null, smoke: [], smokeAcc: 0
   };
   OB.G = G;
   G.cameraDepth = 1 / Math.tan((G.fov / 2) * Math.PI / 180);
@@ -96,8 +96,19 @@
     G.position = 0; G.playerX = 0; G.speed = 0; G.steer = 0; G.lean = 0; G.bgOffset = 0;
     G.health = 100; G.ice = 100; G.score = 0; G.time = T.STAGES[G.stageKey].time + (G.stageNo > 1 ? 10 : 0);
     G.cars = []; G.msg = null; G.shake = 0; G.invuln = 0; G.forkHint = null; G.result = null; G.overReason = null; G.paused = false;
-    G.wipe = 0; G.parts = []; G.skidCd = 0;
+    G.wipe = 0; G.parts = []; G.skidCd = 0; G.smoke = []; G.smokeAcc = 0;
+    // START banner across the road at the start line, like the arcade
+    const sb = T.segments[16]; if (sb && OB.SPR.banner_start) sb.sprites.push({ spr: OB.SPR.banner_start, offset: 0, anchor: 'center', overhead: true });
     for (let i = 0; i < 8; i++) spawnCar(60 + i * 40);
+  }
+  // ---------- tyre smoke ----------
+  function emitSmoke(dir) {
+    const cx = W / 2 + (G.drawShift || 0) + (G.playerDX || 0), by = 457 + (G.bounce || 0);
+    const side = dir !== 0 ? dir : (Math.random() < 0.5 ? -1 : 1);
+    G.smoke.push({ x: cx + (Math.random() - 0.5) * 30 + dir * 10, y: by - 14 + Math.random() * 8, vx: side * (30 + Math.random() * 90) * (dir !== 0 ? 1.4 : 1), vy: 50 + Math.random() * 90, r: 4 + Math.random() * 4, life: 0.75 + Math.random() * 0.4, t: 0 });
+  }
+  function updateSmoke(dt) {
+    for (let i = G.smoke.length - 1; i >= 0; i--) { const p = G.smoke[i]; p.t += dt; p.x += p.vx * dt; p.y += p.vy * dt; p.r += 40 * dt; p.vx *= 0.97; p.vy *= 0.99; if (p.t >= p.life) G.smoke.splice(i, 1); }
   }
   // ---------- records / name entry ----------
   function qualifies(score) { return score >= 1000 && (G.ranking.length < 5 || score > G.ranking[G.ranking.length - 1].score); }
@@ -149,15 +160,16 @@
     const seg = T.segments[segIdx];
     if (seg.median > 0) return false;
     const oncoming = rng() < th.oncoming * 0.45;
+    const all = T.laneList(), oncomingLane = all[all.length - 1];
     let lane, spr, speed;
-    if (oncoming) { lane = 0.66; spr = OB.SPR[ONCOMING[Math.floor(rng() * ONCOMING.length)]]; speed = -G.maxSpeed * (0.22 + rng() * 0.16); }
+    if (oncoming) { lane = oncomingLane; spr = OB.SPR[ONCOMING[Math.floor(rng() * ONCOMING.length)]]; speed = -G.maxSpeed * (0.22 + rng() * 0.16); }
     else {
-      const lanes = th.oncoming > 0 ? [-0.66, 0, -0.66, 0, 0.66] : [-0.66, 0, 0.66];
-      lane = lanes[Math.floor(rng() * lanes.length)];
+      const pool = th.oncoming > 0 ? all.slice(0, all.length - 1) : all;
+      lane = pool[Math.floor(rng() * pool.length)];
       spr = OB.SPR[CARS[Math.floor(rng() * CARS.length)]]; speed = G.maxSpeed * (th.min + rng() * (th.max - th.min));
     }
     // avoid stacking
-    for (const c of G.cars) if (Math.abs(c.z - segIdx * segLen) < 8 * segLen && Math.abs(c.offset - lane) < 0.5) return false;
+    for (const c of G.cars) if (Math.abs(c.z - segIdx * segLen) < 8 * segLen && Math.abs(c.offset - lane) < 0.4) return false;
     G.cars.push({ z: segIdx * segLen + rng() * segLen, offset: lane, targetLane: lane, spr, speed, oncoming, passed: false });
     return true;
   }
@@ -177,10 +189,11 @@
         for (const o of G.cars) {
           if (o === c || o.oncoming) continue;
           const dz = o.z - c.z;
-          if (dz > 0 && dz < 25 * segLen && Math.abs(o.offset - c.offset) < 0.45 && o.speed < c.speed) {
-            const cand = [-0.66, 0, 0.66].filter(l => Math.abs(l - c.offset) > 0.3 && !(th.oncoming > 0 && l > 0.5));
+          if (dz > 0 && dz < 25 * segLen && Math.abs(o.offset - c.offset) < 0.4 && o.speed < c.speed) {
+            const all = T.laneList(), last = all[all.length - 1];
+            const cand = all.filter(l => Math.abs(l - c.offset) > 0.2 && !(th.oncoming > 0 && l === last));
             let best = null;
-            for (const l of cand) { let free = true; for (const q of G.cars) if (q !== c && Math.abs(q.z - c.z) < 30 * segLen && Math.abs(q.offset - l) < 0.45) free = false; if (free) { best = l; break; } }
+            for (const l of cand) { let free = true; for (const q of G.cars) if (q !== c && Math.abs(q.z - c.z) < 30 * segLen && Math.abs(q.offset - l) < 0.4) free = false; if (free) { best = l; break; } }
             if (best !== null) c.targetLane = best; else c.speed = Math.max(o.speed * 0.95, G.maxSpeed * 0.15);
           }
         }
@@ -286,7 +299,7 @@
     if (G.wallCd > 0) G.wallCd -= dt;
     if (G.wipe > 0) G.wipe -= dt / 0.7;
     if (G.skidCd > 0) G.skidCd -= dt;
-    updateParts(dt);
+    updateParts(dt); updateSmoke(dt);
     G.bounce *= 0.8;
     const mode = G.mode;
     if (mode === 'loading') return;
@@ -338,6 +351,11 @@
     const offroad = Math.abs(G.playerX) > 1.0 * seg.rw;
     if (offroad) { if (G.speed > G.maxSpeed * 0.45) G.speed -= G.maxSpeed * 0.7 * dt; if (pct > 0.1) G.bounce = (Math.random() - 0.5) * 4 * pct; }
     G.speed = OB.clamp(G.speed, 0, G.maxSpeed);
+    // tyre smoke: burnout off the line, and drifting through corners at speed
+    const burnout = mode === 'play' && gas && pct < 0.3 && pct > 0.005, drift = mode === 'play' && pct > 0.5 && Math.abs(G.steer) > 0.7;
+    if (burnout) G.smokeAcc += dt * 75; else if (drift) G.smokeAcc += dt * 40;
+    while (G.smokeAcc >= 1) { G.smokeAcc -= 1; emitSmoke(drift ? -Math.sign(G.steer) : 0); }
+    if (!burnout && !drift) G.smokeAcc = 0;
     if (mode === 'play' && pct > 0.55 && Math.abs(G.steer) > 0.85 && G.skidCd <= 0) { A.sfx('skid'); G.skidCd = 0.6; }
     if (mode === 'play') checkCollisions(seg);
     advance(dt, true);
