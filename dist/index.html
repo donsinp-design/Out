@@ -2407,8 +2407,8 @@ window.OB = window.OB || {};
     TXT(ctx, String(n), 0, 0, { size: 56, sy: 1.2, fill: '#ffffff', outline: '#000', outlineW: 10, align: 'center' });
     ctx.restore();
     // the controls live here now, not on the title screen
-    const l1 = G.touchMode ? 'FINGER LEFT / RIGHT STEERS   -   AUTO GAS   -   HOLD TWO FINGERS TO BRAKE' : 'ARROWS STEER   -   UP GAS   -   DOWN BRAKE';
-    const l2 = G.touchMode ? 'DOUBLE TAP WHILE TURNING HARD TO DRIFT' : 'SHIFT (OR DOUBLE TAP THE ARROW) WHILE TURNING HARD TO DRIFT';
+    const l1 = G.touchMode ? 'FINGER LEFT / RIGHT STEERS   -   AUTO GAS   -   HOLD THREE FINGERS TO BRAKE' : 'ARROWS STEER   -   UP GAS   -   DOWN BRAKE';
+    const l2 = G.touchMode ? 'HOLD A SECOND FINGER WHILE TURNING HARD TO DRIFT' : 'SHIFT (OR DOUBLE TAP THE ARROW) WHILE TURNING HARD TO DRIFT';
     TXT(ctx, l1, W / 2, 292, { size: 7, sy: 1.4, fill: '#fff', outline: '#000', outlineW: 3, align: 'center' });
     TXT(ctx, l2, W / 2, 310, { size: 7, sy: 1.4, fill: '#ffd800', outline: '#000', outlineW: 3, align: 'center' });
   };
