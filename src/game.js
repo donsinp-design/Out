@@ -605,6 +605,12 @@
     G.flip = null; G.rider = null; G.drift = 0; G.driftK = 0; G.marks = []; markLast = -1; G.goT = 0; G.crash = null; G.cleanT = 0;
     for (let i = 0; i < 8; i++) spawnCar(40 + i * 45);
   };
+  // Belt and braces beyond the CSS (-webkit-touch-callout etc. on #screen): some WebKit versions still start the
+  // long-press selection/lookup loupe, or a browser context menu, on a canvas even with those properties set.
+  // None of these gestures do anything useful over the game canvas, so they are vetoed outright at the DOM level.
+  for (const t of ['contextmenu', 'selectstart', 'dragstart', 'gesturestart', 'gesturechange', 'gestureend']) {
+    document.addEventListener(t, e => e.preventDefault());
+  }
   // ---------- boot ----------
   const canvas = document.getElementById('screen');
   R.init(canvas); R.ctx = canvas.getContext('2d');
