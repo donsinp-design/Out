@@ -28,8 +28,9 @@ On touch devices there are no buttons: the bike accelerates by itself, a finger 
 
 Three radio stations, all synthesised live in WebAudio in the Thai country-fair style (เพลงบ้านๆ): *Luk Thung Shower*
 (sam-cha rhythm, keyboard brass, sung-style lead with เอื้อน slides), *Mor Lam Wave* (lam sing drive, khaen ostinato,
-phin riff throughout) *Ramwong Breeze* (hand-drum groove, ching, ranat ek lead) and *Soi Trap* (Thai hip hop: half-time trap beat,
-sliding 808s, hat rolls, a flipped mor lam phin riff as the hook). Each song has a verse and a hook,
+phin riff throughout) *Ramwong Breeze* (hand-drum groove, ching, ranat ek lead) *Soi Trap* (Thai hip hop: half-time trap beat,
+sliding 808s, hat rolls, a flipped mor lam phin riff as the hook) and *Sarama Banger* (the Muay Thai ring music
+flipped into a heavy boom-bap track: pi chawa oboe line, klong khaek drums, fast ching, ring-bell dings, 808s). Each song has a verse and a hook,
 with phin answer-phrases in the gaps between vocal lines. A top-5 best-riders table with OutRun-style name entry is kept in the browser.
 
 ## Layout

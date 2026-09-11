@@ -71,7 +71,19 @@
       melodyB: ['B5 - - - A5 - G5 - E5 - - - G5 - A5 -', 'B5 - A5 - G5 - E5 - D5 - - - . . . .', 'E5 - G5 - A5 - - - B5 - D6 - B5 - A5 -', 'G5 - - - E5 - - - . . . . . . . .',
         'B5 - - - A5 - G5 - E5 - - - G5 - A5 -', 'B5 - D6 - B5 - A5 - G5 - - - . . . .', 'E5 - D5 - B4 - D5 - E5 - G5 - E5 - D5 -', 'E5 - - - - - - - . . . . . . . .'],
       kick: 'x.....x...x...x.', snare: '', clap: '........x.......', rim: '', hat: 'h.h.h.h.h.h.RRh.', hatB: 'h.hhh.h.RRh.hRRR', shaker: '', conga: '', bell: '', ching: '....o.......o...',
-      stabs: [], chop: [0, 10], riff: [0, 2, 1, 2, 0, 2, 1, 0], drone: null, droneB: CH('E3', 'B3', 'E4') }
+      stabs: [], chop: [0, 10], riff: [0, 2, 1, 2, 0, 2, 1, 0], drone: null, droneB: CH('E3', 'B3', 'E4') },
+    //  5) SARAMA BANGER - the Muay Thai ring music flipped into a heavy boom-bap banger: pi chawa oboe line with slides
+    //     and deep vibrato, klong khaek drums, fast ching, three ring-bell dings at the top of each round, 808s, crowd stabs
+    { name: 'SARAMA BANGER', thai: 'สะระหม่า มวยไทย ฮิปฮอป', bpm: 95, lead: 'pichawa', delay: 2, trap: true, glide: true, bell3: true,
+      scale: [2, 5, 7, 9, 12],
+      chords: [CH('D3', 'F3', 'A3'), CH('D3', 'F3', 'A3'), CH('C3', 'E3', 'G3'), CH('D3', 'F3', 'A3'), CH('D3', 'F3', 'A3'), CH('A#2', 'D3', 'F3'), CH('C3', 'E3', 'G3'), CH('D3', 'F3', 'A3')],
+      bass: ['D2', 'D2', 'C2', 'D2', 'D2', 'A#1', 'C2', 'D2'], bassPat: 'x.....x..x....5.',
+      melody: ['A4 - - - C5 - A4 - G4 - A4 - - - F4 -', 'G4 - A4 - - - - - F4 - G4 - E4 - D4 -', 'D4 - F4 - G4 - A4 - - - C5 - A4 - G4 -', 'A4 - - - - - - - . . . . . . . .',
+        'C5 - - - D5 - C5 - A4 - G4 - A4 - - -', 'F4 - G4 - A4 - - - G4 - F4 - E4 - - -', 'D4 - E4 - F4 - G4 - A4 - G4 - F4 - E4 -', 'D4 - - - - - - - . . . . . . . .'],
+      melodyB: ['D5 - - - C5 - D5 - F5 - - - D5 - C5 -', 'A4 - C5 - D5 - - - - - C5 - A4 - G4 -', 'A4 - - - C5 - D5 - F5 - G5 - F5 - D5 -', 'C5 - - - D5 - - - . . . . . . . .',
+        'D5 - - - C5 - D5 - F5 - - - G5 - - -', 'F5 - D5 - C5 - A4 - C5 - - - . . . .', 'A4 - G4 - A4 - C5 - D5 - C5 - A4 - G4 -', 'D4 - - - - - - - . . . . . . . .'],
+      kick: 'x.....x..x......', snare: '....x.......x...', clap: '....x.......x...', rim: '', hat: 'h.h.h.h.h.h.h.h.', hatB: 'h.hhh.h.h.hhh.RR', shaker: '', conga: 'c..C..c.c..C..C.', bell: '', ching: 'o.c.o.c.o.c.o.c.',
+      stabs: [], chop: [4, 12], riff: [0, 1, 2, 1, 0, 2, 1, 0], drone: null, droneB: CH('D3', 'A3', 'D4') }
   ];
   A.stations.forEach(s => {
     s.seq = parse(s.melody); s.seqB = parse(s.melodyB || s.melody);
@@ -198,6 +210,15 @@
     const f = hz(m);
     if (type === 'ranat') { ranat(t, m, dur); if (dur > 0.3) ranat(t + dur * 0.5, m, dur * 0.5, 0.06); return; }
     if (type === 'phinlead') { phin(t, m); if (dur > 0.2) tone('triangle', f, t, dur, 0.07, musicBus, { attack: 0.02, release: 0.08, send: leadDelay.d }); return; }
+    if (type === 'pichawa') { // Muay Thai oboe: nasal reed through a resonant band, always sliding, deep fast vibrato
+      const a = tone('sawtooth', f, t, dur, 0.17, musicBus, { filter: 1500, ftype: 'bandpass', q: 2.2, attack: 0.02, release: 0.08, send: leadDelay.d });
+      const b = tone('square', f, t, dur, 0.05, musicBus, { detune: 7, filter: 2600, attack: 0.02, release: 0.08 });
+      const gt = from && from !== m ? Math.min(0.12, dur * 0.5) : 0.08, f0 = from && from !== m ? hz(from) : f * 0.94;
+      [a, b].forEach(o => { o.frequency.setValueAtTime(f0, t); o.frequency.exponentialRampToValueAtTime(f, t + gt); });
+      const lfo = ctx.createOscillator(), lg = ctx.createGain(); lfo.frequency.value = 6.5; lg.gain.setValueAtTime(0, t + 0.08); lg.gain.linearRampToValueAtTime(22, t + 0.3);
+      lfo.connect(lg); lg.connect(a.detune); lg.connect(b.detune); lfo.start(t); lfo.stop(t + dur + 0.2);
+      return;
+    }
     const o1 = tone(type, f, t, dur, 0.085, musicBus, { detune: -5, attack: 0.012, release: 0.07, filter: 2600, send: leadDelay.d });
     const o2 = tone(type, f, t, dur, 0.055, musicBus, { detune: 6, attack: 0.012, release: 0.07, filter: 2400, send: leadDelay.d });
     if (from && from !== m) { // เอื้อน: slide in from the previous note
@@ -231,11 +252,13 @@
   const M = { playing: false, station: 0, step: 0, next: 0, timer: null, last: null };
   A.music = M;
   function chaap(t) { hit(t, 0.45, 0.16, 'bandpass', 4200, 0.7); hit(t, 0.3, 0.08, 'highpass', 7000); }
+  function ringBell(t) { tone('sine', 1760, t, 0.7, 0.14, musicBus, { attack: 0.002, decay: 0.6, sustain: 0.05, release: 0.1 }); tone('sine', 2640, t, 0.4, 0.05, musicBus, { attack: 0.002, decay: 0.35, sustain: 0.05, release: 0.05 }); hit(t, 0.02, 0.1, 'highpass', 5000); }
   function below(m, tones) { let b = tones[0]; for (const x of tones) { if (x < m) b = x; else break; } return b; }
   function scheduleStep(st, step, t) {
     const dur = 60 / st.bpm / 4, bar = Math.floor(step / 16) % 16, sub = step % 16, cbar = bar % 8, second = bar >= 8, fill = (cbar === 7);
     const chord = st.chords[cbar], seq = second ? st.seqB : st.seq, ms = step % 128;
     if (sub === 0 && cbar === 0) chaap(t);
+    if (st.bell3 && bar === 0 && sub === 0) for (let i = 0; i < 3; i++) ringBell(t + i * 0.27); // ding ding ding: next round
     // kit
     if (st.kick[sub] === 'x') drums.kick(t);
     const sn = fill ? '....x...x.x.xxxx' : st.snare;
