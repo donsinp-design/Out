@@ -8,7 +8,7 @@
     speed: 0, maxSpeed: 12000, steer: 0, lean: 0, bgOffset: 0, bgShift: 0, cars: [], health: 100, ice: 100, time: 80, score: 0,
     stageNo: 1, stageKey: 'charoenkrung', light: 'day', station: 0, hiScore: 0, msg: null, shake: 0, invuln: 0, bounce: 0,
     forkHint: null, wallCd: 0, countdown: 0, overReason: null, result: null, seed: 20240808, paused: false, route: [], cur: null, nextInfo: null, nextKey: null,
-    muted: false, drawShift: -200
+    muted: false, drawShift: -200, playerDX: 0, course: 0
   };
   OB.G = G;
   G.cameraDepth = 1 / Math.tan((G.fov / 2) * Math.PI / 180);
@@ -28,7 +28,7 @@
     if (KEYMAP[e.key]) { keys[KEYMAP[e.key]] = true; e.preventDefault(); }
     if (e.key === 'Enter' || e.key === ' ') { startPressed = true; e.preventDefault(); }
     if (e.key === 'ArrowLeft' || e.key === 'a') tuneDir = -1; if (e.key === 'ArrowRight' || e.key === 'd') tuneDir = 1;
-    if (e.key === 'ArrowUp' && (G.mode === 'radio')) startPressed = true;
+    if (e.key === 'ArrowUp' && (G.mode === 'radio' || G.mode === 'course')) startPressed = true;
     if (e.key === 'm' || e.key === 'M') { G.muted = !G.muted; A.setMusicVolume(G.muted ? 0 : 0.8); }
     if ((e.key === 'p' || e.key === 'P' || e.key === 'Escape') && (G.mode === 'play')) G.paused = !G.paused;
   });
@@ -52,13 +52,13 @@
     const info = T.buildStage(key, no, G.seed);
     return info;
   }
-  function newGame() {
+  function newGame(key, stageNo) {
     T.reset();
-    G.stageNo = 1; G.stageKey = 'charoenkrung'; G.route = ['charoenkrung']; G.nextKey = null; G.nextInfo = null;
-    G.cur = buildStage(G.stageKey, 1);
+    G.stageNo = stageNo || 1; G.stageKey = key || 'charoenkrung'; G.route = [G.stageKey]; G.nextKey = null; G.nextInfo = null;
+    G.cur = buildStage(G.stageKey, G.stageNo);
     G.light = T.THEMES[T.STAGES[G.stageKey].theme].light;
     G.position = 0; G.playerX = 0; G.speed = 0; G.steer = 0; G.lean = 0; G.bgOffset = 0;
-    G.health = 100; G.ice = 100; G.score = 0; G.time = T.STAGES[G.stageKey].time;
+    G.health = 100; G.ice = 100; G.score = 0; G.time = T.STAGES[G.stageKey].time + (G.stageNo > 1 ? 10 : 0);
     G.cars = []; G.msg = null; G.shake = 0; G.invuln = 0; G.forkHint = null; G.result = null; G.overReason = null; G.paused = false;
     for (let i = 0; i < 8; i++) spawnCar(60 + i * 40);
   }
@@ -214,7 +214,7 @@
     const mode = G.mode;
     if (mode === 'loading') return;
     if (mode === 'over' || (mode === 'play' && G.paused)) { G.speed = Math.max(0, G.speed - G.maxSpeed * dt * 0.6); if (mode === 'over') advance(dt, false); A.setEngine(0, false, false, false); return; }
-    if (mode === 'title' || mode === 'radio') {
+    if (mode === 'title' || mode === 'radio' || mode === 'course') {
       G.drawShift += ((mode === 'title' ? -200 : 0) - G.drawShift) * Math.min(1, dt * 3);
       const target = mode === 'title' ? G.maxSpeed * 0.28 : G.maxSpeed * 0.12;
       G.speed += (target - G.speed) * Math.min(1, dt * 0.8);
@@ -225,8 +225,10 @@
       if (seg.index > T.segments.length - 700) { newGame(); }
       if (startPressed) { startPressed = false; A.init(); A.sfx('select');
         if (mode === 'title') { G.mode = 'radio'; A.playMusic(G.station); A.setMusicVolume(G.muted ? 0 : 0.8); }
+        else if (mode === 'radio') { G.mode = 'course'; }
         else { startRun(); } }
-      if (mode === 'radio' && tuneDir) { G.station = (G.station + tuneDir + 3) % 3; A.playMusic(G.station); A.sfx('select'); tuneDir = 0; }
+      if (mode === 'radio' && tuneDir) { G.station = (G.station + tuneDir + 3) % 3; A.playMusic(G.station); A.sfx('select'); }
+      if (mode === 'course' && tuneDir) { const n = T.COURSES.length; G.course = (G.course + tuneDir + n) % n; A.sfx('select'); }
       tuneDir = 0;
       A.setEngine(G.speed / G.maxSpeed, false, false, A.ready());
       return;
@@ -279,7 +281,8 @@
     if (withCars) updateCars(dt);
   }
   function startRun() {
-    newGame(); G.mode = 'countdown'; G.countdown = 3.99; G.speed = 0; G.playerX = 0;
+    const c = T.COURSES[G.course] || T.COURSES[0];
+    newGame(c.key, c.stageNo); G.mode = 'countdown'; G.countdown = 3.99; G.speed = 0; G.playerX = 0;
   }
 
   // ---------- loop ----------
@@ -297,6 +300,7 @@
     switch (G.mode) {
       case 'title': R.title(G); break;
       case 'radio': R.radio(G); break;
+      case 'course': R.course(G); break;
       case 'countdown': R.hud(G); R.countdown(G); break;
       case 'play': R.hud(G); if (G.paused) { OB.text(R.ctx || document.getElementById('screen').getContext('2d'), 'PAUSE', W / 2, 200, { size: 24, sy: 1.3, fill: '#fff', outline: '#000', outlineW: 6, align: 'center' }); } break;
       case 'goal': R.hud(G); R.goal(G); break;

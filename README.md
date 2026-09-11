@@ -13,6 +13,7 @@ and the route forks after every stage.
 * Or serve the repo root (`python3 -m http.server`) and open `index.html`.
 
 Controls: `← →` steer, `↑` gas, `↓` brake, `Enter`/`Space` start, `M` mute music, `P` pause.
+After the music select, a course select lets you start from any of the seven areas (Full Run starts at Charoen Krung).
 Touch devices get on-screen buttons.
 
 ## Route map

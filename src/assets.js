@@ -358,6 +358,83 @@
     return c;
   }
 
+  // ---------- shophouse composer: reference ground floor + drawn upper storeys + swappable shop modules ----------
+  const FAC_WALLS = ['#d9cdb1', '#d9cdb1', '#e3d8c0', '#cfd6c4', '#d8c9c1', '#c9d2d8'];
+  function composeFacade(rng, opt) {
+    const base = IMG[opt.cart ? 'facade0' : 'facade1'];
+    const W = 260, floors = opt.floors, FH = 64, PAR = 14, TOP = 22, upperH = PAR + floors * FH;
+    const wall = opt.wall || rng.pick(FAC_WALLS), dark = shade(wall, 0.72), light = shade(wall, 1.12);
+    const frame = rng.pick(['#f4f1e8', '#e8e2d2', '#d8dde2']), winC = rng.pick(['#20304a', '#2a3b4e', '#1c2a3a', '#2c3e50']);
+    // upper storeys
+    const U = mk(W, TOP + upperH + 44), u = U.getContext('2d');
+    px(u, 0, TOP + PAR, W, upperH - PAR + 44, wall); px(u, W - 6, TOP + PAR, 6, upperH - PAR + 44, dark); px(u, 0, TOP + PAR, 3, upperH - PAR + 44, light);
+    px(u, 0, TOP, W, PAR, shade(wall, 0.9)); px(u, 0, TOP, W, 3, light); px(u, 0, TOP + PAR - 2, W, 2, dark);
+    if (rng.chance(0.65)) { const tx = 30 + rng.int(150); px(u, tx, TOP - 18, 34, 16, '#6f7378'); px(u, tx + 2, TOP - 16, 30, 3, '#9a9ea3'); px(u, tx + 4, TOP - 2, 3, 4, '#333'); px(u, tx + 27, TOP - 2, 3, 4, '#333'); }
+    if (rng.chance(0.6)) { const ax = 190 + rng.int(40); px(u, ax, TOP - 22, 2, 22, '#222'); px(u, ax - 8, TOP - 20, 18, 1, '#222'); px(u, ax - 5, TOP - 15, 12, 1, '#222'); px(u, ax - 3, TOP - 10, 8, 1, '#222'); }
+    if (rng.chance(0.4)) { const dx = 100 + rng.int(60); px(u, dx, TOP - 12, 12, 12, '#d0d0d0'); px(u, dx + 3, TOP - 9, 6, 6, '#a0a0a0'); px(u, dx + 5, TOP, 2, 6, '#777'); }
+    for (let f = 0; f < floors; f++) {
+      const y = TOP + PAR + f * FH;
+      px(u, 0, y + FH - 5, W, 5, shade(wall, 0.8)); px(u, 0, y + FH - 5, W, 1, light);
+      px(u, 64, y, 3, FH - 5, shade(wall, 0.9)); px(u, 128, y, 3, FH - 5, shade(wall, 0.9)); px(u, 192, y, 3, FH - 5, shade(wall, 0.9));
+      for (let k = 0; k < 4; k++) {
+        const x = 6 + k * 64, style = rng.int(4);
+        if (style === 1) { // balcony with door + railing
+          px(u, x + 12, y + 6, 36, 42, winC); px(u, x + 14, y + 8, 12, 12, '#5c7797'); px(u, x + 11, y + 5, 38, 1, frame);
+          px(u, x + 2, y + 30, 58, 4, shade(wall, 0.85)); px(u, x + 2, y + 29, 58, 1, light);
+          for (let r = 0; r < 58; r += 4) px(u, x + 2 + r, y + 17, 1, 13, rng.chance(0.5) ? '#3a4a5a' : '#2d3a48');
+          px(u, x + 2, y + 16, 58, 2, '#8aa0b4');
+          if (rng.chance(0.45)) px(u, x + 8 + rng.int(30), y + 19, 6, 10, rng.pick(['#e94e4e', '#4e8de9', '#f0d24e', '#ffffff']));
+        } else if (style === 2) { // louvre shutters
+          px(u, x + 8, y + 10, 44, 34, frame); px(u, x + 10, y + 12, 40, 30, shade(frame, 0.75)); for (let l = 0; l < 30; l += 3) px(u, x + 10, y + 12 + l, 40, 1, shade(frame, 0.55));
+          px(u, x + 6, y + 44, 48, 3, shade(wall, 0.7));
+        } else { // window (+ AC unit)
+          px(u, x + 8, y + 10, 44, 34, frame); px(u, x + 10, y + 12, 40, 30, winC); px(u, x + 11, y + 13, 16, 8, '#5c7797'); px(u, x + 30, y + 12, 1, 30, frame); px(u, x + 10, y + 26, 40, 1, frame);
+          px(u, x + 6, y + 44, 48, 3, shade(wall, 0.7));
+          if (style === 3) { px(u, x + 36, y + 34, 16, 12, '#cfd2d5'); px(u, x + 37, y + 35, 14, 7, '#8d9296'); px(u, x + 39, y + 43, 10, 1, '#6e7276'); }
+        }
+      }
+    }
+    if (rng.chance(0.6)) { px(u, W - 14, TOP + 4, 3, upperH + 40, shade(wall, 0.62)); px(u, W - 14, TOP + 4, 1, upperH + 40, shade(wall, 0.5)); }
+    texturize(U, { amp: 0.07 });
+    // compose
+    const H = TOP + upperH + 300, c = mk(W, H), g = c.getContext('2d'); g.imageSmoothingEnabled = false;
+    px(g, 0, TOP + upperH, W, 44, wall);
+    g.drawImage(U, 0, 0); g.drawImage(base, 0, TOP + upperH);
+    // ground-floor modules
+    const O = mk(W, 300), o = O.getContext('2d'); let any = false; o.imageSmoothingEnabled = false;
+    if (opt.band === 'sign' || opt.band === 'wall') {
+      px(o, 0, 36, W, 62, wall); px(o, 0, 36, W, 2, light); px(o, W - 6, 36, 6, 62, dark); any = true;
+      if (opt.band === 'sign') {
+        const sc = opt.signCol || rng.pick(SIGNCOL), txt = opt.text || rng.pick(SIGNTXT);
+        px(o, 14, 44, W - 34, 46, sc[0]); px(o, 14, 44, W - 34, 3, shade(sc[0], 1.3)); px(o, 14, 87, W - 34, 3, shade(sc[0], 0.6)); px(o, 14, 44, 3, 46, shade(sc[0], 0.6)); px(o, W - 23, 44, 3, 46, shade(sc[0], 0.6));
+        o.fillStyle = sc[1]; o.font = '700 30px "Kanit"'; o.textAlign = 'center'; o.textBaseline = 'middle'; o.fillText(txt, W / 2 - 4, 67);
+      } else { for (let k = 0; k < 3; k++) { px(o, 30 + k * 70, 48, 40, 34, frame); px(o, 32 + k * 70, 50, 36, 30, winC); px(o, 33 + k * 70, 51, 14, 8, '#5c7797'); } }
+    }
+    const it = opt.interior;
+    if (it === 'shutter') {
+      px(o, 6, 150, W - 16, 150, '#9aa0a8'); for (let yy = 154; yy < 300; yy += 4) px(o, 6, yy, W - 16, 1, '#6f757d'); px(o, 6, 150, W - 16, 4, '#4a4f56'); px(o, 6, 294, W - 16, 6, '#5a5f66');
+      px(o, W / 2 - 12, 262, 24, 10, '#4a4f56'); const pc = rng.pick(['#c8322b', '#1f4fa3', '#e0b030']); px(o, 30, 185, 56, 70, pc); px(o, 34, 189, 48, 62, shade(pc, 1.25)); any = true;
+    } else if (it === 'gold') {
+      px(o, 6, 150, W - 16, 150, '#5a1414'); px(o, 6, 150, W - 16, 5, '#c9a227');
+      for (let i = 0; i < 5; i++) { px(o, 16 + i * 48, 172, 40, 62, '#7a1f1f'); px(o, 18 + i * 48, 174, 36, 58, '#8a2a2a'); for (let j = 0; j < 6; j++) px(o, 22 + i * 48 + (j % 3) * 10, 182 + Math.floor(j / 3) * 22, 6, 12, '#f3cf5a'); }
+      px(o, 6, 248, W - 16, 52, '#3a0f0f'); px(o, 6, 248, W - 16, 3, '#c9a227'); for (let i = 0; i < 8; i++) px(o, 20 + i * 28, 262, 14, 18, '#f3cf5a'); any = true;
+    } else if (it === 'pharmacy') {
+      px(o, 6, 150, W - 16, 150, '#e9f2ee'); px(o, 6, 150, W - 16, 4, '#1f8a4c');
+      for (let r = 0; r < 3; r++) { px(o, 14, 178 + r * 28, W - 32, 2, '#b9c8c0'); for (let i = 0; i < 16; i++) if (rng.chance(0.8)) px(o, 16 + i * 14, 166 + r * 28, 8, 12, rng.pick(['#ffffff', '#e94e4e', '#4e8de9', '#f0d24e', '#3aa35c'])); }
+      px(o, W / 2 - 30, 226, 60, 74, '#bcd6e8'); px(o, W / 2 - 28, 228, 56, 70, '#d9eaf5'); px(o, W / 2 - 1, 226, 2, 74, '#8aa0b4');
+      px(o, 18, 160, 28, 8, '#1f8a4c'); px(o, 28, 152, 8, 24, '#1f8a4c'); any = true;
+    } else if (it === 'eatery') {
+      px(o, 6, 150, W - 16, 150, '#2a2a30'); px(o, 6, 150, W - 16, 4, '#3d3d46');
+      px(o, 16, 186, 120, 64, '#c9d2d5'); px(o, 18, 188, 116, 24, '#e6ecef'); for (let i = 0; i < 5; i++) px(o, 24 + i * 22, 192, 16, 16, rng.pick(['#8a8f94', '#b8902a', '#c8541c', '#6a3a2a']));
+      px(o, 16, 250, 120, 50, '#3a3a44'); for (let i = 0; i < 3; i++) { px(o, 150 + i * 34, 236, 26, 20, '#d8d8d0'); px(o, 152 + i * 34, 256, 3, 40, '#8d8d8a'); px(o, 172 + i * 34, 256, 3, 40, '#8d8d8a'); px(o, 150 + i * 34, 276, 18, 14, '#2b6fb0'); px(o, 152 + i * 34, 290, 2, 8, '#2b6fb0'); px(o, 164 + i * 34, 290, 2, 8, '#2b6fb0'); }
+      any = true;
+    }
+    if (any) { texturize(O, { amp: 0.06 }); g.drawImage(O, 0, TOP + upperH); }
+    if (opt.awning) { g.save(); g.globalCompositeOperation = 'color'; g.fillStyle = opt.awning; g.fillRect(0, TOP + upperH + 96, W, 54); g.restore(); }
+    return c;
+  }
+  OB.composeFacade = composeFacade;
+
   function median() { // striped crash barrier head for fork medians
     const c = mk(60, 90), g = c.getContext('2d');
     px(g, 0, 40, 60, 50, '#ffd23f'); for (let y = 40; y < 90; y += 12) px(g, 0, y, 60, 6, '#111');
@@ -395,12 +472,25 @@
     const p2 = pole(300, { noTx: true }); add('pole2', tx(p2.c, { amp: 0.05 }), 520, { solid: true, thin: 0.35, poleTop: { x: p2.topX / 40, y: p2.topY / 300 } });
     add('lamp', tx(lampPost(), { amp: 0.04 }), 600, { solid: true, thin: 0.3 });
     add('pillar', tx(pillar(), { amp: 0.06 }), 640, { solid: true });
-    // shophouse facades rectified straight out of the reference frame
-    for (let i = 0; i < 6; i++) add('facade' + i, IMG['facade' + i], 2400, { solid: true, building: true });
-    for (let i = 0; i < 6; i++) add('shop' + i, tx(shophouse(rng)), 3000, { solid: true, building: true });
-    add('shop_seven', tx(shophouse(rng, { floors: 2, color: '#e9e2cf', sign: 'storepanel', seven: true, shop: 0 })), 3000, { solid: true, building: true });
-    add('shop_noodle', tx(shophouse(rng, { floors: 2, color: '#d9c9a4', text: 'ก๋วยเตี๋ยวเรือ', shop: 1 })), 3000, { solid: true, building: true });
-    for (let i = 0; i < 4; i++) add('shopcn' + i, tx(shophouse(rng, { text: ['ร้านทองเยาวราช', 'หูฉลาม', 'เป็ดย่าง', 'ร้านชาจีน'][i], color: ['#d8b7ac', '#e2cfa0', '#c9c0b0', '#d0a889'][i] })), 3000, { solid: true, building: true });
+    // shophouses: the reference's own facade (rectified) with drawn upper storeys and swappable shop modules
+    const AWN = [null, null, null, '#c8322b', '#1f8a4c', '#d99a1c', '#8a1c8c', '#2b6fb0'];
+    const INT = ['keep', 'shutter', 'gold', 'pharmacy', 'eatery', 'shutter', 'eatery'];
+    for (let i = 0; i < 14; i++) {
+      const cart = i % 5 === 0;
+      const opt = { cart, floors: rng.chance(0.55) ? 1 : 2, band: cart ? 'stripes' : rng.pick(['stripes', 'sign', 'sign', 'wall']), interior: cart ? 'keep' : rng.pick(INT), awning: rng.pick(AWN) };
+      add('fac' + i, composeFacade(rng, opt), 2400, { solid: true, building: true });
+    }
+    // taller back-row shophouses (3 storeys) that sit behind the street-front row and close the gaps between cards
+    for (let i = 0; i < 6; i++) {
+      const opt = { cart: false, floors: 3, band: rng.pick(['sign', 'wall', 'stripes']), interior: rng.pick(['shutter', 'keep', 'gold', 'eatery']), awning: rng.pick(AWN), wall: rng.pick(FAC_WALLS) };
+      add('facb' + i, composeFacade(rng, opt), 2600, { solid: true, building: true });
+    }
+    const CNTXT = ['ร้านทอง', 'ฮั่วเซ่งเฮง', 'หูฉลาม', 'เป็ดย่าง', 'ตั้งโต๊ะกัง', 'บะหมี่เกี๊ยว', 'ร้านชาจีน', 'เยาวราช'];
+    for (let i = 0; i < 8; i++) {
+      const opt = { cart: i === 3, floors: rng.chance(0.4) ? 1 : 2, band: 'sign', text: CNTXT[i], signCol: rng.pick([['#c8222a', '#ffe37a'], ['#f2c12e', '#8a1c1c'], ['#c8222a', '#ffffff']]),
+        interior: i === 3 ? 'keep' : rng.pick(['gold', 'gold', 'eatery', 'shutter', 'keep']), awning: rng.pick(['#c8322b', '#c8322b', '#d99a1c', null]) };
+      add('faccn' + i, composeFacade(rng, opt), 2400, { solid: true, building: true });
+    }
     for (let i = 0; i < 8; i++) add('tower' + i, tx(tower(rng), { amp: 0.06 }), 2600 + rng.int(1400), { solid: true, building: true });
     for (let i = 0; i < 4; i++) add('tree' + i, tx(tree(rng, false), { amp: 0.12, outline: 0.5 }), 1500, { solid: true, thin: 0.15 });
     for (let i = 0; i < 3; i++) add('palm' + i, tx(tree(rng, true), { amp: 0.1, outline: 0.5 }), 1300, { solid: true, thin: 0.12 });

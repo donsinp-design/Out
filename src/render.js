@@ -56,7 +56,7 @@
 
   // ---------- projection ----------
   const roadW = () => OB.track.roadW;
-  const WATER_DROP = 380;
+  const WATER_DROP = 380, SIDEWALK = 0.17, FOLLOW = 0.8; // camera follows the bike only partially so the road stays centred
   function project(p, camX, camY, camZ, depth, rw) {
     p.camera.x = p.world.x - camX; p.camera.y = p.world.y - camY; p.camera.z = p.world.z - camZ;
     p.screen.scale = depth / p.camera.z;
@@ -71,7 +71,7 @@
   function renderGround(seg, pal, th) {
     const p1 = seg.p1.screen, p2 = seg.p2.screen;
     const x1 = p1.x, y1 = p1.y, w1 = p1.w, x2 = p2.x, y2 = p2.y, w2 = p2.w;
-    const sw1 = w1 * 0.2, sw2 = w2 * 0.2, alt = Math.floor(seg.index / 3) % 2;
+    const sw1 = w1 * SIDEWALK, sw2 = w2 * SIDEWALK, alt = Math.floor(seg.index / 3) % 2;
     const envL = pal[th.left] || pal.shop, envR = pal[th.right] || pal.shop;
     poly(0, y1, x1 - w1 - sw1, y1, x2 - w2 - sw2, y2, 0, y2, envL[alt]);
     if (th.right === 'water') {
@@ -129,7 +129,7 @@
 
   function renderRail(seg, pal) {
     const p1 = seg.p1.screen, p2 = seg.p2.screen;
-    const rx1 = p1.x + p1.w + p1.w * 0.2, rx2 = p2.x + p2.w + p2.w * 0.2;
+    const rx1 = p1.x + p1.w + p1.w * SIDEWALK, rx2 = p2.x + p2.w + p2.w * SIDEWALK;
     const h1 = p1.scale * 420 * K, h2 = p2.scale * 420 * K;
     if (h1 < 1) return;
     const t1 = Math.max(1, h1 * 0.07), t2 = Math.max(1, h2 * 0.07);
@@ -163,7 +163,8 @@
     const playerSeg = T.findSegment(G.position + G.playerZ), playerPct = ((G.position + G.playerZ) % segLen) / segLen;
     const playerY = OB.lerp(playerSeg.p1.world.y, playerSeg.p2.world.y, playerPct);
     G.bgShift = -(playerY) * 0.004;
-    const camX = G.playerX * RW, camY = G.cameraH + playerY, camZ = G.position;
+    const camX = G.playerX * RW * FOLLOW, camY = G.cameraH + playerY, camZ = G.position;
+    G.playerDX = (G.playerX * RW - camX) * (G.cameraDepth / G.playerZ) * K;
     ctx.save();
     if (G.shake > 0) ctx.translate(Math.round((Math.random() - 0.5) * G.shake * 8), Math.round((Math.random() - 0.5) * G.shake * 6));
     drawBackground(G);
@@ -172,7 +173,7 @@
     for (const c of G.cars) { const i = Math.floor(c.z / segLen); if (!carsBySeg.has(i)) carsBySeg.set(i, []); carsBySeg.get(i).push(c); }
     // ---- ground pass (front to back) ----
     let maxy = H, x = 0, dx = -(baseSeg.curve * basePct);
-    const drawn = [];
+    const projected = [];
     for (let n = 0; n < G.drawDistance; n++) {
       const idx = baseSeg.index + n; if (idx >= segs.length) break;
       const seg = segs[idx];
@@ -180,18 +181,19 @@
       project(seg.p2, camX - x - dx, camY, camZ, G.cameraDepth, seg.rw);
       x += dx; dx += seg.curve;
       seg.clip = maxy;
-      if (seg.p1.camera.z <= G.cameraDepth || seg.p2.screen.y >= seg.p1.screen.y || seg.p2.screen.y >= maxy) { seg.hidden = true; continue; }
+      if (seg.p1.camera.z <= G.cameraDepth) { seg.hidden = true; seg.behind = true; continue; }
+      seg.behind = false; projected.push(seg);
+      if (seg.p2.screen.y >= seg.p1.screen.y || seg.p2.screen.y >= maxy) { seg.hidden = true; continue; }
       seg.hidden = false;
       renderGround(seg, pal, T.THEMES[seg.theme]);
       maxy = seg.p2.screen.y;
-      drawn.push(seg);
     }
-    // ---- sprite pass (back to front) ----
+    // ---- sprite pass (back to front): every projected slice, clipped by the crest line, so nothing pops ----
     const poles = { L: [], R: [] };
-    for (let n = drawn.length - 1; n >= 0; n--) {
-      const seg = drawn[n];
+    for (let n = projected.length - 1; n >= 0; n--) {
+      const seg = projected[n];
       const th = T.THEMES[seg.theme];
-      if (seg.rail) renderRail(seg, pal);
+      if (seg.rail && !seg.hidden) renderRail(seg, pal);
       const scale = seg.p1.screen.scale, sx = seg.p1.screen.x, sy = seg.p1.screen.y;
       for (const sp of seg.sprites) {
         const s = sp.spr, img = s.img;
@@ -206,7 +208,7 @@
         if (sp.pole && s.poleTop) poles[sp.pole].push({ x: destX + destW * s.poleTop.x, y: destY + destH * s.poleTop.y, w: destW, seg: seg.index });
         if (sp.pillar) { /* pillars carry the deck */ }
       }
-      if (seg.deck) renderDeck(seg, pal);
+      if (seg.deck && !seg.hidden) renderDeck(seg, pal);
       const cars = carsBySeg.get(seg.index);
       if (cars) for (const c of cars) {
         const pct = (c.z % segLen) / segLen;
@@ -268,11 +270,11 @@
   function drawPlayer(G) {
     const img = OB.IMG.bike; const bw = img.width, bh = img.height;
     const bounce = G.bounce || 0;
-    const cx = W / 2 + (G.drawShift || 0), by = 457 + bounce;
+    const cx = Math.round(W / 2 + (G.drawShift || 0) + (G.playerDX || 0)), by = 457 + bounce;
     // shadow
     ctx.fillStyle = 'rgba(0,0,0,0.35)'; ctx.beginPath(); ctx.ellipse(cx + 2, by - 6, bw * 0.42, 7, 0, 0, Math.PI * 2); ctx.fill();
     ctx.save(); ctx.translate(cx, by); ctx.rotate(G.lean * 0.16); ctx.translate(-bw / 2 + G.lean * 6, -bh);
-    if (G.invuln > 0 && Math.floor(G.t * 20) % 2 === 0) ctx.globalAlpha = 0.55;
+    if (G.invuln > 0 && Math.floor(G.t * 8) % 2 === 0) ctx.globalAlpha = 0.7;
     ctx.drawImage(img, 0, 0);
     ctx.restore();
     // ice melt drips
@@ -401,6 +403,34 @@
     // eq bars
     for (let i = 0; i < 12; i++) { const hh = 4 + Math.abs(Math.sin(G.t * 9 + i * 1.3)) * 22; ctx.fillStyle = i < 8 ? '#39f2b0' : '#ff5a5a'; ctx.fillRect(x + w - 150 + i * 9, y + 66 - hh, 6, hh); }
     TXT(ctx, 'LEFT / RIGHT : TUNE      GAS / ENTER : START', W / 2, y + h + 26, { size: 8, sy: 1.4, fill: '#fff', outline: '#000', outlineW: 3, align: 'center' });
+  };
+  R.course = function (G) {
+    dim(0.35);
+    const T = OB.track, C = T.COURSES, sel = G.course, cur = C[sel], st = T.STAGES[cur.key];
+    const x = W / 2 - 250, y = 78, w = 500, h = 280;
+    ctx.fillStyle = '#1a1c22'; ctx.fillRect(x, y, w, h); ctx.fillStyle = '#3a3d46'; ctx.fillRect(x, y, w, 4); ctx.fillRect(x, y + h - 4, w, 4); ctx.fillRect(x, y, 4, h); ctx.fillRect(x + w - 4, y, 4, h);
+    TXT(ctx, 'SELECT COURSE', W / 2, y + 30, { size: 10, sy: 1.5, fill: '#ff37a8', outline: '#000', outlineW: 4, align: 'center' });
+    // route tree: rows of nodes, lines to successors
+    const rows = [['charoenkrung'], ['yaowarat', 'sathorn'], ['siam', 'rattanakosin'], ['sanamluang', 'thatien']];
+    const pos = {};
+    rows.forEach((r, i) => r.forEach((k, j) => { pos[k] = { x: W / 2 + (r.length === 1 ? 0 : (j - 0.5) * 190), y: y + 70 + i * 44 }; }));
+    ctx.strokeStyle = '#4a5060'; ctx.lineWidth = 2;
+    for (const k in T.STAGES) { const nx = T.STAGES[k].next; if (!nx) continue; nx.forEach(n => { ctx.beginPath(); ctx.moveTo(pos[k].x, pos[k].y + 8); ctx.lineTo(pos[n].x, pos[n].y - 10); ctx.stroke(); }); }
+    ctx.strokeStyle = '#ffd800'; ctx.beginPath(); ctx.moveTo(pos.sanamluang.x, pos.sanamluang.y + 8); ctx.lineTo(W / 2, y + 70 + 4 * 44 - 8); ctx.moveTo(pos.thatien.x, pos.thatien.y + 8); ctx.lineTo(W / 2, y + 70 + 4 * 44 - 8); ctx.stroke();
+    TXT(ctx, 'GOAL  WAT PHO', W / 2, y + 70 + 4 * 44 + 2, { size: 7, sy: 1.4, fill: '#ffd800', outline: '#000', outlineW: 3, align: 'center' });
+    for (const k in pos) {
+      const p = pos[k], isSel = k === cur.key, nm = T.STAGES[k].name;
+      const tw = nm.eng.length * 7 + 16;
+      ctx.fillStyle = isSel ? '#ffd800' : '#2b2f3a'; ctx.fillRect(p.x - tw / 2, p.y - 10, tw, 20);
+      ctx.fillStyle = isSel ? '#fff' : '#4a5060'; ctx.fillRect(p.x - tw / 2, p.y - 10, tw, 1); ctx.fillRect(p.x - tw / 2, p.y + 9, tw, 1);
+      TXT(ctx, nm.eng, p.x, p.y + 4, { size: 7, sy: 1.4, fill: isSel ? '#000' : '#cfd3da', align: 'center' });
+    }
+    // selection caption
+    const capY = y + h + 22;
+    arrow(W / 2 - 220, capY - 6, -1, 8, '#ffd800', '#000'); arrow(W / 2 + 220, capY - 6, 1, 8, '#ffd800', '#000');
+    TXT(ctx, (cur.label ? cur.label + '  -  ' : 'STAGE ' + cur.stageNo + '  -  ') + st.name.eng, W / 2, capY, { size: 9, sy: 1.5, fill: '#fff', outline: '#000', outlineW: 4, align: 'center' });
+    TXT(ctx, st.name.thai, W / 2, capY + 24, { size: 16, font: 'Kanit', weight: '700', fill: '#ffd23f', outline: '#000', outlineW: 4, align: 'center' });
+    TXT(ctx, 'LEFT / RIGHT : COURSE      GAS / ENTER : START', W / 2, H - 14, { size: 7, sy: 1.4, fill: '#fff', outline: '#000', outlineW: 3, align: 'center' });
   };
   R.countdown = function (G) {
     const n = Math.ceil(G.countdown);

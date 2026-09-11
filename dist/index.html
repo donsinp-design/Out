@@ -442,6 +442,83 @@ window.OB = window.OB || {};
     return c;
   }
 
+  // ---------- shophouse composer: reference ground floor + drawn upper storeys + swappable shop modules ----------
+  const FAC_WALLS = ['#d9cdb1', '#d9cdb1', '#e3d8c0', '#cfd6c4', '#d8c9c1', '#c9d2d8'];
+  function composeFacade(rng, opt) {
+    const base = IMG[opt.cart ? 'facade0' : 'facade1'];
+    const W = 260, floors = opt.floors, FH = 64, PAR = 14, TOP = 22, upperH = PAR + floors * FH;
+    const wall = opt.wall || rng.pick(FAC_WALLS), dark = shade(wall, 0.72), light = shade(wall, 1.12);
+    const frame = rng.pick(['#f4f1e8', '#e8e2d2', '#d8dde2']), winC = rng.pick(['#20304a', '#2a3b4e', '#1c2a3a', '#2c3e50']);
+    // upper storeys
+    const U = mk(W, TOP + upperH + 44), u = U.getContext('2d');
+    px(u, 0, TOP + PAR, W, upperH - PAR + 44, wall); px(u, W - 6, TOP + PAR, 6, upperH - PAR + 44, dark); px(u, 0, TOP + PAR, 3, upperH - PAR + 44, light);
+    px(u, 0, TOP, W, PAR, shade(wall, 0.9)); px(u, 0, TOP, W, 3, light); px(u, 0, TOP + PAR - 2, W, 2, dark);
+    if (rng.chance(0.65)) { const tx = 30 + rng.int(150); px(u, tx, TOP - 18, 34, 16, '#6f7378'); px(u, tx + 2, TOP - 16, 30, 3, '#9a9ea3'); px(u, tx + 4, TOP - 2, 3, 4, '#333'); px(u, tx + 27, TOP - 2, 3, 4, '#333'); }
+    if (rng.chance(0.6)) { const ax = 190 + rng.int(40); px(u, ax, TOP - 22, 2, 22, '#222'); px(u, ax - 8, TOP - 20, 18, 1, '#222'); px(u, ax - 5, TOP - 15, 12, 1, '#222'); px(u, ax - 3, TOP - 10, 8, 1, '#222'); }
+    if (rng.chance(0.4)) { const dx = 100 + rng.int(60); px(u, dx, TOP - 12, 12, 12, '#d0d0d0'); px(u, dx + 3, TOP - 9, 6, 6, '#a0a0a0'); px(u, dx + 5, TOP, 2, 6, '#777'); }
+    for (let f = 0; f < floors; f++) {
+      const y = TOP + PAR + f * FH;
+      px(u, 0, y + FH - 5, W, 5, shade(wall, 0.8)); px(u, 0, y + FH - 5, W, 1, light);
+      px(u, 64, y, 3, FH - 5, shade(wall, 0.9)); px(u, 128, y, 3, FH - 5, shade(wall, 0.9)); px(u, 192, y, 3, FH - 5, shade(wall, 0.9));
+      for (let k = 0; k < 4; k++) {
+        const x = 6 + k * 64, style = rng.int(4);
+        if (style === 1) { // balcony with door + railing
+          px(u, x + 12, y + 6, 36, 42, winC); px(u, x + 14, y + 8, 12, 12, '#5c7797'); px(u, x + 11, y + 5, 38, 1, frame);
+          px(u, x + 2, y + 30, 58, 4, shade(wall, 0.85)); px(u, x + 2, y + 29, 58, 1, light);
+          for (let r = 0; r < 58; r += 4) px(u, x + 2 + r, y + 17, 1, 13, rng.chance(0.5) ? '#3a4a5a' : '#2d3a48');
+          px(u, x + 2, y + 16, 58, 2, '#8aa0b4');
+          if (rng.chance(0.45)) px(u, x + 8 + rng.int(30), y + 19, 6, 10, rng.pick(['#e94e4e', '#4e8de9', '#f0d24e', '#ffffff']));
+        } else if (style === 2) { // louvre shutters
+          px(u, x + 8, y + 10, 44, 34, frame); px(u, x + 10, y + 12, 40, 30, shade(frame, 0.75)); for (let l = 0; l < 30; l += 3) px(u, x + 10, y + 12 + l, 40, 1, shade(frame, 0.55));
+          px(u, x + 6, y + 44, 48, 3, shade(wall, 0.7));
+        } else { // window (+ AC unit)
+          px(u, x + 8, y + 10, 44, 34, frame); px(u, x + 10, y + 12, 40, 30, winC); px(u, x + 11, y + 13, 16, 8, '#5c7797'); px(u, x + 30, y + 12, 1, 30, frame); px(u, x + 10, y + 26, 40, 1, frame);
+          px(u, x + 6, y + 44, 48, 3, shade(wall, 0.7));
+          if (style === 3) { px(u, x + 36, y + 34, 16, 12, '#cfd2d5'); px(u, x + 37, y + 35, 14, 7, '#8d9296'); px(u, x + 39, y + 43, 10, 1, '#6e7276'); }
+        }
+      }
+    }
+    if (rng.chance(0.6)) { px(u, W - 14, TOP + 4, 3, upperH + 40, shade(wall, 0.62)); px(u, W - 14, TOP + 4, 1, upperH + 40, shade(wall, 0.5)); }
+    texturize(U, { amp: 0.07 });
+    // compose
+    const H = TOP + upperH + 300, c = mk(W, H), g = c.getContext('2d'); g.imageSmoothingEnabled = false;
+    px(g, 0, TOP + upperH, W, 44, wall);
+    g.drawImage(U, 0, 0); g.drawImage(base, 0, TOP + upperH);
+    // ground-floor modules
+    const O = mk(W, 300), o = O.getContext('2d'); let any = false; o.imageSmoothingEnabled = false;
+    if (opt.band === 'sign' || opt.band === 'wall') {
+      px(o, 0, 36, W, 62, wall); px(o, 0, 36, W, 2, light); px(o, W - 6, 36, 6, 62, dark); any = true;
+      if (opt.band === 'sign') {
+        const sc = opt.signCol || rng.pick(SIGNCOL), txt = opt.text || rng.pick(SIGNTXT);
+        px(o, 14, 44, W - 34, 46, sc[0]); px(o, 14, 44, W - 34, 3, shade(sc[0], 1.3)); px(o, 14, 87, W - 34, 3, shade(sc[0], 0.6)); px(o, 14, 44, 3, 46, shade(sc[0], 0.6)); px(o, W - 23, 44, 3, 46, shade(sc[0], 0.6));
+        o.fillStyle = sc[1]; o.font = '700 30px "Kanit"'; o.textAlign = 'center'; o.textBaseline = 'middle'; o.fillText(txt, W / 2 - 4, 67);
+      } else { for (let k = 0; k < 3; k++) { px(o, 30 + k * 70, 48, 40, 34, frame); px(o, 32 + k * 70, 50, 36, 30, winC); px(o, 33 + k * 70, 51, 14, 8, '#5c7797'); } }
+    }
+    const it = opt.interior;
+    if (it === 'shutter') {
+      px(o, 6, 150, W - 16, 150, '#9aa0a8'); for (let yy = 154; yy < 300; yy += 4) px(o, 6, yy, W - 16, 1, '#6f757d'); px(o, 6, 150, W - 16, 4, '#4a4f56'); px(o, 6, 294, W - 16, 6, '#5a5f66');
+      px(o, W / 2 - 12, 262, 24, 10, '#4a4f56'); const pc = rng.pick(['#c8322b', '#1f4fa3', '#e0b030']); px(o, 30, 185, 56, 70, pc); px(o, 34, 189, 48, 62, shade(pc, 1.25)); any = true;
+    } else if (it === 'gold') {
+      px(o, 6, 150, W - 16, 150, '#5a1414'); px(o, 6, 150, W - 16, 5, '#c9a227');
+      for (let i = 0; i < 5; i++) { px(o, 16 + i * 48, 172, 40, 62, '#7a1f1f'); px(o, 18 + i * 48, 174, 36, 58, '#8a2a2a'); for (let j = 0; j < 6; j++) px(o, 22 + i * 48 + (j % 3) * 10, 182 + Math.floor(j / 3) * 22, 6, 12, '#f3cf5a'); }
+      px(o, 6, 248, W - 16, 52, '#3a0f0f'); px(o, 6, 248, W - 16, 3, '#c9a227'); for (let i = 0; i < 8; i++) px(o, 20 + i * 28, 262, 14, 18, '#f3cf5a'); any = true;
+    } else if (it === 'pharmacy') {
+      px(o, 6, 150, W - 16, 150, '#e9f2ee'); px(o, 6, 150, W - 16, 4, '#1f8a4c');
+      for (let r = 0; r < 3; r++) { px(o, 14, 178 + r * 28, W - 32, 2, '#b9c8c0'); for (let i = 0; i < 16; i++) if (rng.chance(0.8)) px(o, 16 + i * 14, 166 + r * 28, 8, 12, rng.pick(['#ffffff', '#e94e4e', '#4e8de9', '#f0d24e', '#3aa35c'])); }
+      px(o, W / 2 - 30, 226, 60, 74, '#bcd6e8'); px(o, W / 2 - 28, 228, 56, 70, '#d9eaf5'); px(o, W / 2 - 1, 226, 2, 74, '#8aa0b4');
+      px(o, 18, 160, 28, 8, '#1f8a4c'); px(o, 28, 152, 8, 24, '#1f8a4c'); any = true;
+    } else if (it === 'eatery') {
+      px(o, 6, 150, W - 16, 150, '#2a2a30'); px(o, 6, 150, W - 16, 4, '#3d3d46');
+      px(o, 16, 186, 120, 64, '#c9d2d5'); px(o, 18, 188, 116, 24, '#e6ecef'); for (let i = 0; i < 5; i++) px(o, 24 + i * 22, 192, 16, 16, rng.pick(['#8a8f94', '#b8902a', '#c8541c', '#6a3a2a']));
+      px(o, 16, 250, 120, 50, '#3a3a44'); for (let i = 0; i < 3; i++) { px(o, 150 + i * 34, 236, 26, 20, '#d8d8d0'); px(o, 152 + i * 34, 256, 3, 40, '#8d8d8a'); px(o, 172 + i * 34, 256, 3, 40, '#8d8d8a'); px(o, 150 + i * 34, 276, 18, 14, '#2b6fb0'); px(o, 152 + i * 34, 290, 2, 8, '#2b6fb0'); px(o, 164 + i * 34, 290, 2, 8, '#2b6fb0'); }
+      any = true;
+    }
+    if (any) { texturize(O, { amp: 0.06 }); g.drawImage(O, 0, TOP + upperH); }
+    if (opt.awning) { g.save(); g.globalCompositeOperation = 'color'; g.fillStyle = opt.awning; g.fillRect(0, TOP + upperH + 96, W, 54); g.restore(); }
+    return c;
+  }
+  OB.composeFacade = composeFacade;
+
   function median() { // striped crash barrier head for fork medians
     const c = mk(60, 90), g = c.getContext('2d');
     px(g, 0, 40, 60, 50, '#ffd23f'); for (let y = 40; y < 90; y += 12) px(g, 0, y, 60, 6, '#111');
@@ -479,12 +556,25 @@ window.OB = window.OB || {};
     const p2 = pole(300, { noTx: true }); add('pole2', tx(p2.c, { amp: 0.05 }), 520, { solid: true, thin: 0.35, poleTop: { x: p2.topX / 40, y: p2.topY / 300 } });
     add('lamp', tx(lampPost(), { amp: 0.04 }), 600, { solid: true, thin: 0.3 });
     add('pillar', tx(pillar(), { amp: 0.06 }), 640, { solid: true });
-    // shophouse facades rectified straight out of the reference frame
-    for (let i = 0; i < 6; i++) add('facade' + i, IMG['facade' + i], 2400, { solid: true, building: true });
-    for (let i = 0; i < 6; i++) add('shop' + i, tx(shophouse(rng)), 3000, { solid: true, building: true });
-    add('shop_seven', tx(shophouse(rng, { floors: 2, color: '#e9e2cf', sign: 'storepanel', seven: true, shop: 0 })), 3000, { solid: true, building: true });
-    add('shop_noodle', tx(shophouse(rng, { floors: 2, color: '#d9c9a4', text: 'ก๋วยเตี๋ยวเรือ', shop: 1 })), 3000, { solid: true, building: true });
-    for (let i = 0; i < 4; i++) add('shopcn' + i, tx(shophouse(rng, { text: ['ร้านทองเยาวราช', 'หูฉลาม', 'เป็ดย่าง', 'ร้านชาจีน'][i], color: ['#d8b7ac', '#e2cfa0', '#c9c0b0', '#d0a889'][i] })), 3000, { solid: true, building: true });
+    // shophouses: the reference's own facade (rectified) with drawn upper storeys and swappable shop modules
+    const AWN = [null, null, null, '#c8322b', '#1f8a4c', '#d99a1c', '#8a1c8c', '#2b6fb0'];
+    const INT = ['keep', 'shutter', 'gold', 'pharmacy', 'eatery', 'shutter', 'eatery'];
+    for (let i = 0; i < 14; i++) {
+      const cart = i % 5 === 0;
+      const opt = { cart, floors: rng.chance(0.55) ? 1 : 2, band: cart ? 'stripes' : rng.pick(['stripes', 'sign', 'sign', 'wall']), interior: cart ? 'keep' : rng.pick(INT), awning: rng.pick(AWN) };
+      add('fac' + i, composeFacade(rng, opt), 2400, { solid: true, building: true });
+    }
+    // taller back-row shophouses (3 storeys) that sit behind the street-front row and close the gaps between cards
+    for (let i = 0; i < 6; i++) {
+      const opt = { cart: false, floors: 3, band: rng.pick(['sign', 'wall', 'stripes']), interior: rng.pick(['shutter', 'keep', 'gold', 'eatery']), awning: rng.pick(AWN), wall: rng.pick(FAC_WALLS) };
+      add('facb' + i, composeFacade(rng, opt), 2600, { solid: true, building: true });
+    }
+    const CNTXT = ['ร้านทอง', 'ฮั่วเซ่งเฮง', 'หูฉลาม', 'เป็ดย่าง', 'ตั้งโต๊ะกัง', 'บะหมี่เกี๊ยว', 'ร้านชาจีน', 'เยาวราช'];
+    for (let i = 0; i < 8; i++) {
+      const opt = { cart: i === 3, floors: rng.chance(0.4) ? 1 : 2, band: 'sign', text: CNTXT[i], signCol: rng.pick([['#c8222a', '#ffe37a'], ['#f2c12e', '#8a1c1c'], ['#c8222a', '#ffffff']]),
+        interior: i === 3 ? 'keep' : rng.pick(['gold', 'gold', 'eatery', 'shutter', 'keep']), awning: rng.pick(['#c8322b', '#c8322b', '#d99a1c', null]) };
+      add('faccn' + i, composeFacade(rng, opt), 2400, { solid: true, building: true });
+    }
     for (let i = 0; i < 8; i++) add('tower' + i, tx(tower(rng), { amp: 0.06 }), 2600 + rng.int(1400), { solid: true, building: true });
     for (let i = 0; i < 4; i++) add('tree' + i, tx(tree(rng, false), { amp: 0.12, outline: 0.5 }), 1500, { solid: true, thin: 0.15 });
     for (let i = 0; i < 3; i++) add('palm' + i, tx(tree(rng, true), { amp: 0.1, outline: 0.5 }), 1300, { solid: true, thin: 0.12 });
@@ -653,7 +743,7 @@ window.OB = window.OB || {};
 // OutRun Bangkok — track segments, themes, stages and routes
 (function (OB) {
   'use strict';
-  const T = { segments: [], segLen: 200, roadW: 1800, lanes: 3 };
+  const T = { segments: [], segLen: 200, roadW: 2000, lanes: 3 };
   OB.track = T;
 
   T.STAGES = {
@@ -719,14 +809,17 @@ window.OB = window.OB || {};
   }
 
   // ---------- population ----------
-  const SHOPS = ['shop0', 'shop1', 'shop2', 'shop3', 'shop4', 'shop5', 'shop_seven', 'shop_noodle'];
-  const CNSHOPS = ['shopcn0', 'shopcn1', 'shopcn2', 'shopcn3', 'shop2', 'shop5', 'shop_noodle'];
-  const FACADES = ['facade0', 'facade1', 'facade1', 'facade2', 'facade3', 'facade4', 'facade5'];
+  const FACADES = []; for (let i = 0; i < 14; i++) FACADES.push('fac' + i);
+  const CNFACADES = []; for (let i = 0; i < 8; i++) CNFACADES.push('faccn' + i);
+  const BACKROW = []; for (let i = 0; i < 6; i++) BACKROW.push('facb' + i);
   const TOWERS = ['tower0', 'tower1', 'tower2', 'tower3', 'tower4', 'tower5', 'tower6', 'tower7'];
-  // shophouse picker: mostly the facades cut from the reference, some procedural ones for variety
-  function pickShop(rng, theme) {
-    if (theme === 'chinatown') return rng.chance(0.5) ? rng.pick(['facade2', 'facade5', 'facade4', 'facade1']) : rng.pick(CNSHOPS);
-    return rng.chance(0.72) ? rng.pick(FACADES) : rng.pick(SHOPS);
+  // shophouse picker: composed reference facades, never the same one twice in a row per side
+  const lastPick = {};
+  function pickShop(rng, theme, side) {
+    const list = theme === 'chinatown' ? (rng.chance(0.75) ? CNFACADES : FACADES) : FACADES;
+    let n = rng.pick(list), tries = 0;
+    while (n === lastPick[side] && tries++ < 5) n = rng.pick(list);
+    lastPick[side] = n; return n;
   }
   function put(seg, name, offset, extra) { const spr = OB.SPR[name]; if (!spr) return; seg.sprites.push(Object.assign({ spr, offset }, extra || {})); }
 
@@ -739,7 +832,8 @@ window.OB = window.OB || {};
       if (opts.noSprites) continue;
       // ---- LEFT ----
       if (th.left === 'shop') {
-        if (rel % (stage.theme === 'chinatown' ? 10 : 12) === 0) put(seg, pickShop(rng, stage.theme), edgeL - 0.12, { anchor: 'left' });
+        if (rel % (stage.theme === 'chinatown' ? 10 : 12) === 0) put(seg, pickShop(rng, stage.theme, 'L'), edgeL - 0.12, { anchor: 'left' });
+        if (rel % 12 === 6) put(seg, rng.pick(BACKROW), edgeL - 1.15, { anchor: 'left' });
         if (rel % 16 === 4) { put(seg, rng.chance(0.7) ? 'pole' : 'pole2', edgeL + 0.1, { pole: 'L' }); }
         if (rel % 160 === 40) put(seg, 'signs_pole', edgeL + 0.08);
         if (rel % 210 === 120) put(seg, 'ckrd_pole', edgeL + 0.1);
@@ -749,7 +843,7 @@ window.OB = window.OB || {};
         if (stage.theme === 'chinatown' && rel % 33 === 20) put(seg, 'redsign_pole', edgeL + 0.1);
       } else if (th.left === 'city') {
         if (rel % 10 === 0) put(seg, rng.pick(TOWERS), edgeL - 0.45 - rng.range(0, 1.4), { anchor: 'left' });
-        if (rel % 9 === 3 && rng.chance(0.4)) put(seg, rng.pick(['facade1', 'facade4', 'shop2', 'shop5']), edgeL - 0.12, { anchor: 'left' });
+        if (rel % 9 === 3 && rng.chance(0.4)) put(seg, pickShop(rng, 'city', 'L'), edgeL - 0.12, { anchor: 'left' });
         if (rel % 26 === 8) put(seg, 'lamp', edgeL + 0.06, { flip: true });
         if (rel % 44 === 20) put(seg, rng.pick(['tree0', 'tree1', 'palm0']), edgeL - 0.1);
         if (th.skytrain && rel % 14 === 7) put(seg, 'pillar', edgeL + 0.05, { pillar: true });
@@ -769,14 +863,15 @@ window.OB = window.OB || {};
         if (rel % 330 === 60) put(seg, 'thatien_pole', edgeR - 0.08);
         if (rel % 60 === 30) put(seg, rng.pick(['boat0', 'boat1', 'boat2']), edgeR + rng.range(1.2, 3.5), { water: true });
       } else if (th.right === 'shop') {
-        if (rel % (stage.theme === 'chinatown' ? 10 : 12) === 5) put(seg, pickShop(rng, stage.theme), edgeR + 0.12, { anchor: 'right' });
+        if (rel % (stage.theme === 'chinatown' ? 10 : 12) === 5) put(seg, pickShop(rng, stage.theme, 'R'), edgeR + 0.12, { anchor: 'right' });
+        if (rel % 12 === 11) put(seg, rng.pick(BACKROW), edgeR + 1.15, { anchor: 'right' });
         if (rel % 16 === 4) put(seg, 'pole2', edgeR - 0.1, { pole: 'R', flip: true });
         if (rel % 33 === 20 && stage.theme === 'chinatown') put(seg, 'redsign_pole', edgeR - 0.1);
         if (rel % 150 === 75) put(seg, 'vendor', edgeR + 0.02, { flip: true });
         if (rel % 120 === 100) put(seg, 'tuktuk_parked', edgeR - 0.32);
       } else if (th.right === 'city') {
         if (rel % 10 === 5) put(seg, rng.pick(TOWERS), edgeR + 0.45 + rng.range(0, 1.4), { anchor: 'right' });
-        if (rel % 9 === 8 && rng.chance(0.4)) put(seg, rng.pick(['facade1', 'facade3', 'shop0', 'shop4']), edgeR + 0.12, { anchor: 'right' });
+        if (rel % 9 === 8 && rng.chance(0.4)) put(seg, pickShop(rng, 'city', 'R'), edgeR + 0.12, { anchor: 'right' });
         if (rel % 26 === 21) put(seg, 'lamp', edgeR - 0.06);
         if (rel % 44 === 30) put(seg, rng.pick(['tree2', 'tree3', 'palm2']), edgeR + 0.1);
         if (th.skytrain && rel % 14 === 7) put(seg, 'pillar', edgeR - 0.05, { pillar: true });
@@ -793,9 +888,13 @@ window.OB = window.OB || {};
 
   // ---------- stage assembly ----------
   const BODY = 2500, WIDEN = 120, MEDIAN = 260, NARROW = 330;
+  T.COURSES = [
+    { key: 'charoenkrung', stageNo: 1, label: 'FULL RUN' }, { key: 'yaowarat', stageNo: 2 }, { key: 'sathorn', stageNo: 2 },
+    { key: 'siam', stageNo: 3 }, { key: 'rattanakosin', stageNo: 3 }, { key: 'sanamluang', stageNo: 4 }, { key: 'thatien', stageNo: 4 }
+  ];
   T.buildStage = function (stageKey, stageNo, seed) {
     const stage = T.STAGES[stageKey];
-    const rng = OB.rng(seed + stageNo * 7919);
+    const rng = OB.rng(seed + stageNo * 7919 + stageKey.length * 131);
     const from = T.segments.length;
     if (!OB.SPR.redsign_pole && OB.IMG.redsign) { // lazily add hanging red sign on pole
       const im = OB.IMG.redsign; const c = OB.makeCanvas(24, 130), g = c.getContext('2d'); g.imageSmoothingEnabled = false;
@@ -890,7 +989,7 @@ window.OB = window.OB || {};
 
   // ---------- projection ----------
   const roadW = () => OB.track.roadW;
-  const WATER_DROP = 380;
+  const WATER_DROP = 380, SIDEWALK = 0.17, FOLLOW = 0.8; // camera follows the bike only partially so the road stays centred
   function project(p, camX, camY, camZ, depth, rw) {
     p.camera.x = p.world.x - camX; p.camera.y = p.world.y - camY; p.camera.z = p.world.z - camZ;
     p.screen.scale = depth / p.camera.z;
@@ -905,7 +1004,7 @@ window.OB = window.OB || {};
   function renderGround(seg, pal, th) {
     const p1 = seg.p1.screen, p2 = seg.p2.screen;
     const x1 = p1.x, y1 = p1.y, w1 = p1.w, x2 = p2.x, y2 = p2.y, w2 = p2.w;
-    const sw1 = w1 * 0.2, sw2 = w2 * 0.2, alt = Math.floor(seg.index / 3) % 2;
+    const sw1 = w1 * SIDEWALK, sw2 = w2 * SIDEWALK, alt = Math.floor(seg.index / 3) % 2;
     const envL = pal[th.left] || pal.shop, envR = pal[th.right] || pal.shop;
     poly(0, y1, x1 - w1 - sw1, y1, x2 - w2 - sw2, y2, 0, y2, envL[alt]);
     if (th.right === 'water') {
@@ -963,7 +1062,7 @@ window.OB = window.OB || {};
 
   function renderRail(seg, pal) {
     const p1 = seg.p1.screen, p2 = seg.p2.screen;
-    const rx1 = p1.x + p1.w + p1.w * 0.2, rx2 = p2.x + p2.w + p2.w * 0.2;
+    const rx1 = p1.x + p1.w + p1.w * SIDEWALK, rx2 = p2.x + p2.w + p2.w * SIDEWALK;
     const h1 = p1.scale * 420 * K, h2 = p2.scale * 420 * K;
     if (h1 < 1) return;
     const t1 = Math.max(1, h1 * 0.07), t2 = Math.max(1, h2 * 0.07);
@@ -997,7 +1096,8 @@ window.OB = window.OB || {};
     const playerSeg = T.findSegment(G.position + G.playerZ), playerPct = ((G.position + G.playerZ) % segLen) / segLen;
     const playerY = OB.lerp(playerSeg.p1.world.y, playerSeg.p2.world.y, playerPct);
     G.bgShift = -(playerY) * 0.004;
-    const camX = G.playerX * RW, camY = G.cameraH + playerY, camZ = G.position;
+    const camX = G.playerX * RW * FOLLOW, camY = G.cameraH + playerY, camZ = G.position;
+    G.playerDX = (G.playerX * RW - camX) * (G.cameraDepth / G.playerZ) * K;
     ctx.save();
     if (G.shake > 0) ctx.translate(Math.round((Math.random() - 0.5) * G.shake * 8), Math.round((Math.random() - 0.5) * G.shake * 6));
     drawBackground(G);
@@ -1006,7 +1106,7 @@ window.OB = window.OB || {};
     for (const c of G.cars) { const i = Math.floor(c.z / segLen); if (!carsBySeg.has(i)) carsBySeg.set(i, []); carsBySeg.get(i).push(c); }
     // ---- ground pass (front to back) ----
     let maxy = H, x = 0, dx = -(baseSeg.curve * basePct);
-    const drawn = [];
+    const projected = [];
     for (let n = 0; n < G.drawDistance; n++) {
       const idx = baseSeg.index + n; if (idx >= segs.length) break;
       const seg = segs[idx];
@@ -1014,18 +1114,19 @@ window.OB = window.OB || {};
       project(seg.p2, camX - x - dx, camY, camZ, G.cameraDepth, seg.rw);
       x += dx; dx += seg.curve;
       seg.clip = maxy;
-      if (seg.p1.camera.z <= G.cameraDepth || seg.p2.screen.y >= seg.p1.screen.y || seg.p2.screen.y >= maxy) { seg.hidden = true; continue; }
+      if (seg.p1.camera.z <= G.cameraDepth) { seg.hidden = true; seg.behind = true; continue; }
+      seg.behind = false; projected.push(seg);
+      if (seg.p2.screen.y >= seg.p1.screen.y || seg.p2.screen.y >= maxy) { seg.hidden = true; continue; }
       seg.hidden = false;
       renderGround(seg, pal, T.THEMES[seg.theme]);
       maxy = seg.p2.screen.y;
-      drawn.push(seg);
     }
-    // ---- sprite pass (back to front) ----
+    // ---- sprite pass (back to front): every projected slice, clipped by the crest line, so nothing pops ----
     const poles = { L: [], R: [] };
-    for (let n = drawn.length - 1; n >= 0; n--) {
-      const seg = drawn[n];
+    for (let n = projected.length - 1; n >= 0; n--) {
+      const seg = projected[n];
       const th = T.THEMES[seg.theme];
-      if (seg.rail) renderRail(seg, pal);
+      if (seg.rail && !seg.hidden) renderRail(seg, pal);
       const scale = seg.p1.screen.scale, sx = seg.p1.screen.x, sy = seg.p1.screen.y;
       for (const sp of seg.sprites) {
         const s = sp.spr, img = s.img;
@@ -1040,7 +1141,7 @@ window.OB = window.OB || {};
         if (sp.pole && s.poleTop) poles[sp.pole].push({ x: destX + destW * s.poleTop.x, y: destY + destH * s.poleTop.y, w: destW, seg: seg.index });
         if (sp.pillar) { /* pillars carry the deck */ }
       }
-      if (seg.deck) renderDeck(seg, pal);
+      if (seg.deck && !seg.hidden) renderDeck(seg, pal);
       const cars = carsBySeg.get(seg.index);
       if (cars) for (const c of cars) {
         const pct = (c.z % segLen) / segLen;
@@ -1102,11 +1203,11 @@ window.OB = window.OB || {};
   function drawPlayer(G) {
     const img = OB.IMG.bike; const bw = img.width, bh = img.height;
     const bounce = G.bounce || 0;
-    const cx = W / 2 + (G.drawShift || 0), by = 457 + bounce;
+    const cx = Math.round(W / 2 + (G.drawShift || 0) + (G.playerDX || 0)), by = 457 + bounce;
     // shadow
     ctx.fillStyle = 'rgba(0,0,0,0.35)'; ctx.beginPath(); ctx.ellipse(cx + 2, by - 6, bw * 0.42, 7, 0, 0, Math.PI * 2); ctx.fill();
     ctx.save(); ctx.translate(cx, by); ctx.rotate(G.lean * 0.16); ctx.translate(-bw / 2 + G.lean * 6, -bh);
-    if (G.invuln > 0 && Math.floor(G.t * 20) % 2 === 0) ctx.globalAlpha = 0.55;
+    if (G.invuln > 0 && Math.floor(G.t * 8) % 2 === 0) ctx.globalAlpha = 0.7;
     ctx.drawImage(img, 0, 0);
     ctx.restore();
     // ice melt drips
@@ -1236,6 +1337,34 @@ window.OB = window.OB || {};
     for (let i = 0; i < 12; i++) { const hh = 4 + Math.abs(Math.sin(G.t * 9 + i * 1.3)) * 22; ctx.fillStyle = i < 8 ? '#39f2b0' : '#ff5a5a'; ctx.fillRect(x + w - 150 + i * 9, y + 66 - hh, 6, hh); }
     TXT(ctx, 'LEFT / RIGHT : TUNE      GAS / ENTER : START', W / 2, y + h + 26, { size: 8, sy: 1.4, fill: '#fff', outline: '#000', outlineW: 3, align: 'center' });
   };
+  R.course = function (G) {
+    dim(0.35);
+    const T = OB.track, C = T.COURSES, sel = G.course, cur = C[sel], st = T.STAGES[cur.key];
+    const x = W / 2 - 250, y = 78, w = 500, h = 280;
+    ctx.fillStyle = '#1a1c22'; ctx.fillRect(x, y, w, h); ctx.fillStyle = '#3a3d46'; ctx.fillRect(x, y, w, 4); ctx.fillRect(x, y + h - 4, w, 4); ctx.fillRect(x, y, 4, h); ctx.fillRect(x + w - 4, y, 4, h);
+    TXT(ctx, 'SELECT COURSE', W / 2, y + 30, { size: 10, sy: 1.5, fill: '#ff37a8', outline: '#000', outlineW: 4, align: 'center' });
+    // route tree: rows of nodes, lines to successors
+    const rows = [['charoenkrung'], ['yaowarat', 'sathorn'], ['siam', 'rattanakosin'], ['sanamluang', 'thatien']];
+    const pos = {};
+    rows.forEach((r, i) => r.forEach((k, j) => { pos[k] = { x: W / 2 + (r.length === 1 ? 0 : (j - 0.5) * 190), y: y + 70 + i * 44 }; }));
+    ctx.strokeStyle = '#4a5060'; ctx.lineWidth = 2;
+    for (const k in T.STAGES) { const nx = T.STAGES[k].next; if (!nx) continue; nx.forEach(n => { ctx.beginPath(); ctx.moveTo(pos[k].x, pos[k].y + 8); ctx.lineTo(pos[n].x, pos[n].y - 10); ctx.stroke(); }); }
+    ctx.strokeStyle = '#ffd800'; ctx.beginPath(); ctx.moveTo(pos.sanamluang.x, pos.sanamluang.y + 8); ctx.lineTo(W / 2, y + 70 + 4 * 44 - 8); ctx.moveTo(pos.thatien.x, pos.thatien.y + 8); ctx.lineTo(W / 2, y + 70 + 4 * 44 - 8); ctx.stroke();
+    TXT(ctx, 'GOAL  WAT PHO', W / 2, y + 70 + 4 * 44 + 2, { size: 7, sy: 1.4, fill: '#ffd800', outline: '#000', outlineW: 3, align: 'center' });
+    for (const k in pos) {
+      const p = pos[k], isSel = k === cur.key, nm = T.STAGES[k].name;
+      const tw = nm.eng.length * 7 + 16;
+      ctx.fillStyle = isSel ? '#ffd800' : '#2b2f3a'; ctx.fillRect(p.x - tw / 2, p.y - 10, tw, 20);
+      ctx.fillStyle = isSel ? '#fff' : '#4a5060'; ctx.fillRect(p.x - tw / 2, p.y - 10, tw, 1); ctx.fillRect(p.x - tw / 2, p.y + 9, tw, 1);
+      TXT(ctx, nm.eng, p.x, p.y + 4, { size: 7, sy: 1.4, fill: isSel ? '#000' : '#cfd3da', align: 'center' });
+    }
+    // selection caption
+    const capY = y + h + 22;
+    arrow(W / 2 - 220, capY - 6, -1, 8, '#ffd800', '#000'); arrow(W / 2 + 220, capY - 6, 1, 8, '#ffd800', '#000');
+    TXT(ctx, (cur.label ? cur.label + '  -  ' : 'STAGE ' + cur.stageNo + '  -  ') + st.name.eng, W / 2, capY, { size: 9, sy: 1.5, fill: '#fff', outline: '#000', outlineW: 4, align: 'center' });
+    TXT(ctx, st.name.thai, W / 2, capY + 24, { size: 16, font: 'Kanit', weight: '700', fill: '#ffd23f', outline: '#000', outlineW: 4, align: 'center' });
+    TXT(ctx, 'LEFT / RIGHT : COURSE      GAS / ENTER : START', W / 2, H - 14, { size: 7, sy: 1.4, fill: '#fff', outline: '#000', outlineW: 3, align: 'center' });
+  };
   R.countdown = function (G) {
     const n = Math.ceil(G.countdown);
     const label = n > 0 ? String(n) : 'GO!';
@@ -1287,7 +1416,7 @@ window.OB = window.OB || {};
     speed: 0, maxSpeed: 12000, steer: 0, lean: 0, bgOffset: 0, bgShift: 0, cars: [], health: 100, ice: 100, time: 80, score: 0,
     stageNo: 1, stageKey: 'charoenkrung', light: 'day', station: 0, hiScore: 0, msg: null, shake: 0, invuln: 0, bounce: 0,
     forkHint: null, wallCd: 0, countdown: 0, overReason: null, result: null, seed: 20240808, paused: false, route: [], cur: null, nextInfo: null, nextKey: null,
-    muted: false, drawShift: -200
+    muted: false, drawShift: -200, playerDX: 0, course: 0
   };
   OB.G = G;
   G.cameraDepth = 1 / Math.tan((G.fov / 2) * Math.PI / 180);
@@ -1307,7 +1436,7 @@ window.OB = window.OB || {};
     if (KEYMAP[e.key]) { keys[KEYMAP[e.key]] = true; e.preventDefault(); }
     if (e.key === 'Enter' || e.key === ' ') { startPressed = true; e.preventDefault(); }
     if (e.key === 'ArrowLeft' || e.key === 'a') tuneDir = -1; if (e.key === 'ArrowRight' || e.key === 'd') tuneDir = 1;
-    if (e.key === 'ArrowUp' && (G.mode === 'radio')) startPressed = true;
+    if (e.key === 'ArrowUp' && (G.mode === 'radio' || G.mode === 'course')) startPressed = true;
     if (e.key === 'm' || e.key === 'M') { G.muted = !G.muted; A.setMusicVolume(G.muted ? 0 : 0.8); }
     if ((e.key === 'p' || e.key === 'P' || e.key === 'Escape') && (G.mode === 'play')) G.paused = !G.paused;
   });
@@ -1331,13 +1460,13 @@ window.OB = window.OB || {};
     const info = T.buildStage(key, no, G.seed);
     return info;
   }
-  function newGame() {
+  function newGame(key, stageNo) {
     T.reset();
-    G.stageNo = 1; G.stageKey = 'charoenkrung'; G.route = ['charoenkrung']; G.nextKey = null; G.nextInfo = null;
-    G.cur = buildStage(G.stageKey, 1);
+    G.stageNo = stageNo || 1; G.stageKey = key || 'charoenkrung'; G.route = [G.stageKey]; G.nextKey = null; G.nextInfo = null;
+    G.cur = buildStage(G.stageKey, G.stageNo);
     G.light = T.THEMES[T.STAGES[G.stageKey].theme].light;
     G.position = 0; G.playerX = 0; G.speed = 0; G.steer = 0; G.lean = 0; G.bgOffset = 0;
-    G.health = 100; G.ice = 100; G.score = 0; G.time = T.STAGES[G.stageKey].time;
+    G.health = 100; G.ice = 100; G.score = 0; G.time = T.STAGES[G.stageKey].time + (G.stageNo > 1 ? 10 : 0);
     G.cars = []; G.msg = null; G.shake = 0; G.invuln = 0; G.forkHint = null; G.result = null; G.overReason = null; G.paused = false;
     for (let i = 0; i < 8; i++) spawnCar(60 + i * 40);
   }
@@ -1493,7 +1622,7 @@ window.OB = window.OB || {};
     const mode = G.mode;
     if (mode === 'loading') return;
     if (mode === 'over' || (mode === 'play' && G.paused)) { G.speed = Math.max(0, G.speed - G.maxSpeed * dt * 0.6); if (mode === 'over') advance(dt, false); A.setEngine(0, false, false, false); return; }
-    if (mode === 'title' || mode === 'radio') {
+    if (mode === 'title' || mode === 'radio' || mode === 'course') {
       G.drawShift += ((mode === 'title' ? -200 : 0) - G.drawShift) * Math.min(1, dt * 3);
       const target = mode === 'title' ? G.maxSpeed * 0.28 : G.maxSpeed * 0.12;
       G.speed += (target - G.speed) * Math.min(1, dt * 0.8);
@@ -1504,8 +1633,10 @@ window.OB = window.OB || {};
       if (seg.index > T.segments.length - 700) { newGame(); }
       if (startPressed) { startPressed = false; A.init(); A.sfx('select');
         if (mode === 'title') { G.mode = 'radio'; A.playMusic(G.station); A.setMusicVolume(G.muted ? 0 : 0.8); }
+        else if (mode === 'radio') { G.mode = 'course'; }
         else { startRun(); } }
-      if (mode === 'radio' && tuneDir) { G.station = (G.station + tuneDir + 3) % 3; A.playMusic(G.station); A.sfx('select'); tuneDir = 0; }
+      if (mode === 'radio' && tuneDir) { G.station = (G.station + tuneDir + 3) % 3; A.playMusic(G.station); A.sfx('select'); }
+      if (mode === 'course' && tuneDir) { const n = T.COURSES.length; G.course = (G.course + tuneDir + n) % n; A.sfx('select'); }
       tuneDir = 0;
       A.setEngine(G.speed / G.maxSpeed, false, false, A.ready());
       return;
@@ -1558,7 +1689,8 @@ window.OB = window.OB || {};
     if (withCars) updateCars(dt);
   }
   function startRun() {
-    newGame(); G.mode = 'countdown'; G.countdown = 3.99; G.speed = 0; G.playerX = 0;
+    const c = T.COURSES[G.course] || T.COURSES[0];
+    newGame(c.key, c.stageNo); G.mode = 'countdown'; G.countdown = 3.99; G.speed = 0; G.playerX = 0;
   }
 
   // ---------- loop ----------
@@ -1576,6 +1708,7 @@ window.OB = window.OB || {};
     switch (G.mode) {
       case 'title': R.title(G); break;
       case 'radio': R.radio(G); break;
+      case 'course': R.course(G); break;
       case 'countdown': R.hud(G); R.countdown(G); break;
       case 'play': R.hud(G); if (G.paused) { OB.text(R.ctx || document.getElementById('screen').getContext('2d'), 'PAUSE', W / 2, 200, { size: 24, sy: 1.3, fill: '#fff', outline: '#000', outlineW: 6, align: 'center' }); } break;
       case 'goal': R.hud(G); R.goal(G); break;
