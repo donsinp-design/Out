@@ -96,6 +96,12 @@
   // three fingers brake. Menus are tapped. A small pause button sits top-right during play.
   const touch = { steer: 0, active: false, fingers: 0, twoT: 0 };
   const pointers = new Map();
+  // Drop every held input. A finger whose lift was never delivered (it happens on iOS) would otherwise sit in the
+  // map for good: steering follows the first finger recorded, so the bike would steer itself and ignore the real
+  // finger, and that carries into the next run. Same for a key whose keyup was lost while the page was away.
+  function resetInput() { pointers.clear(); touch.active = false; touch.steer = 0; touch.fingers = 0; for (const k in keys) keys[k] = false; driftReq = false; }
+  window.addEventListener('blur', resetInput); window.addEventListener('pagehide', resetInput);
+  document.addEventListener('visibilitychange', () => { if (document.hidden) resetInput(); });
   // portrait phone: the stage is rotated 90 degrees by CSS to fill the screen; touches are mapped back through it
   function toCanvas(e) {
     const cv = document.getElementById('screen'), r = cv.getBoundingClientRect();
@@ -148,6 +154,11 @@
       swipeX = null;
     };
     cv.addEventListener('pointerup', end); cv.addEventListener('pointercancel', end); cv.addEventListener('pointerleave', end); cv.addEventListener('lostpointercapture', end);
+    // The Touch API's touches list is the ground truth for fingers on the glass. Pointer events fire before the
+    // matching touch event, so at each touch transition the map should hold exactly touches.length fingers; any
+    // surplus is a finger whose lift went missing. Stale entries are always the oldest, so trim from the front.
+    const reconcile = e => { const n = e.touches ? e.touches.length : 0; let guard = 0; while (pointers.size > n && guard++ < 10) pointers.delete(pointers.keys().next().value); upd(); };
+    for (const t of ['touchstart', 'touchend', 'touchcancel']) cv.addEventListener(t, reconcile, { passive: true });
   }
 
   // ---------- game setup ----------
@@ -414,7 +425,7 @@
   // ---------- progression ----------
   function gameOver(reason) {
     if (G.mode === 'over') return;
-    G.mode = 'over'; G.overReason = reason; G.forkHint = null; G.overSel = 0; A.stopMusic(); A.sfx('over');
+    G.mode = 'over'; G.overReason = reason; G.forkHint = null; G.overSel = 0; A.stopMusic(); A.sfx('over'); resetInput();
     if (qualifies(G.score)) G.pendingRecord = { score: G.score, route: routeStr() };
   }
   function progress(seg) {
@@ -583,7 +594,7 @@
   }
   function startRun() {
     const c = T.COURSES[G.course] || T.COURSES[0];
-    newGame(c.key, c.stageNo); G.mode = 'countdown'; G.countdown = 3; G.speed = 0; G.playerX = 0; A.sfx('beep');
+    newGame(c.key, c.stageNo); resetInput(); G.mode = 'countdown'; G.countdown = 3; G.speed = 0; G.playerX = 0; A.sfx('beep');
   }
 
   // ---------- loop ----------
