@@ -278,8 +278,21 @@
     const img = OB.IMG.bike; const bw = img.width, bh = img.height;
     const bounce = G.bounce || 0;
     const cx = Math.round(W / 2 + (G.drawShift || 0) + (G.playerDX || 0)), by = 457 + bounce;
-    // shadow
-    ctx.fillStyle = 'rgba(0,0,0,0.35)'; ctx.beginPath(); ctx.ellipse(cx + 2, by - 6, bw * 0.42, 7, 0, 0, Math.PI * 2); ctx.fill();
+    const f = G.flip;
+    // shadow (stays on the road while the bike tumbles above it)
+    { const sx = cx + (f ? f.x : 0), h = f ? -f.y : 0, k = Math.max(0.35, 1 - h / 320);
+      ctx.fillStyle = 'rgba(0,0,0,' + (0.35 * k).toFixed(2) + ')'; ctx.beginPath(); ctx.ellipse(sx + 2, by - 6, bw * 0.42 * k, 7 * k, 0, 0, Math.PI * 2); ctx.fill(); }
+    // rubber: a dark trail from the rear tyre that smears sideways with the road under the smoke
+    if (G.marks && G.marks.length > 1) {
+      ctx.save(); ctx.lineCap = 'butt'; // butt caps: adjacent pieces do not overlap, so the fade stays even instead of dotting at the joints
+      for (let i = 1; i < G.marks.length; i++) {
+        const a = G.marks[i - 1], b = G.marks[i]; if (b.start) continue;
+        const al = b.t < 0.2 ? 0.9 : 0.9 * (1 - (b.t - 0.2) / 0.3);
+        ctx.strokeStyle = 'rgba(6,4,6,' + al.toFixed(2) + ')'; ctx.lineWidth = b.w;
+        ctx.beginPath(); ctx.moveTo(a.x, a.y); ctx.lineTo(b.x, b.y); ctx.stroke();
+      }
+      ctx.restore();
+    }
     // tyre smoke: flat ragged band of 2px pixel clusters, white with grey speckle, dithering out (no soft fades)
     if (G.smoke && G.smoke.length) {
       const C = 2;
@@ -292,12 +305,28 @@
         }
       }
     }
-    // wipeout: the bike kicks up and tilts hard for a moment
-    const wp = G.wipe > 0 ? Math.sin((1 - G.wipe) * Math.PI) : 0;
-    ctx.save(); ctx.translate(cx, by - wp * 34); ctx.rotate(G.lean * 0.16 + wp * 0.85 * (G.wipeDir || 1)); ctx.translate(-bw / 2 + G.lean * 6, -bh);
-    if (G.invuln > 0 && Math.floor(G.t * 8) % 2 === 0) ctx.globalAlpha = 0.7;
-    ctx.drawImage(img, 0, 0);
-    ctx.restore();
+    if (f) {
+      // crash: riderless bike barrel-rolls through the air (a roll seen from behind is a plain spin of the rear view),
+      // bouncing across the road; the rider is thrown clear and ends up sitting on the tarmac
+      const wimg = OB.IMG.wreck, ww = wimg.width, wh = wimg.height;
+      const ext = Math.abs(Math.cos(f.rot)) * wh / 2 + Math.abs(Math.sin(f.rot)) * ww / 2; // keeps the spinning sprite on the road line
+      ctx.save(); ctx.translate(Math.round(cx + f.x), Math.round(by + f.y - ext)); ctx.rotate(f.rot); ctx.drawImage(wimg, -ww / 2, -wh / 2); ctx.restore();
+      const r = G.rider;
+      if (r) {
+        const rimg = OB.IMG.rider, rw = rimg.width, rh = rimg.height;
+        ctx.save();
+        if (r.down) { ctx.translate(Math.round(cx + r.x), Math.round(by + 2)); ctx.scale(1, 0.8); ctx.drawImage(rimg, -rw / 2, -rh); }
+        else { ctx.translate(Math.round(cx + r.x), Math.round(by + r.y - rh / 2)); ctx.rotate(r.rot); ctx.drawImage(rimg, -rw / 2, -rh / 2); }
+        ctx.restore();
+      }
+    } else {
+      // riding: lean into the turn; a drift throws the back end out and leans harder
+      const dk = G.driftK || 0, dd = G.driftDir || 1;
+      ctx.save(); ctx.translate(cx - dd * dk * 6, by); ctx.rotate(G.lean * 0.16 + dk * dd * 0.3); ctx.translate(-bw / 2 + G.lean * 6 + dk * dd * 4, -bh);
+      if (G.invuln > 0 && Math.floor(G.t * 8) % 2 === 0) ctx.globalAlpha = 0.7;
+      ctx.drawImage(img, 0, 0);
+      ctx.restore();
+    }
     // flying ice bags
     if (G.parts) for (const p of G.parts) {
       ctx.save(); ctx.translate(p.x, p.y); ctx.rotate(p.rot);
@@ -424,13 +453,6 @@
         for (let i = 0; i < 3; i++) { const r = rk[i]; if (!r) break; TXT(ctx, (i + 1) + ['ST', 'ND', 'RD'][i] + ' ' + (r.name + '   ').slice(0, 3) + ' ' + OB.pad(r.score, 7), rx, ry + 16 + i * 14, { size: 6, sy: 1.4, fill: i === 0 ? '#ffd800' : '#fff', outline: '#000', outlineW: 3 }); }
       }
     }
-    // controls in the left margin
-    const lx = 14;
-    if (ax > 150) {
-      TXT(ctx, G.touchMode ? 'FINGER LEFT / RIGHT' : 'ARROWS STEER', lx, H - 62, { size: 6, sy: 1.4, fill: '#9fd0ee', outline: '#000', outlineW: 3 });
-      TXT(ctx, G.touchMode ? 'STEERS  -  AUTO GAS' : 'UP GAS  DOWN BRAKE', lx, H - 48, { size: 6, sy: 1.4, fill: '#9fd0ee', outline: '#000', outlineW: 3 });
-      TXT(ctx, G.touchMode ? 'TWO FINGERS BRAKE' : 'M MUSIC  P PAUSE', lx, H - 34, { size: 6, sy: 1.4, fill: '#9fd0ee', outline: '#000', outlineW: 3 });
-    }
     if (G.touchMode && window.innerHeight > window.innerWidth) TXT(ctx, 'ROTATE YOUR PHONE FOR FULL SCREEN', W / 2, 16, { size: 7, sy: 1.4, fill: '#ffd800', outline: '#000', outlineW: 3, align: 'center' });
   };
   R.radio = function (G) {
@@ -512,13 +534,22 @@
     TXT(ctx, G.touchMode ? 'TAP A COURSE, THEN START' : 'LEFT / RIGHT : COURSE      ENTER : START', W / 2, H - 10, { size: 7, sy: 1.4, fill: '#fff', outline: '#000', outlineW: 3, align: 'center' });
   };
   R.countdown = function (G) {
-    const n = Math.ceil(G.countdown);
-    const label = n > 0 ? String(n) : 'GO!';
-    const k = 1 - (G.countdown % 1); const sc = n > 0 ? 1 + (1 - k) * 0.4 : 1.2;
+    const n = Math.max(1, Math.ceil(G.countdown));
+    const k = 1 - (G.countdown % 1); const sc = 1 + (1 - k) * 0.4;
     ctx.save(); ctx.translate(W / 2, 200); ctx.scale(sc, sc);
-    TXT(ctx, label, 0, 0, { size: 56, sy: 1.2, fill: '#ffffff', outline: '#000', outlineW: 10, align: 'center' });
+    TXT(ctx, String(n), 0, 0, { size: 56, sy: 1.2, fill: '#ffffff', outline: '#000', outlineW: 10, align: 'center' });
     ctx.restore();
-    if (G.touchMode) TXT(ctx, 'HOLD A FINGER LEFT OR RIGHT TO STEER   TWO FINGERS TO BRAKE', W / 2, 300, { size: 7, sy: 1.4, fill: '#fff', outline: '#000', outlineW: 3, align: 'center' });
+    // the controls live here now, not on the title screen
+    const l1 = G.touchMode ? 'FINGER LEFT / RIGHT STEERS   -   AUTO GAS   -   HOLD TWO FINGERS TO BRAKE' : 'ARROWS STEER   -   UP GAS   -   DOWN BRAKE';
+    const l2 = G.touchMode ? 'DOUBLE TAP WHILE TURNING HARD TO DRIFT' : 'SHIFT (OR DOUBLE TAP THE ARROW) WHILE TURNING HARD TO DRIFT';
+    TXT(ctx, l1, W / 2, 292, { size: 7, sy: 1.4, fill: '#fff', outline: '#000', outlineW: 3, align: 'center' });
+    TXT(ctx, l2, W / 2, 310, { size: 7, sy: 1.4, fill: '#ffd800', outline: '#000', outlineW: 3, align: 'center' });
+  };
+  R.go = function (G) {
+    const k = OB.clamp(G.goT / 0.9, 0, 1), sc = 1.2 + (1 - k) * 0.5;
+    ctx.save(); ctx.globalAlpha = Math.min(1, k * 3); ctx.translate(W / 2, 200); ctx.scale(sc, sc);
+    TXT(ctx, 'GO!', 0, 0, { size: 56, sy: 1.2, fill: '#ffffff', outline: '#000', outlineW: 10, align: 'center' });
+    ctx.restore();
   };
   R.gameover = function (G) {
     band(120, 200, 0.6);

@@ -9,7 +9,8 @@
     stageNo: 1, stageKey: 'charoenkrung', light: 'day', station: 0, hiScore: 0, msg: null, shake: 0, invuln: 0, bounce: 0,
     forkHint: null, wallCd: 0, countdown: 0, overReason: null, result: null, seed: 20240808, paused: false, route: [], cur: null, nextInfo: null, nextKey: null,
     muted: false, drawShift: -200, playerDX: 0, course: 0, touchMode: false,
-    wipe: 0, wipeDir: 1, parts: [], skidCd: 0, ranking: [], pendingRecord: null, nameEntry: null, smoke: [], smokeAcc: 0
+    wipe: 0, wipeDir: 1, parts: [], skidCd: 0, ranking: [], pendingRecord: null, nameEntry: null, smoke: [], smokeAcc: 0,
+    flip: null, rider: null, drift: 0, driftDir: 1, driftK: 0, marks: [], goT: 0
   };
   OB.G = G;
   G.cameraDepth = 1 / Math.tan((G.fov / 2) * Math.PI / 180);
@@ -26,13 +27,17 @@
 
   // ---------- input ----------
   const keys = { left: false, right: false, gas: false, brake: false };
-  let startPressed = false, tuneDir = 0;
+  let startPressed = false, tuneDir = 0, driftReq = false, lastKey = '', lastKeyT = 0;
   const KEYMAP = { ArrowLeft: 'left', a: 'left', A: 'left', ArrowRight: 'right', d: 'right', D: 'right', ArrowUp: 'gas', w: 'gas', W: 'gas', x: 'gas', X: 'gas', ArrowDown: 'brake', s: 'brake', S: 'brake', z: 'brake', Z: 'brake' };
   window.addEventListener('keydown', e => {
     if (e.repeat) { if (KEYMAP[e.key]) e.preventDefault(); return; }
     A.init(); A.unlock();
     if (G.mode === 'name') { nameKey(e); e.preventDefault(); return; }
     if (KEYMAP[e.key]) { keys[KEYMAP[e.key]] = true; e.preventDefault(); }
+    // drift: Shift / Space while steering hard, or a quick double tap of the steering key
+    const dirKey = KEYMAP[e.key] === 'left' || KEYMAP[e.key] === 'right' ? KEYMAP[e.key] : null;
+    if (dirKey) { const now = performance.now(); if (lastKey === dirKey && now - lastKeyT < 300) driftReq = true; lastKey = dirKey; lastKeyT = now; }
+    if (e.key === 'Shift' || (e.key === ' ' && G.mode === 'play')) driftReq = true;
     if (e.key === 'Enter' || e.key === ' ') { startPressed = true; e.preventDefault(); }
     if (e.key === 'ArrowLeft' || e.key === 'a') tuneDir -= 1; if (e.key === 'ArrowRight' || e.key === 'd') tuneDir += 1; // accumulate so fast double presses are not lost
     if (e.key === 'ArrowUp' && (G.mode === 'radio' || G.mode === 'course')) startPressed = true;
@@ -42,16 +47,18 @@
   window.addEventListener('keyup', e => { if (KEYMAP[e.key]) { keys[KEYMAP[e.key]] = false; e.preventDefault(); } });
   // Touch: no on-screen buttons. The bike accelerates by itself; steering follows the finger's horizontal
   // position (left of centre steers left, further out steers harder); two fingers brake. Menus: tap left / right / centre.
-  const touch = { steer: 0, active: false, fingers: 0 };
+  // A quick double tap (either the steering finger re-tapping, or a second finger tapping twice) while steering hard drifts.
+  const touch = { steer: 0, active: false, fingers: 0, twoT: 0 };
   const pointers = new Map();
+  let lastTapT = 0;
   function bindTouch() {
     const cv = document.getElementById('screen');
     G.touchMode = !!(window.matchMedia && window.matchMedia('(pointer: coarse)').matches);
     const upd = () => {
       touch.fingers = pointers.size;
       if (!pointers.size) { touch.active = false; touch.steer = 0; return; }
-      let sx = 0; for (const x of pointers.values()) sx += x;
-      const r = cv.getBoundingClientRect(), rel = (sx / pointers.size - r.left) / r.width - 0.5;
+      const first = pointers.values().next().value; // the first finger down steers; extra fingers only count
+      const r = cv.getBoundingClientRect(), rel = (first - r.left) / r.width - 0.5;
       touch.steer = OB.clamp(rel / 0.3, -1, 1); touch.active = true;
     };
     let swipeX = null;
@@ -60,7 +67,10 @@
       const r = cv.getBoundingClientRect(), ix = (e.clientX - r.left) / r.width * W, iy = (e.clientY - r.top) / r.height * H;
       const inBox = (b) => !!b && ix >= b.x && ix <= b.x + b.w && iy >= b.y && iy <= b.y + b.h;
       if (e.pointerType !== 'mouse') G.touchMode = true;
-      if (G.mode === 'play' || G.mode === 'countdown') { if (e.pointerType !== 'mouse') { pointers.set(e.pointerId, e.clientX); upd(); } }
+      if (G.mode === 'play' || G.mode === 'countdown') {
+        if (e.pointerType !== 'mouse') { pointers.set(e.pointerId, e.clientX); upd(); }
+        const now = performance.now(); if (G.mode === 'play' && now - lastTapT < 320) driftReq = true; lastTapT = now;
+      }
       else if (G.mode === 'radio') { // tap a station row (tap the selected one again to start), START button, or swipe
         swipeX = ix;
         if (inBox(R.hit.start)) startPressed = true;
@@ -97,11 +107,12 @@
     G.health = 100; G.ice = 100; G.score = 0; G.time = T.STAGES[G.stageKey].time + (G.stageNo > 1 ? 10 : 0);
     G.cars = []; G.msg = null; G.shake = 0; G.invuln = 0; G.forkHint = null; G.result = null; G.overReason = null; G.paused = false;
     G.wipe = 0; G.parts = []; G.skidCd = 0; G.smoke = []; G.smokeAcc = 0;
+    G.flip = null; G.rider = null; G.drift = 0; G.driftK = 0; G.marks = []; markLast = -1; G.goT = 0;
     for (let i = 0; i < 8; i++) spawnCar(60 + i * 40);
   }
   // ---------- tyre smoke ----------
-  function emitSmoke(dir) {
-    const cx = W / 2 + (G.drawShift || 0) + (G.playerDX || 0), by = 457 + (G.bounce || 0);
+  function emitSmoke(dir, ox) {
+    const cx = W / 2 + (G.drawShift || 0) + (G.playerDX || 0) + (ox || 0), by = 457 + (G.bounce || 0);
     // OutRun-style: a low cloud that spreads sideways along the road behind the wheel and never rises
     // arcade-style: a flat, ragged band of tiny pixel clusters spreading sideways along the road behind the wheel
     const side = dir !== 0 ? dir : (Math.random() < 0.5 ? -1 : 1);
@@ -116,6 +127,21 @@
       p.vx *= Math.max(0, 1 - 2.4 * dt); // slows down so the band piles up
       if (p.t >= p.life) G.smoke.splice(i, 1);
     }
+  }
+  // ---------- tyre marks ----------
+  // The road behind the rear wheel is only a sliver in this view (the bike sits on the bottom edge), so rubber fixed to the
+  // tarmac would vanish within a frame. Like the smoke band, the trail is a screen-space effect: points laid under the tyre
+  // slide sideways with the road (so a drift smears them out to the side) and recede slowly, fading as they go.
+  let markLast = -1;
+  function layMark(w) {
+    const cx = W / 2 + (G.drawShift || 0) + (G.playerDX || 0) - (G.driftDir || 1) * (G.driftK || 0) * 6, by = 454 + (G.bounce || 0);
+    G.marks.push({ x: cx, y: by, w, t: 0, start: G.t - markLast > 0.05 });
+    markLast = G.t;
+    if (G.marks.length > 80) G.marks.shift();
+  }
+  function updateMarks(dt, dpx) {
+    const flow = 30 + 90 * (G.speed / G.maxSpeed); // recedes a little faster at speed (still far slower than the road, on purpose)
+    for (let i = G.marks.length - 1; i >= 0; i--) { const p = G.marks[i]; p.t += dt; p.x -= dpx; p.y += flow * dt; if (p.t > 0.5) G.marks.splice(i, 1); }
   }
   // ---------- records / name entry ----------
   function qualifies(score) { return score >= 1000 && (G.ranking.length < 5 || score > G.ranking[G.ranking.length - 1].score); }
@@ -150,7 +176,31 @@
     const cx = W / 2 + (G.drawShift || 0) + (G.playerDX || 0), cy = 457 - 105;
     for (let i = 0; i < n; i++) G.parts.push({ x: cx + (Math.random() - 0.5) * 50, y: cy + (Math.random() - 0.5) * 30, vx: (Math.random() - 0.5) * 420, vy: -(220 + Math.random() * 260), rot: Math.random() * 6, vr: (Math.random() - 0.5) * 12, life: 1.5 });
   }
-  function wipeout(n) { G.wipe = 1; G.wipeDir = G.playerX > 0 ? -1 : 1; spawnParts(n); A.sfx('wipe'); }
+  // OutRun-style crash: the bike is thrown up and barrel-rolls across the road, bouncing lower each time, while the
+  // rider is flung off and lands sitting on the tarmac. Everything is in screen space around the bike's normal spot.
+  function wipeout(n) {
+    if (G.flip) return;
+    const dir = G.playerX > 0 ? -1 : 1; // tumbles back toward the middle of the road
+    G.flip = { t: 0, dir, x: 0, y: 0, vx: dir * 170, vy: -720, rot: 0, vr: dir * 9.5, bounces: 0, rest: 0 };
+    G.rider = { x: 0, y: -40, vx: -dir * 130 + (Math.random() - 0.5) * 50, vy: -480, rot: 0, vr: -dir * 7, down: false };
+    G.drift = 0; G.driftK = 0; G.invuln = 4; G.steer = 0; G.lean = 0;
+    spawnParts(n); A.sfx('wipe'); A.sfx('flip');
+  }
+  function updateFlip(dt) {
+    const f = G.flip; if (!f) return;
+    f.t += dt;
+    f.vy += 1500 * dt; f.x += f.vx * dt; f.y += f.vy * dt; f.rot += f.vr * dt;
+    if (f.y >= 0) {
+      f.y = 0;
+      if (f.vy > 60) { // bounce: lower, slower, less spin; a puff of dust each time
+        f.bounces++; f.vy = -f.vy * 0.5; f.vx *= 0.65; f.vr *= 0.6; G.shake = Math.max(G.shake, 0.6); A.sfx('bump');
+        for (let i = 0; i < 10; i++) emitSmoke(i % 2 ? 1 : -1, f.x);
+      } else { f.vy = 0; f.vx *= Math.max(0, 1 - 4 * dt); const up = Math.round(f.rot / (Math.PI * 2)) * Math.PI * 2; f.rot += (up - f.rot) * Math.min(1, dt * 10); f.rest += dt; }
+    }
+    const r = G.rider;
+    if (r && !r.down) { r.vy += 1400 * dt; r.x += r.vx * dt; r.y += r.vy * dt; r.rot += r.vr * dt; if (r.y >= 0 && r.vy > 0) { r.y = 0; r.down = true; r.rot = 0; } }
+    if (f.rest > 0.7 || f.t > 3.2) { G.flip = null; G.rider = null; G.invuln = 1.6; } // rider hops back on, bike blinks while getting going
+  }
   function updateParts(dt) {
     for (let i = G.parts.length - 1; i >= 0; i--) { const p = G.parts[i]; p.vy += 1100 * dt; p.x += p.vx * dt; p.y += p.vy * dt; p.rot += p.vr * dt; p.life -= dt; if (p.life <= 0 || p.y > H + 30) G.parts.splice(i, 1); }
   }
@@ -217,15 +267,17 @@
     A.sfx(kind === 'wall' || kind === 'median' ? 'bump' : 'crash');
     G.shake = 1; G.invuln = 1.3; G.bounce = 4;
     if (kind === 'car') {
-      if (car.oncoming) { G.speed *= 0.12; G.health -= 18; G.ice -= 8; wipeout(6); }
+      if (car.oncoming) { G.speed = 0; G.health -= 18; G.ice -= 8; wipeout(8); }
+      else if (G.speed - car.speed > G.maxSpeed * 0.55) { G.speed = 0; G.health -= 16; G.ice -= 7; wipeout(6); } // rear-ended at speed: over the bars
       else { G.speed = Math.min(G.speed, Math.max(0, car.speed * 0.45)); G.health -= 12; G.ice -= 5; spawnParts(2); }
       G.playerX += (G.playerX >= car.offset ? 1 : -1) * 0.12;
-    } else if (kind === 'sprite') { G.speed *= 0.18; G.health -= 20; G.ice -= 10; G.playerX += (G.playerX > 0 ? -1 : 1) * 0.18; wipeout(5); }
+    } else if (kind === 'sprite') { G.speed = 0; G.health -= 20; G.ice -= 10; G.playerX += (G.playerX > 0 ? -1 : 1) * 0.18; wipeout(8); }
     else if (kind === 'wall') { G.speed *= 0.4; G.health -= 8; G.ice -= 3; }
     else if (kind === 'median') { G.speed *= 0.3; G.health -= 8; G.ice -= 4; }
     if (G.health <= 0) { G.health = 0; gameOver('wreck'); }
   }
   function checkCollisions(seg) {
+    if (G.flip) return; // tumbling: nothing else can hit the bike
     const pz = G.position + G.playerZ, rw = seg.rw, RW = T.roadW;
     // hard edges: the pavement is rideable, but the railing / shopfront line at its outer edge is a wall (never into the river)
     const EDGE = 1.03; // bike centre; its outer side then just touches the railing, never beyond it
@@ -307,8 +359,10 @@
     if (G.wallCd > 0) G.wallCd -= dt;
     if (G.wipe > 0) G.wipe -= dt / 0.7;
     if (G.skidCd > 0) G.skidCd -= dt;
-    updateParts(dt); updateSmoke(dt);
+    if (G.goT > 0) G.goT -= dt;
+    updateParts(dt); updateSmoke(dt); updateFlip(dt);
     G.bounce *= 0.8;
+    const wantDrift = driftReq; driftReq = false;
     const mode = G.mode;
     if (mode === 'loading') return;
     if (mode === 'over' || (mode === 'play' && G.paused)) { G.speed = Math.max(0, G.speed - G.maxSpeed * dt * 0.6); if (mode === 'over') advance(dt, false); A.setEngine(0, false, false, false); return; }
@@ -333,11 +387,11 @@
       A.setEngine(G.speed / G.maxSpeed, false, false, A.ready());
       return;
     }
-    if (mode === 'countdown') {
+    if (mode === 'countdown') { // 3 - 2 - 1, three seconds flat; GO flashes over the first moments of play
       G.drawShift = 0;
       const before = Math.ceil(G.countdown); G.countdown -= dt; const after = Math.ceil(G.countdown);
-      if (after !== before) { if (after > 0) A.sfx('beep'); else if (after === 0) A.sfx('go'); }
-      if (G.countdown <= -0.7) { G.mode = 'play'; }
+      if (after !== before && after > 0) A.sfx('beep');
+      if (G.countdown <= 0) { G.mode = 'play'; G.goT = 0.9; A.sfx('go'); }
       G.speed = 0; A.setEngine(0.05 + (keys.gas ? 0.15 : 0), keys.gas, false, true);
       return;
     }
@@ -345,26 +399,39 @@
     const seg = T.findSegment(G.position + G.playerZ);
     const pct = G.speed / G.maxSpeed;
     const usingTouch = G.touchMode && touch.active;
-    const gas = mode === 'play' ? (keys.gas || (G.touchMode && touch.fingers < 2)) : false;
-    const brake = mode === 'play' ? (keys.brake || (G.touchMode && touch.fingers >= 2)) : true;
-    const steerIn = mode === 'play' ? (usingTouch ? touch.steer : ((keys.left ? -1 : 0) + (keys.right ? 1 : 0))) : 0;
-    G.steer += (steerIn - G.steer) * Math.min(1, dt * 9);
+    const flipping = !!G.flip;
+    if (touch.fingers >= 2) touch.twoT += dt; else touch.twoT = 0; // a held second finger brakes; quick taps do not
+    const gas = mode === 'play' && !flipping ? (keys.gas || (G.touchMode && touch.twoT < 0.18)) : false;
+    const brake = mode === 'play' && !flipping ? (keys.brake || (G.touchMode && touch.twoT >= 0.18)) : true;
+    const steerIn = mode === 'play' && !flipping ? (usingTouch ? touch.steer : ((keys.left ? -1 : 0) + (keys.right ? 1 : 0))) : 0;
+    // drift: double tap (or Shift) while steering hard at speed. Sharper turn, less push from the curve, some speed scrubbed.
+    if (wantDrift && mode === 'play' && !flipping && G.drift <= 0 && pct > 0.3 && Math.abs(steerIn) > 0.5) { G.drift = 1.1; G.driftDir = Math.sign(steerIn); G.score += 300; A.sfx('drift'); G.skidCd = 0.4; }
+    if (G.drift > 0) { G.drift -= dt; if (Math.abs(steerIn) < 0.3 || pct < 0.15 || Math.sign(steerIn) !== G.driftDir) G.drift = 0; }
+    const drifting = G.drift > 0;
+    G.driftK += ((drifting ? 1 : 0) - G.driftK) * Math.min(1, dt * (drifting ? 12 : 5));
+    // handling: quick to turn in, quicker to straighten up; less grip on the pavement; the curve pushes you outward
+    G.steer += (steerIn - G.steer) * Math.min(1, dt * (Math.abs(steerIn) > Math.abs(G.steer) ? 10 : 14));
     G.lean += ((G.steer * Math.min(1, pct * 2 + 0.2)) - G.lean) * Math.min(1, dt * 8);
+    const offroad = Math.abs(G.playerX) > 1.0 * seg.rw;
     const dx = pct > 0.01 ? dt * (0.35 + 2.1 * pct) : 0;
-    G.playerX += G.steer * dx;
-    G.playerX -= dx * pct * seg.curve * 0.25;
-    if (gas) G.speed += (G.maxSpeed / 3.4) * (1.2 - pct * 0.85) * dt;
+    const prevX = G.playerX;
+    G.playerX += G.steer * dx * (offroad ? 0.75 : 1) * (1 + 0.35 * G.driftK);
+    G.playerX -= dx * pct * seg.curve * 0.25 * (1 - 0.55 * G.driftK);
+    updateMarks(dt, (G.playerX - prevX) * T.roadW * 0.8 * (G.cameraDepth / G.playerZ) * K); // the road (and rubber on it) slides the other way as the camera follows
+    if (flipping) G.speed = Math.max(0, G.speed - G.maxSpeed * 2 * dt);
+    else if (gas) G.speed += (G.maxSpeed / 3.4) * (1.2 - pct * 0.85) * dt;
     else if (brake) G.speed -= G.maxSpeed * 0.85 * dt;
     else G.speed -= G.maxSpeed / 7 * dt;
-    const offroad = Math.abs(G.playerX) > 1.0 * seg.rw;
+    if (drifting) G.speed -= G.maxSpeed * 0.12 * dt; else if (pct > 0.8 && Math.abs(G.steer) > 0.85) G.speed -= G.maxSpeed * 0.04 * dt; // tyres scrub speed
     if (offroad) { if (G.speed > G.maxSpeed * 0.45) G.speed -= G.maxSpeed * 0.7 * dt; if (pct > 0.1) G.bounce = (Math.random() - 0.5) * 4 * pct; }
     G.speed = OB.clamp(G.speed, 0, G.maxSpeed);
-    // tyre smoke: burnout off the line, and drifting through corners at speed
-    const burnout = mode === 'play' && gas && pct < 0.3, drift = mode === 'play' && pct > 0.5 && Math.abs(G.steer) > 0.7;
-    if (burnout) G.smokeAcc += dt * 520; else if (drift) G.smokeAcc += dt * 240;
-    while (G.smokeAcc >= 1) { G.smokeAcc -= 1; emitSmoke(drift ? -Math.sign(G.steer) : 0); }
-    if (!burnout && !drift) G.smokeAcc = 0;
-    if (mode === 'play' && pct > 0.55 && Math.abs(G.steer) > 0.85 && G.skidCd <= 0) { A.sfx('skid'); G.skidCd = 0.6; }
+    // tyre smoke + rubber: burnout off the line and drifting lay marks; a hard corner at speed only smokes a little
+    const burnout = mode === 'play' && !flipping && gas && pct < 0.3, corner = mode === 'play' && !flipping && !drifting && pct > 0.6 && Math.abs(G.steer) > 0.85;
+    if (burnout) G.smokeAcc += dt * 520; else if (drifting) G.smokeAcc += dt * 460; else if (corner) G.smokeAcc += dt * 90;
+    while (G.smokeAcc >= 1) { G.smokeAcc -= 1; emitSmoke(drifting ? -G.driftDir : (corner ? -Math.sign(G.steer) : 0)); }
+    if (!burnout && !drifting && !corner) G.smokeAcc = 0;
+    if (burnout && pct > 0.005) layMark(5); else if (drifting) layMark(7);
+    if (mode === 'play' && G.skidCd <= 0 && (drifting || (pct > 0.55 && Math.abs(G.steer) > 0.85))) { A.sfx('skid'); G.skidCd = drifting ? 0.35 : 0.6; }
     if (mode === 'play') checkCollisions(seg);
     advance(dt, true);
     if (mode === 'play') {
@@ -390,7 +457,7 @@
   }
   function startRun() {
     const c = T.COURSES[G.course] || T.COURSES[0];
-    newGame(c.key, c.stageNo); G.mode = 'countdown'; G.countdown = 3.99; G.speed = 0; G.playerX = 0;
+    newGame(c.key, c.stageNo); G.mode = 'countdown'; G.countdown = 3; G.speed = 0; G.playerX = 0; A.sfx('beep');
   }
 
   // ---------- loop ----------
@@ -411,7 +478,7 @@
       case 'course': R.course(G); break;
       case 'name': R.name(G); break;
       case 'countdown': R.hud(G); R.countdown(G); break;
-      case 'play': R.hud(G); if (G.paused) { OB.text(R.ctx || document.getElementById('screen').getContext('2d'), 'PAUSE', W / 2, 200, { size: 24, sy: 1.3, fill: '#fff', outline: '#000', outlineW: 6, align: 'center' }); } break;
+      case 'play': R.hud(G); if (G.goT > 0) R.go(G); if (G.paused) { OB.text(R.ctx || document.getElementById('screen').getContext('2d'), 'PAUSE', W / 2, 200, { size: 24, sy: 1.3, fill: '#fff', outline: '#000', outlineW: 6, align: 'center' }); } break;
       case 'goal': R.hud(G); R.goal(G); break;
       case 'over': R.hud(G); R.gameover(G); break;
     }
@@ -420,10 +487,12 @@
   window.addEventListener('keydown', e => { if ((e.key === 'Enter' || e.key === ' ') && G.mode === 'over') leaveOver(); });
 
   // debug/testing hook: jump straight into a given stage
+  OB.debugCrash = function () { wipeout(8); }; OB.debugDrift = function () { driftReq = true; };
   OB.debugStage = function (key, no) {
     T.reset(); G.stageNo = no || 2; G.stageKey = key; G.route = ['charoenkrung', key]; G.nextKey = null; G.nextInfo = null;
     G.cur = buildStage(key, G.stageNo); G.light = T.THEMES[T.STAGES[key].theme].light;
     G.position = 0; G.playerX = -0.3; G.speed = G.maxSpeed * 0.5; G.cars = []; G.time = 90; G.mode = 'play'; G.drawShift = 0; G.smoke = []; G.parts = [];
+    G.flip = null; G.rider = null; G.drift = 0; G.driftK = 0; G.marks = []; markLast = -1; G.goT = 0;
     for (let i = 0; i < 8; i++) spawnCar(40 + i * 45);
   };
   // ---------- boot ----------

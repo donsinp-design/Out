@@ -12,9 +12,10 @@ and the route forks after every stage.
 * `dist/index.html` — single self-contained file (fonts and sprites inlined). Open it in any browser.
 * Or serve the repo root (`python3 -m http.server`) and open `index.html`.
 
-Controls: `← →` steer, `↑` gas, `↓` brake, `Enter`/`Space` start, `M` mute music, `P` pause.
-After the music select, a course select lets you start from any of the seven areas (Full Run starts at Charoen Krung).
-On touch devices there are no buttons: the bike accelerates by itself, a finger left or right of centre steers (further out steers harder), two fingers brake, and menus are tapped left / right / centre.
+Controls: `← →` steer, `↑` gas, `↓` brake, `Shift` (or a quick double tap of the steering arrow) while turning hard drifts, `Enter`/`Space` start, `M` mute music, `P` pause.
+After the music select, a course select lets you start from any of the seven areas (Full Run starts at Charoen Krung). The countdown is three seconds; the controls are shown during it, not on the title screen.
+On touch devices there are no buttons: the bike accelerates by itself, a finger left or right of centre steers (further out steers harder), holding a second finger brakes, a quick double tap while steering hard drifts, and menus are tapped.
+A drift turns in sharper, resists the curve's push and scrubs speed, with tyre smoke and a rubber trail. Hitting oncoming traffic, a roadside object or the back of a car at speed throws the bike into an OutRun-style barrel roll across the road while the rider is flung off; you lose a couple of seconds and some health, then ride on.
 
 ## Route map
 

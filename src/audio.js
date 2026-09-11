@@ -310,6 +310,10 @@
       case 'bump': { const n = noise(), f = ctx.createBiquadFilter(), g = ctx.createGain(); f.type = 'lowpass'; f.frequency.value = 400; g.gain.setValueAtTime(0.25, t); g.gain.exponentialRampToValueAtTime(0.001, t + 0.15); n.connect(f); f.connect(g); g.connect(sfxBus); n.start(t); n.stop(t + 0.2); break; }
       case 'horn': tone('square', 415, t, 0.35, 0.08, sfxBus); tone('square', 350, t, 0.35, 0.08, sfxBus); break;
       case 'skid': hit(t, 0.35, 0.16, 'bandpass', 2600, 2.5, sfxBus); break;
+      case 'drift': { const n = noise(), f = ctx.createBiquadFilter(), g = ctx.createGain(); f.type = 'bandpass'; f.Q.value = 3; f.frequency.setValueAtTime(3200, t); f.frequency.exponentialRampToValueAtTime(1500, t + 0.5);
+        g.gain.setValueAtTime(0.001, t); g.gain.exponentialRampToValueAtTime(0.3, t + 0.04); g.gain.exponentialRampToValueAtTime(0.001, t + 0.55); n.connect(f); f.connect(g); g.connect(sfxBus); n.start(t); n.stop(t + 0.6); break; }
+      case 'flip': { const n = noise(), f = ctx.createBiquadFilter(), g = ctx.createGain(); f.type = 'bandpass'; f.Q.value = 1.2; f.frequency.setValueAtTime(300, t); f.frequency.exponentialRampToValueAtTime(1800, t + 0.6);
+        g.gain.setValueAtTime(0.001, t); g.gain.exponentialRampToValueAtTime(0.22, t + 0.1); g.gain.exponentialRampToValueAtTime(0.001, t + 0.8); n.connect(f); f.connect(g); g.connect(sfxBus); n.start(t); n.stop(t + 0.85); break; }
       case 'wipe': { for (let i = 0; i < 4; i++) tone('square', 900 - i * 180, t + i * 0.07, 0.08, 0.08, sfxBus, { slide: 400 - i * 60 }); break; }
       case 'name': tone('square', 1200, t, 0.05, 0.08, sfxBus); break;
       case 'beep': tone('square', 880, t, 0.12, 0.12, sfxBus); break;
