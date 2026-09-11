@@ -10,7 +10,7 @@
     forkHint: null, wallCd: 0, countdown: 0, overReason: null, result: null, seed: 20240808, paused: false, route: [], cur: null, nextInfo: null, nextKey: null,
     muted: false, drawShift: -200, playerDX: 0, course: 0, touchMode: false,
     wipe: 0, wipeDir: 1, parts: [], skidCd: 0, ranking: [], pendingRecord: null, nameEntry: null, smoke: [], smokeAcc: 0,
-    flip: null, rider: null, drift: 0, driftDir: 1, driftK: 0, marks: [], goT: 0, cleanT: 0, pops: [],
+    flip: null, rider: null, drift: 0, driftDir: 1, driftK: 0, marks: [], goT: 0, pops: [], mult: 1, multStep: 1, multWhy: '', multBreak: 0, draft: 0,
     // sprite-driven rider / world state
     crash: null, bumpT: 0, braking: false, crouch: false, riderT: 0, vxLat: 0, flutter: 0,
     hopY: 0, hopV: 0, stackY: 0, stackV: 0, stackC: 0, splashT: 0, splashSide: 1,
@@ -23,7 +23,7 @@
   G.cameraDepth = 1 / Math.tan((G.fov / 2) * Math.PI / 180);
   G.playerZ = G.cameraDepth * G.cameraH * K / (457 - OB.HORIZON);
   const PLAYER_W = 480 / T.roadW;
-  const CARS = ['taxi', 'taxi', 'taxi_orange', 'taxi_blue', 'taxi_green', 'sedan', 'sedan', 'sedan_black', 'sedan_red', 'green', 'green_yellow', 'green_purple', 'truck', 'pickup', 'pickup_w'];
+  const CARS = ['taxi', 'taxi', 'taxi_orange', 'taxi_blue', 'taxi_green', 'sedan', 'sedan', 'sedan_black', 'sedan_red', 'green', 'green_yellow', 'green_purple', 'truck', 'pickup', 'pickup_w', 'moto', 'moto', 'moto', 'moto'];
   const ONCOMING = []; // no traffic comes the other way; every theme's oncoming rate is 0 so all lanes run with us
   const store = { get(k, d) { try { const v = localStorage.getItem(k); return v === null ? d : JSON.parse(v); } catch (e) { return d; } }, set(k, v) { try { localStorage.setItem(k, JSON.stringify(v)); } catch (e) { } } };
   G.ranking = store.get('ob_ranking', []); if (!Array.isArray(G.ranking)) G.ranking = [];
@@ -182,7 +182,7 @@
     G.light = T.THEMES[T.STAGES[G.stageKey].theme].light;
     G.position = 0; G.playerX = 0; G.speed = 0; G.steer = 0; G.lean = 0; G.bgOffset = 0;
     G.health = 100; G.ice = 100; G.score = 0; G.time = T.STAGES[G.stageKey].time + (G.stageNo > 1 ? 10 : 0);
-    G.cars = []; G.msg = null; G.shake = 0; G.invuln = 0; G.forkHint = null; G.result = null; G.overReason = null; G.paused = false; G.cleanT = 0;
+    G.cars = []; G.msg = null; G.shake = 0; G.invuln = 0; G.forkHint = null; G.result = null; G.overReason = null; G.paused = false; G.mult = 1; G.multStep = 1; G.multBreak = 0; G.draft = 0;
     G.wipe = 0; G.parts = []; G.skidCd = 0; G.smoke = []; G.smokeAcc = 0; G.pops = [];
     G.flip = null; G.rider = null; G.drift = 0; G.driftK = 0; G.marks = []; markLast = -1; G.goT = 0;
     for (let i = 0; i < 8; i++) spawnCar(60 + i * 40);
@@ -219,6 +219,70 @@
   function updateMarks(dt, dpx) {
     const flow = 30 + 90 * (G.speed / G.maxSpeed); // recedes a little faster at speed (still far slower than the road, on purpose)
     for (let i = G.marks.length - 1; i >= 0; i--) { const p = G.marks[i]; p.t += dt; p.x -= dpx; p.y += flow * dt; if (p.t > 0.5) G.marks.splice(i, 1); }
+  }
+  // ---------- horns ----------
+  // Traffic leans on the horn when the bike crowds it: cutting across a bonnet, sitting in a blind spot, or a hit.
+  // Rate-limited per vehicle and globally, so heavy traffic never turns into a wall of noise.
+  let hornCd = 0;
+  function horn(c, urgency) {
+    if (hornCd > 0) return;
+    if (c) { if (c.hornT > 0) return; c.hornT = 2.2 + Math.random() * 2; }
+    hornCd = 0.28 + Math.random() * 0.25;
+    A.sfx('horn');
+    if (urgency > 0.8 && Math.random() < 0.5) setTimeout(() => A.sfx('horn'), 150); // a second blast when it is close
+  }
+  // any vehicle the bike is crowding from behind or alongside sounds off
+  function proximityHorns(dt, G) {
+    const pz = G.position + G.playerZ, RW = T.roadW, pct = G.speed / G.maxSpeed;
+    for (const c of G.cars) {
+      if (c.hornT > 0) { c.hornT -= dt; continue; }
+      const dz = c.z - pz; if (dz < -700 || dz > 1500) continue;
+      const cseg = T.findSegment(c.z);
+      const halfSum = (PLAYER_W + c.spr.w / RW) / 2, lat = Math.abs(G.playerX - c.offset * cseg.rw);
+      if (lat > halfSum * 1.5) continue;
+      const behind = dz > 140 && dz < 900 && pct > 0.5 && G.speed > c.speed * 1.15;  // tailgating it
+      const beside = Math.abs(dz) < 260 && lat < halfSum * 1.15;                      // squeezing alongside
+      if (behind || beside) horn(c, beside ? 0.9 : 0.5);
+    }
+  }
+  // ---------- combo multiplier ----------
+  // One live multiplier feeds every score the run earns. It climbs while the riding is good — flat out, drifting,
+  // tucked in a slipstream, and simply not taking damage — and drops straight back to 1.00 on any hit, so the
+  // reward is continuous rather than a lump sum on a timer.
+  const MULT_MAX = 9.99;
+  function multGain(G, pct) {
+    let g = 0.45;                                    // clean riding, the base rate
+    if (pct > 0.96) g += 1.05;                       // held at top speed
+    if (G.drift > 0) g += 1.15;
+    if (G.draft > 0.25) g += 1.1 * G.draft;
+    return g;
+  }
+  function multLabel(G, pct) {
+    if (G.draft > 0.25) return 'DRAFT';
+    if (G.drift > 0) return 'DRIFT';
+    if (pct > 0.96) return 'MAX SPEED';
+    return 'NO DAMAGE';
+  }
+  G.breakCombo = function (hard) {
+    if (G.mult > 1.35) { G.multBreak = 0.7; pop('COMBO LOST', '#ff6a5a'); }
+    G.mult = 1; G.multStep = 1;
+  };
+  // ---------- slipstream ----------
+  // Sitting square behind a vehicle and close to it pulls you along: free speed for a risky line.
+  function draftAmount(G) {
+    const pz = G.position + G.playerZ, RW = T.roadW; let best = 0;
+    for (const c of G.cars) {
+      const dz = c.z - pz;
+      if (dz < 140 || dz > 1600) continue;                       // ahead of us, not already touching
+      const cseg = T.findSegment(c.z);
+      const halfSum = (PLAYER_W + c.spr.w / RW) / 2, lat = Math.abs(G.playerX - c.offset * cseg.rw);
+      const window = halfSum * 1.3;
+      if (lat > window) continue;                                // has to be lined up behind it
+      const near = 1 - (dz - 140) / 1460, line = 1 - lat / window;
+      const size = Math.min(1.25, c.spr.w / 940);                // a truck punches a bigger hole in the air
+      best = Math.max(best, near * line * size);
+    }
+    return Math.min(1, best);
   }
   // ---------- online leaderboard ----------
   // Published as an artifact, the page gets a shared document store, so the board is world-wide with no account,
@@ -347,6 +411,7 @@
       const pool = th.oncoming > 0 ? all.slice(0, all.length - 1) : all;
       lane = pool[Math.floor(rng() * pool.length)];
       spr = OB.SPR[CARS[Math.floor(rng() * CARS.length)]]; speed = G.maxSpeed * (th.min + rng() * (th.max - th.min));
+      if (spr.moto) speed = G.maxSpeed * (0.72 + rng() * 0.24);   // riders filter through far quicker than the cars
     }
     // avoid stacking
     for (const c of G.cars) if (Math.abs(c.z - segIdx * segLen) < 8 * segLen && Math.abs(c.offset - lane) < 0.4) return false;
@@ -363,7 +428,7 @@
       if (c.z < G.position - 30 * segLen || c.z > pz + 700 * segLen) { G.cars.splice(i, 1); continue; }
       if (c.z > pz) ahead++;
       // overtake bonus
-      if (!c.oncoming && !c.passed && c.z < pz - 200 && G.mode === 'play') { c.passed = true; G.score += 300; }
+      if (!c.oncoming && !c.passed && c.z < pz - 200 && G.mode === 'play') { c.passed = true; G.score += Math.round(300 * G.mult); }
       // lane AI (same direction): avoid slower car ahead in same lane. A lane change is announced first:
       // indicator on and a small drift toward the line for a moment, then the move.
       if (c.brake > 0) c.brake -= dt;
@@ -376,7 +441,8 @@
             const cand = all.filter(l => Math.abs(l - c.offset) > 0.2 && !(th.oncoming > 0 && l === last));
             let best = null;
             for (const l of cand) { let free = true; for (const q of G.cars) if (q !== c && Math.abs(q.z - c.z) < 30 * segLen && Math.abs(q.offset - l) < 0.4) free = false; if (free) { best = l; break; } }
-            if (best !== null) { if (!c.intent) c.intent = { lane: best, t: 0 }; }
+            if (best !== null) { if (!c.intent) c.intent = { lane: best, t: c.spr.moto ? 0.55 : 0 }; } // riders dive for the gap
+            else if (c.spr.moto) { /* a bike just filters past rather than queueing */ }
             else { if (c.speed > o.speed * 0.95) c.brake = 0.5; c.speed = Math.max(o.speed * 0.95, G.maxSpeed * 0.15); }
           }
         }
@@ -396,7 +462,8 @@
     if (kind === 'wall' || kind === 'median') { if (G.wallCd > 0) return; G.wallCd = 0.9; }
     else if (G.invuln > 0) return;
     A.sfx(kind === 'wall' || kind === 'median' ? 'bump' : 'crash');
-    G.shake = 1; G.invuln = 1.3; G.bounce = 4; G.cleanT = 0;
+    if (kind === 'car') { hornCd = 0; horn(car && car.spr ? car : null, 1); }   // whoever you hit lays on it
+    G.shake = 1; G.invuln = 1.3; G.bounce = 4; G.breakCombo();
     if (kind === 'car') {
       const carX = car.offset * T.findSegment(car.z).rw;
       if (car.oncoming) { G.speed = 0; G.health -= 18; G.ice -= 8; wipeout(3, carX); }
@@ -453,7 +520,9 @@
             const big = c.spr.w >= 1100;
             A.sfx('whoosh'); G.shake = Math.max(G.shake, big ? 0.3 : 0.2); G.bumpT = 0.35; G.flutter = 1;
             G.playerX += (G.playerX >= c.offset * cseg.rw ? 1 : -1) * (big ? 0.03 : 0.02); G.stackKick(big ? 0.5 : 0.35);
-            const pts = c.oncoming ? 600 : 300; G.score += pts; pop('NEAR MISS +' + pts, c.oncoming ? '#ff6a5a' : '#ffd800');
+            const pts = Math.round((c.oncoming ? 600 : 300) * G.mult); G.score += pts;
+          pop('NEAR MISS +' + pts, c.oncoming ? '#ff6a5a' : '#ffd800');
+          horn(c, 0.9);                                    // they lean on it as you cut past
           }
         }
       }
@@ -579,7 +648,7 @@
     let askDrift = wantDrift;
     if (G.touchMode && touch.fingers === 2 && mode === 'play') { if (G.drift > 0 && Math.sign(steerIn) === G.driftDir) G.drift = Math.max(G.drift, 0.3); else askDrift = true; }
     // drift: second finger / Shift while steering hard at speed. Sharper turn, less push from the curve, some speed scrubbed.
-    if (askDrift && mode === 'play' && !flipping && G.drift <= 0 && pct > 0.3 && Math.abs(steerIn) > 0.5) { G.drift = 1.1; G.driftDir = Math.sign(steerIn); G.score += 300; A.sfx('drift'); G.skidCd = 0.4; }
+    if (askDrift && mode === 'play' && !flipping && G.drift <= 0 && pct > 0.3 && Math.abs(steerIn) > 0.5) { G.drift = 1.1; G.driftDir = Math.sign(steerIn); G.score += Math.round(300 * G.mult); A.sfx('drift'); G.skidCd = 0.4; }
     if (G.drift > 0) { G.drift -= dt; if (Math.abs(steerIn) < 0.3 || pct < 0.15 || Math.sign(steerIn) !== G.driftDir) G.drift = 0; }
     const drifting = G.drift > 0;
     G.driftK += ((drifting ? 1 : 0) - G.driftK) * Math.min(1, dt * (drifting ? 12 : 5));
@@ -599,12 +668,13 @@
     G.riderT += dt * (3 + 9 * pct + 6 * Math.max(0, G.flutter));
     G.cam.lean += ((-G.steer * 3) - G.cam.lean) * Math.min(1, dt * 6);
     if (flipping) G.speed = Math.max(0, G.speed - G.maxSpeed * 2 * dt);
-    else if (gas) G.speed += (G.maxSpeed / 3.4) * (1.2 - pct * 0.85) * dt;
+    else if (gas) G.speed += (G.maxSpeed / 3.4) * (1.2 - pct * 0.85) * dt * (1 + 0.55 * (G.draft || 0)); // the tow pulls harder than the engine alone
     else if (brake) G.speed -= G.maxSpeed * 0.85 * dt;
     else G.speed -= G.maxSpeed / 7 * dt;
     if (drifting) G.speed -= G.maxSpeed * 0.12 * dt; else if (pct > 0.8 && Math.abs(G.steer) > 0.85) G.speed -= G.maxSpeed * 0.04 * dt; // tyres scrub speed
     if (offroad) { if (G.speed > G.maxSpeed * 0.45) G.speed -= G.maxSpeed * 0.7 * dt; if (pct > 0.1) { G.bounce = (Math.random() - 0.5) * 4 * pct; if (Math.random() < dt * 3) { G.bumpT = 0.2; G.stackKick(0.4 * pct); } } }
-    G.speed = OB.clamp(G.speed, 0, G.maxSpeed);
+    // a slipstream lets you run past your own top speed while you stay in it
+    G.speed = OB.clamp(G.speed, 0, G.maxSpeed * (1 + 0.07 * (G.draft || 0)));
     const accel = (G.speed - speedPrev) / dt;
     G.crouch = !flipping && ((gas && accel > G.maxSpeed * 0.12 && pct < 0.5) || pct > 0.9);
     G.cam.pitch += (((gas && accel > G.maxSpeed * 0.1 && pct < 0.7) ? 2 : 0) - G.cam.pitch) * Math.min(1, dt * 8);
@@ -623,10 +693,20 @@
       G.ice -= dt * (100 / 290) * (pct < 0.08 ? 1.6 : 1);
       if (G.ice <= 0) { G.ice = 0; gameOver('ice'); return; }
       if (G.ice < 25 && Math.floor(G.t * 2) !== Math.floor((G.t - dt) * 2) && Math.floor(G.t * 2) % 4 === 0) A.sfx('melt');
-      G.score += pct * dt * 2000;
-      // clean-riding streak: every 10 seconds without a crash, a top-up and a score bonus; resets on any crash
-      G.cleanT += dt;
-      if (G.cleanT >= 10) { G.cleanT -= 10; G.health = Math.min(100, G.health + 6); G.ice = Math.min(100, G.ice + 8); G.score += 1000; say('NO DAMAGE', 'ไม่มีความเสียหาย 10 วินาที  ·  +1000', 1.8, '#7CFF7C', 14); A.sfx('check'); }
+      if (hornCd > 0) hornCd -= dt;
+      proximityHorns(dt, G);
+      // the multiplier climbs with the riding and every point earned is scaled by it
+      G.draft = G.draft + (draftAmount(G) - G.draft) * Math.min(1, dt * 6);
+      G.mult = Math.min(MULT_MAX, G.mult + multGain(G, pct) * dt * 0.11);
+      G.multWhy = multLabel(G, pct);
+      if (G.multBreak > 0) G.multBreak -= dt;
+      G.score += pct * dt * 2000 * G.mult;
+      // each whole step of the multiplier is worth a breather, in place of the old flat bonus on a timer
+      if (G.mult >= G.multStep + 1) {
+        G.multStep = Math.floor(G.mult);
+        G.health = Math.min(100, G.health + 4); G.ice = Math.min(100, G.ice + 5);
+        pop(G.multStep.toFixed(0) + 'x ' + G.multWhy, '#7CFF7C'); A.sfx('check');
+      }
       progress(seg);
     } else if (mode === 'goal') {
       G.goalT += dt;
@@ -679,7 +759,7 @@
     T.reset(); WD.clear(); G.stageNo = no || 2; G.stageKey = key; G.route = ['charoenkrung', key]; G.nextKey = null; G.nextInfo = null;
     G.cur = buildStage(key, G.stageNo); G.light = T.THEMES[T.STAGES[key].theme].light;
     G.position = 0; G.playerX = -0.3; G.speed = G.maxSpeed * 0.5; G.cars = []; G.time = 90; G.mode = 'play'; G.drawShift = 0; G.smoke = []; G.parts = [];
-    G.flip = null; G.rider = null; G.drift = 0; G.driftK = 0; G.marks = []; markLast = -1; G.goT = 0; G.crash = null; G.cleanT = 0; G.pops = [];
+    G.flip = null; G.rider = null; G.drift = 0; G.driftK = 0; G.marks = []; markLast = -1; G.goT = 0; G.crash = null; G.pops = []; G.mult = 1; G.multStep = 1; G.draft = 0;
     for (let i = 0; i < 8; i++) spawnCar(40 + i * 45);
   };
   // Belt and braces beyond the CSS (-webkit-touch-callout etc. on #screen): some WebKit versions still start the

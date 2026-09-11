@@ -472,11 +472,41 @@
     return c;
   }
 
+  // Rider portrait by condition: the helmet cracks, then the face is cut and bleeding. Drawn over the one photo so
+  // the damage lines up with the art rather than needing three separate cut-outs.
+  function portraits() {
+    const src = IMG.portrait, W = src.width, H = src.height;
+    const make = (stage) => {
+      const c = mk(W, H), g = c.getContext('2d');
+      g.drawImage(src, 0, 0);
+      if (stage === 0) return c;
+      g.lineCap = 'round';
+      // cracked helmet: a few splits running off the crown
+      g.strokeStyle = 'rgba(20,22,30,0.92)'; g.lineWidth = 1.4;
+      const cracks = [[[20, 8], [24, 14], [21, 19], [27, 24]], [[33, 7], [31, 13], [36, 17]], [[13, 12], [17, 17]]];
+      for (const path of cracks) { g.beginPath(); g.moveTo(path[0][0], path[0][1]); for (let i = 1; i < path.length; i++) g.lineTo(path[i][0], path[i][1]); g.stroke(); }
+      g.strokeStyle = 'rgba(210,220,235,0.5)'; g.lineWidth = 0.7;
+      g.beginPath(); g.moveTo(21, 9); g.lineTo(25, 15); g.stroke();
+      // a scuff across the shell
+      g.fillStyle = 'rgba(232,236,245,0.35)'; g.fillRect(15, 10, 9, 2);
+      if (stage === 1) return c;
+      // bleeding: a cut on the brow and a run down the cheek
+      g.fillStyle = 'rgba(150,18,18,0.95)';
+      g.fillRect(30, 26, 6, 2); g.fillRect(31, 28, 2, 6); g.fillRect(31, 34, 2, 4);
+      g.fillRect(18, 31, 4, 2); g.fillRect(19, 33, 2, 3);
+      g.fillStyle = 'rgba(200,40,40,0.75)'; g.fillRect(33, 29, 1, 8);
+      // split lip
+      g.fillStyle = 'rgba(120,14,14,0.9)'; g.fillRect(24, 40, 5, 2);
+      return c;
+    };
+    OB.PORTRAITS = [make(0), make(1), make(2)];
+  }
   // ---------- registry ----------
   // w = world width (road half width = 1800 units ≈ 3.4 m per 1000)
   OB.SPR = {};
   OB.buildSprites = function () {
     const S = OB.SPR;
+    portraits();
     const rng = OB.rng(1986);
     const add = (name, img, w, extra) => { S[name] = Object.assign({ img, w, h: w * img.height / img.width, name }, extra || {}); return S[name]; };
     // a frame of the sprite atlas as its own canvas (for sprites that go through the static sprite path)
@@ -484,6 +514,7 @@
     OB.frameCanvas = FC;
     // vehicles
     add('bike', IMG.bike, 480);
+    add('moto', IMG.bike, 430, { car: true, moto: true }); // another delivery rider, weaving through at speed
     // Same-direction traffic comes from the sprite sheet's rear views. The old photo cut-outs of the cars were
     // sliced by the crop (the taxi lost the bottom of its wheels and the top of its roof), which is what read as
     // cars being cut off; the sheet versions are whole. Colour variants are hue-rotated copies of the one taxi so

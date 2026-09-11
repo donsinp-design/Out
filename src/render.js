@@ -439,8 +439,9 @@
   }
   R.hud = function (G) {
     const IMG = OB.IMG;
-    // portrait
-    ctx.drawImage(IMG.portrait, 23, 14);
+    // portrait: unhurt, cracked helmet, then bleeding
+    const faces = OB.PORTRAITS;
+    ctx.drawImage(faces ? faces[G.health > 66 ? 0 : G.health > 33 ? 1 : 2] : IMG.portrait, 23, 14);
     TXT(ctx, 'HEALTH', 80, 34, { size: 7, sy: 1.8, fill: '#fff', outline: '#000', outlineW: 3 });
     bar(127, 22, 12, 4, 1, 13, Math.ceil(G.health / 100 * 12), '#ff0e00', '#ff6a5a', '#3a0806');
     TXT(ctx, 'ICE', 80, 52, { size: 7, sy: 1.8, fill: '#e9fbff', outline: '#000', outlineW: 3 });
@@ -453,6 +454,16 @@
     // score
     TXT(ctx, 'SCORE', 622, 34, { size: 12, sy: 1.7, fill: '#ff37a8', outline: '#000', outlineW: 6, outline2: '#fff', outline2W: 3 });
     TXT(ctx, OB.pad(G.score, 7), 704, 34, { size: 12, sy: 1.7, fill: '#fff', outline: '#000', outlineW: 5 });
+    // live multiplier, under the score, with what is feeding it
+    if (G.mode === 'play' || G.mode === 'countdown') {
+      const m = G.mult || 1, hot = m >= 2, brk = (G.multBreak || 0) > 0;
+      const col = brk ? '#ff6a5a' : m >= 4 ? '#ff37a8' : hot ? '#ffd800' : '#cfd3da';
+      const sc = 1 + Math.min(0.35, Math.max(0, m - 1) * 0.05) + (brk ? 0.25 : 0);
+      ctx.save(); ctx.translate(762, 56); ctx.scale(sc, sc);
+      TXT(ctx, m.toFixed(2) + 'x', 0, 0, { size: 11, sy: 1.5, fill: col, outline: '#000', outlineW: 5, align: 'center' });
+      ctx.restore();
+      if (G.multWhy && m > 1.2 && !brk) TXT(ctx, G.multWhy, 762, 74, { size: 6, sy: 1.4, fill: col, outline: '#000', outlineW: 3, align: 'center' });
+    }
     // pause button (top-right corner)
     if (G.mode === 'play') {
       const bx = W - 40, by = 8, bw = 32, bh = 28;
