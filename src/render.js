@@ -265,24 +265,32 @@
     ctx.restore();
   }
 
+  // smoke cluster shapes: [dx, dy, grey] in 2px cells; grey cells sit low for the shaded underside
+  const PUFFS = [
+    [[0, 0, 0], [1, 0, 0], [-1, 0, 0], [0, -1, 0], [0, 1, 1]],
+    [[0, 0, 0], [1, 0, 0], [-1, 0, 0], [0, -1, 0], [1, -1, 0], [0, 1, 1], [1, 1, 1], [-1, 1, 1]],
+    [[0, 0, 0], [1, 0, 0], [2, 0, 0], [-1, 0, 0], [0, -1, 0], [1, -1, 0], [0, 1, 1], [1, 1, 1], [2, 1, 1]],
+    [[0, 0, 0], [1, 0, 0], [0, 1, 1]],
+    [[0, 0, 0], [-1, 0, 0], [1, 0, 0], [-2, 0, 0], [2, 0, 1], [0, -1, 0], [-1, 1, 1], [1, 1, 1]],
+    [[0, 0, 0], [1, 0, 0], [0, -1, 0], [1, -1, 0], [-1, 0, 1], [2, 0, 1], [0, 1, 1], [1, 1, 1]]
+  ];
   function drawPlayer(G) {
     const img = OB.IMG.bike; const bw = img.width, bh = img.height;
     const bounce = G.bounce || 0;
     const cx = Math.round(W / 2 + (G.drawShift || 0) + (G.playerDX || 0)), by = 457 + bounce;
     // shadow
     ctx.fillStyle = 'rgba(0,0,0,0.35)'; ctx.beginPath(); ctx.ellipse(cx + 2, by - 6, bw * 0.42, 7, 0, 0, Math.PI * 2); ctx.fill();
-    // tyre smoke: a dense, low cloud bank behind the wheel (grey underside first, then the white mass on top)
+    // tyre smoke: flat ragged band of 2px pixel clusters, white with grey speckle, dithering out (no soft fades)
     if (G.smoke && G.smoke.length) {
-      const alphaOf = (p) => { const k = p.t / p.life; return k < 0.6 ? 1 : 1 - (k - 0.6) / 0.4; };
-      for (let pass = 0; pass < 2; pass++) {
-        ctx.fillStyle = pass === 0 ? '#b9bcc4' : '#f7f8fa';
-        for (const p of G.smoke) {
-          ctx.globalAlpha = alphaOf(p) * (pass === 0 ? 0.95 : 1);
-          const r = pass === 0 ? p.r : p.r * 0.9, x = Math.round(p.x), y = Math.round(p.y) + (pass === 0 ? 3 : -1);
-          ctx.beginPath(); ctx.ellipse(x, y, r, r * 0.72, 0, 0, Math.PI * 2); ctx.fill();
+      const C = 2;
+      for (const p of G.smoke) {
+        const k = p.t / p.life, keep = k < 0.65 ? 1 : 1 - (k - 0.65) / 0.35;
+        const x = Math.round(p.x / C) * C, y = Math.round(p.y / C) * C, cells = PUFFS[p.seed % PUFFS.length];
+        for (let i = 0; i < cells.length; i++) {
+          if ((((i * 7 + p.seed) % 10) / 10) > keep) continue;
+          const c = cells[i]; ctx.fillStyle = c[2] ? '#c8c9cc' : '#f4f4f5'; ctx.fillRect(x + c[0] * C, y + c[1] * C, C, C);
         }
       }
-      ctx.globalAlpha = 1;
     }
     // wipeout: the bike kicks up and tilts hard for a moment
     const wp = G.wipe > 0 ? Math.sin((1 - G.wipe) * Math.PI) : 0;
