@@ -219,7 +219,7 @@
   function checkCollisions(seg) {
     const pz = G.position + G.playerZ, rw = seg.rw, RW = T.roadW;
     // hard edges: the pavement is rideable, but the railing / shopfront line at its outer edge is a wall (never into the river)
-    const EDGE = 1.09;
+    const EDGE = 1.03; // bike centre; its outer side then just touches the railing, never beyond it
     if (Math.abs(G.playerX) > EDGE * rw) { G.playerX = Math.sign(G.playerX) * EDGE * rw; if (G.speed > G.maxSpeed * 0.2) G.speed *= 0.97; crash('wall'); }
     // median
     if (seg.median > 0) {
