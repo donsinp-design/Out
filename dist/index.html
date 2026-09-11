@@ -2832,28 +2832,30 @@ window.OB = window.OB || {};
     for (const c of G.cars) {
       const dz = c.z - pz;
       const cseg = T.findSegment(c.z);
-      // Near-dodge tracking: a single-frame "is the gap in this thin band right now" check can't reliably see a
-      // close pass, because the lateral speed during a real weave (or a fast car itself) covers more ground per
-      // frame than the band is wide, jumping straight from "clearly clear" to "already touching" between two
-      // frames. So instead the closest clearance reached over the whole encounter is tracked every frame the
-      // vehicle is nearby (clearance measured from the same crash boundary the collision check below uses), and
-      // the verdict — a clean near miss worth a bonus, or a touch that doesn't count — is settled once the
-      // vehicle has fully dropped behind. Bigger vehicles keep their old wider flinch; oncoming traffic pays more.
-      if (!c.whooshed && Math.abs(dz) < segLen * 1.2) {
-        const halfSum = (PLAYER_W + c.spr.w / RW) / 2, crashHalf = halfSum * 0.8;
-        const clearance = Math.abs(G.playerX - c.offset * cseg.rw) - crashHalf;
-        if (clearance < 0) c.everHit = true;
-        else if (c.minClear === undefined || clearance < c.minClear) c.minClear = clearance;
-      }
-      if (!c.whooshed && dz < -segLen * 0.6 && c.minClear !== undefined) {
-        c.whooshed = true;
-        if (!c.everHit && c.minClear < (PLAYER_W + c.spr.w / RW) * 0.25 && Math.abs(G.speed - c.speed) > G.maxSpeed * 0.2) {
-          const big = c.spr.w >= 1100;
-          A.sfx('whoosh'); G.shake = Math.max(G.shake, big ? 0.3 : 0.2); G.bumpT = 0.35; G.flutter = 1;
-          G.playerX += (G.playerX >= c.offset * cseg.rw ? 1 : -1) * (big ? 0.03 : 0.02); G.stackKick(big ? 0.5 : 0.35);
-          G.score += c.oncoming ? 600 : 300;
+      const lat = Math.abs(G.playerX - c.offset * cseg.rw);
+      // Near dodge, measured at the exact moment of passing. Sampling the gap once per frame cannot see this at
+      // all: at racing speed the bike covers the whole few-hundred-unit passing zone in two or three frames, so
+      // most vehicles are never sampled beside the bike even once, and the closest point of a pass that is
+      // sampled falls between frames. Instead watch for the frame where the vehicle crosses from ahead of the
+      // bike to behind it (or the reverse, when a faster one comes past) and interpolate the lateral gap at the
+      // crossing itself, which does not depend on the frame rate. A gap inside the contact boundary means they
+      // touched, so it pays nothing. Bigger vehicles keep the wider flinch; oncoming traffic pays more.
+      if (!c.whooshed && c.pdz !== undefined && (c.pdz > 0) !== (dz > 0)) {
+        const span = c.pdz - dz;
+        if (span > 0 && span < segLen * 10) { // a sane one-frame step, not a gap left by the crash freeze
+          c.whooshed = true;
+          const gap = c.plat + (lat - c.plat) * OB.clamp(c.pdz / span, 0, 1);
+          const halfSum = (PLAYER_W + c.spr.w / RW) / 2, crashHalf = halfSum * 0.8;
+          const clearance = gap - crashHalf;
+          if (clearance > 0 && clearance < halfSum) {
+            const big = c.spr.w >= 1100;
+            A.sfx('whoosh'); G.shake = Math.max(G.shake, big ? 0.3 : 0.2); G.bumpT = 0.35; G.flutter = 1;
+            G.playerX += (G.playerX >= c.offset * cseg.rw ? 1 : -1) * (big ? 0.03 : 0.02); G.stackKick(big ? 0.5 : 0.35);
+            G.score += c.oncoming ? 600 : 300;
+          }
         }
       }
+      c.pdz = dz; c.plat = lat;
       if (dz < -segLen * 0.6 || dz > segLen * 1.4) continue;
       if (OB.overlap(G.playerX, PLAYER_W, c.offset * cseg.rw, c.spr.w / RW, 0.8)) {
         if (c.oncoming) { crash('car', c); c.z = pz + segLen * 2; return; }
