@@ -102,11 +102,18 @@
   // ---------- tyre smoke ----------
   function emitSmoke(dir) {
     const cx = W / 2 + (G.drawShift || 0) + (G.playerDX || 0), by = 457 + (G.bounce || 0);
+    // OutRun-style: a low cloud that spreads sideways along the road behind the wheel and never rises
     const side = dir !== 0 ? dir : (Math.random() < 0.5 ? -1 : 1);
-    G.smoke.push({ x: cx + (Math.random() - 0.5) * 30 + dir * 10, y: by - 14 + Math.random() * 8, vx: side * (30 + Math.random() * 90) * (dir !== 0 ? 1.4 : 1), vy: 50 + Math.random() * 90, r: 4 + Math.random() * 4, life: 0.75 + Math.random() * 0.4, t: 0 });
+    if (G.smoke.length > 220) G.smoke.shift();
+    G.smoke.push({ x: cx + side * (4 + Math.random() * 12), y: by - 10 + Math.random() * 8, vx: side * (90 + Math.random() * 180) * (dir !== 0 ? 1.3 : 1), vy: 6 + Math.random() * 22,
+      r: 7 + Math.random() * 5, rg: 16 + Math.random() * 12, life: 0.85 + Math.random() * 0.45, t: 0 });
   }
   function updateSmoke(dt) {
-    for (let i = G.smoke.length - 1; i >= 0; i--) { const p = G.smoke[i]; p.t += dt; p.x += p.vx * dt; p.y += p.vy * dt; p.r += 40 * dt; p.vx *= 0.97; p.vy *= 0.99; if (p.t >= p.life) G.smoke.splice(i, 1); }
+    for (let i = G.smoke.length - 1; i >= 0; i--) {
+      const p = G.smoke[i]; p.t += dt; p.x += p.vx * dt; p.y += p.vy * dt; p.r += p.rg * dt;
+      p.vx *= Math.max(0, 1 - 2.2 * dt); // slows down so the cloud piles up into a bank
+      if (p.t >= p.life) G.smoke.splice(i, 1);
+    }
   }
   // ---------- records / name entry ----------
   function qualifies(score) { return score >= 1000 && (G.ranking.length < 5 || score > G.ranking[G.ranking.length - 1].score); }
@@ -351,8 +358,8 @@
     if (offroad) { if (G.speed > G.maxSpeed * 0.45) G.speed -= G.maxSpeed * 0.7 * dt; if (pct > 0.1) G.bounce = (Math.random() - 0.5) * 4 * pct; }
     G.speed = OB.clamp(G.speed, 0, G.maxSpeed);
     // tyre smoke: burnout off the line, and drifting through corners at speed
-    const burnout = mode === 'play' && gas && pct < 0.3 && pct > 0.005, drift = mode === 'play' && pct > 0.5 && Math.abs(G.steer) > 0.7;
-    if (burnout) G.smokeAcc += dt * 75; else if (drift) G.smokeAcc += dt * 40;
+    const burnout = mode === 'play' && gas && pct < 0.3, drift = mode === 'play' && pct > 0.5 && Math.abs(G.steer) > 0.7;
+    if (burnout) G.smokeAcc += dt * 150; else if (drift) G.smokeAcc += dt * 80;
     while (G.smokeAcc >= 1) { G.smokeAcc -= 1; emitSmoke(drift ? -Math.sign(G.steer) : 0); }
     if (!burnout && !drift) G.smokeAcc = 0;
     if (mode === 'play' && pct > 0.55 && Math.abs(G.steer) > 0.85 && G.skidCd <= 0) { A.sfx('skid'); G.skidCd = 0.6; }
