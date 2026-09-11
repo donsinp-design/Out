@@ -4,7 +4,7 @@
   const FILES = ['bg','bike','portrait','taxi','taxi_orange','taxi_blue','taxi_green','sedan','sedan_black','sedan_red',
     'green','green_yellow','green_purple','bus','tuktuk','seven','signs','ckrd','spirit','thatien','yen','vendor',
     'noodle','storepanel','sangchai','thongbai','redsign','chedi',
-    'facade0','facade1','facade2','facade3','facade4','facade5'];
+    'facade0','facade1','facade2','facade3','facade4','facade5','towers0','towers1','towers2'];
   const IMG = {};
   OB.IMG = IMG;
 
@@ -195,30 +195,33 @@
     return c;
   }
 
-  function tower(rng) { // Bangkok office tower: glass or concrete body, lobby podium, rooftop plant + sign
-    const W = 96 + rng.int(60), H = 260 + rng.int(200), P = 30;
-    const c = mk(W + 24, H + 34), g = c.getContext('2d');
-    const ox = 12, oy = 34;
-    const base = rng.pick(['#c9c0b0', '#6f8fb5', '#5f9a9c', '#dcd8cf', '#4c5d73', '#c9a99a', '#8ea7c2', '#a7a39b']);
-    const glass = rng.pick(['#2d4a6a', '#1f3a52', '#334e6e', '#3a5a6a', '#26364a']);
-    const style = rng.int(3);
-    px(g, ox, oy, W, H - P, base); px(g, ox + W - 7, oy, 7, H - P, shade(base, 0.68)); px(g, ox, oy, 3, H - P, shade(base, 1.15));
-    if (style === 0) { for (let y = oy + 8; y < oy + H - P - 6; y += 11) for (let x = ox + 6; x < ox + W - 12; x += 9) { const lit = rng.chance(0.08); px(g, x, y, 6, 7, lit ? '#f7f0c8' : glass); px(g, x, y, 6, 1, shade(glass, 1.7)); } }
-    else if (style === 1) { for (let y = oy + 8; y < oy + H - P - 6; y += 12) { px(g, ox + 4, y, W - 12, 7, glass); px(g, ox + 4, y, W - 12, 1, shade(glass, 1.7)); for (let x = ox + 4; x < ox + W - 12; x += 14) px(g, x, y, 1, 7, shade(base, 0.8)); } }
-    else { for (let x = ox + 5; x < ox + W - 11; x += 8) { px(g, x, oy + 6, 5, H - P - 12, glass); for (let y = oy + 6; y < oy + H - P - 6; y += 10) px(g, x, y, 5, 1, shade(glass, 1.5)); } }
-    // podium with glass lobby and canopy
-    px(g, 0, oy + H - P, W + 24, P, shade(base, 0.9)); px(g, 0, oy + H - P, W + 24, 3, shade(base, 1.2)); px(g, W + 18, oy + H - P, 6, P, shade(base, 0.65));
-    px(g, 10, oy + H - P + 8, W + 4, P - 8, '#2a3440'); for (let x = 14; x < W + 10; x += 12) px(g, x, oy + H - P + 8, 2, P - 8, '#c9c4b4');
-    px(g, 6, oy + H - P + 4, W + 12, 4, '#d9d3c4');
-    // roof plant, antenna, optional sign
-    px(g, ox + 8, oy - 8, W - 16, 8, shade(base, 0.85)); px(g, ox + W / 2 - 2, oy - 30, 4, 22, '#8b8f94'); px(g, ox + W / 2 - 2, oy - 34, 4, 4, '#ff3b3b');
-    if (rng.chance(0.55)) {
-      const sc = rng.pick([['#c8222a', '#ffffff'], ['#1b3c8c', '#ffffff'], ['#f2c12e', '#8a1c1c'], ['#0f7a3d', '#ffffff']]);
-      px(g, ox + 4, oy - 4, W - 8, 14, sc[0]); g.fillStyle = sc[1]; g.font = '700 11px "Kanit"'; g.textAlign = 'center'; g.textBaseline = 'middle';
-      g.fillText(rng.pick(['ธนาคาร', 'โรงแรม', 'สำนักงาน', 'ประกันภัย', 'BANGKOK', 'SATHORN']), ox + W / 2, oy + 3);
+  function tower(rng) { // curtain-wall office tower in the reference's hazy blue-grey: setbacks, crown, lobby podium
+    const W = 70 + rng.int(50), H = 240 + rng.int(180), P = 26;
+    const c = mk(W + 20, H + 40), g = c.getContext('2d');
+    const ox = 10, oy = 40;
+    const base = rng.pick(['#9db1c6', '#8fa3b8', '#a9b9c9', '#7f95ab', '#b4bfc9', '#93a6ba']);
+    const glass = rng.pick(['#4f6785', '#465d7a', '#5a7190', '#3f556f']);
+    const mull = shade(base, 1.12);
+    const setback = rng.chance(0.55), sbH = Math.round(H * 0.22), sbIn = 10 + rng.int(8);
+    const bodyTop = setback ? oy + sbH : oy, bodyH = H - P - (bodyTop - oy);
+    for (let y = 0; y < bodyH; y++) px(g, ox, bodyTop + y, W, 1, shade(base, 1.08 - 0.16 * (y / bodyH)));
+    for (let x = ox + 4; x < ox + W - 6; x += 5) { px(g, x, bodyTop + 4, 3, bodyH - 8, glass); px(g, x + 3, bodyTop + 4, 1, bodyH - 8, mull); }
+    for (let y = bodyTop + 4; y < bodyTop + bodyH - 4; y += 7) { px(g, ox + 4, y, W - 10, 1, shade(glass, 0.75)); if (rng.chance(0.5)) px(g, ox + 4 + rng.int(W - 14), y + 2, 2, 4, '#efe6c4'); }
+    if (setback) {
+      for (let y = 0; y < sbH + 2; y++) px(g, ox + sbIn, oy + y, W - sbIn * 2, 1, shade(base, 1.12 - 0.06 * (y / sbH)));
+      for (let x = ox + sbIn + 3; x < ox + W - sbIn - 4; x += 5) { px(g, x, oy + 4, 3, sbH - 6, glass); px(g, x + 3, oy + 4, 1, sbH - 6, mull); }
+      for (let y = oy + 4; y < bodyTop - 2; y += 7) px(g, ox + sbIn + 3, y, W - sbIn * 2 - 6, 1, shade(glass, 0.75));
+      px(g, ox + sbIn, oy, W - sbIn * 2, 2, shade(base, 1.25)); px(g, ox + W - sbIn - 4, oy, 4, sbH, shade(base, 0.72));
     }
+    px(g, ox + W - 5, bodyTop, 5, bodyH, shade(base, 0.7)); px(g, ox, bodyTop, 2, bodyH, shade(base, 1.2)); px(g, ox, bodyTop, W, 2, shade(base, 1.25));
+    const cx = setback ? ox + sbIn : ox, cw = setback ? W - sbIn * 2 : W;
+    px(g, cx + 2, oy - 6, cw - 4, 6, shade(base, 0.85)); px(g, cx + cw / 2 - 8, oy - 14, 16, 8, shade(base, 0.8)); px(g, cx + cw / 2 - 1, oy - 36, 2, 24, '#7d8894'); px(g, cx + cw / 2 - 2, oy - 39, 4, 3, '#ff3b3b');
+    px(g, 0, oy + H - P, W + 20, P, shade(base, 0.92)); px(g, 0, oy + H - P, W + 20, 3, shade(base, 1.2)); px(g, W + 15, oy + H - P, 5, P, shade(base, 0.68));
+    px(g, 8, oy + H - P + 8, W + 4, P - 8, '#2a3440'); for (let x = 12; x < W + 8; x += 10) px(g, x, oy + H - P + 8, 1, P - 8, '#c9c4b4');
+    px(g, 4, oy + H - P + 4, W + 12, 4, '#d9d3c4');
     return c;
   }
+  function haze(c, a) { const g = c.getContext('2d'); g.save(); g.globalCompositeOperation = 'source-atop'; g.fillStyle = 'rgba(120,170,235,' + a + ')'; g.fillRect(0, 0, c.width, c.height); g.restore(); return c; }
 
   function tree(rng, palm) {
     const c = mk(96, 140), g = c.getContext('2d');
@@ -395,7 +398,9 @@
       }
     }
     if (rng.chance(0.6)) { px(u, W - 14, TOP + 4, 3, upperH + 40, shade(wall, 0.62)); px(u, W - 14, TOP + 4, 1, upperH + 40, shade(wall, 0.5)); }
-    texturize(U, { amp: 0.07 });
+    // grime streaks under some windows, then the painterly pass
+    for (let k = 0; k < 6; k++) if (rng.chance(0.5)) { const gx = 20 + rng.int(W - 40), gy = TOP + PAR + 40 + rng.int(Math.max(1, upperH - 50)); px(u, gx, gy, 2, 10 + rng.int(14), shade(wall, 0.86)); }
+    texturize(U, { amp: 0.1 });
     // compose
     const H = TOP + upperH + 300, c = mk(W, H), g = c.getContext('2d'); g.imageSmoothingEnabled = false;
     px(g, 0, TOP + upperH, W, 44, wall);
@@ -429,7 +434,7 @@
       px(o, 16, 250, 120, 50, '#3a3a44'); for (let i = 0; i < 3; i++) { px(o, 150 + i * 34, 236, 26, 20, '#d8d8d0'); px(o, 152 + i * 34, 256, 3, 40, '#8d8d8a'); px(o, 172 + i * 34, 256, 3, 40, '#8d8d8a'); px(o, 150 + i * 34, 276, 18, 14, '#2b6fb0'); px(o, 152 + i * 34, 290, 2, 8, '#2b6fb0'); px(o, 164 + i * 34, 290, 2, 8, '#2b6fb0'); }
       any = true;
     }
-    if (any) { texturize(O, { amp: 0.06 }); g.drawImage(O, 0, TOP + upperH); }
+    if (any) { texturize(O, { amp: 0.08 }); g.drawImage(O, 0, TOP + upperH); }
     if (opt.awning) { g.save(); g.globalCompositeOperation = 'color'; g.fillStyle = opt.awning; g.fillRect(0, TOP + upperH + 96, W, 54); g.restore(); }
     return c;
   }
@@ -503,7 +508,8 @@
     for (let i = 0; i < 10; i++) add('blk' + i, blockOf(facades, 3, 1), 7200, { solid: true, building: true });
     for (let i = 0; i < 6; i++) add('blkcn' + i, blockOf(cnFacades.concat(facades.slice(1, 6)), 3, 1), 7200, { solid: true, building: true });
     for (let i = 0; i < 4; i++) add('blkb' + i, blockOf(backFacades, 3, 0), 7800, { solid: true, building: true });
-    for (let i = 0; i < 8; i++) add('tower' + i, tx(tower(rng), { amp: 0.06 }), 2600 + rng.int(1400), { solid: true, building: true });
+    for (let i = 0; i < 8; i++) add('tower' + i, haze(tx(tower(rng), { amp: 0.05, grain: 8 }), 0.16), 2800 + rng.int(1600), { solid: true, building: true });
+    for (let i = 0; i < 3; i++) add('towers' + i, IMG['towers' + i], 5200, {}); // distant tower clusters from the reference skyline
     for (let i = 0; i < 4; i++) add('tree' + i, tx(tree(rng, false), { amp: 0.12, outline: 0.5 }), 1500, { solid: true, thin: 0.15 });
     for (let i = 0; i < 3; i++) add('palm' + i, tx(tree(rng, true), { amp: 0.1, outline: 0.5 }), 1300, { solid: true, thin: 0.12 });
     add('wall', tx(templeWall(), { amp: 0.06 }), 3600, { solid: true, building: true });

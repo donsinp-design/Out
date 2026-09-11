@@ -8,7 +8,7 @@
     speed: 0, maxSpeed: 12000, steer: 0, lean: 0, bgOffset: 0, bgShift: 0, cars: [], health: 100, ice: 100, time: 80, score: 0,
     stageNo: 1, stageKey: 'charoenkrung', light: 'day', station: 0, hiScore: 0, msg: null, shake: 0, invuln: 0, bounce: 0,
     forkHint: null, wallCd: 0, countdown: 0, overReason: null, result: null, seed: 20240808, paused: false, route: [], cur: null, nextInfo: null, nextKey: null,
-    muted: false, drawShift: -200, playerDX: 0, course: 0
+    muted: false, drawShift: -200, playerDX: 0, course: 0, touchMode: false
   };
   OB.G = G;
   G.cameraDepth = 1 / Math.tan((G.fov / 2) * Math.PI / 180);
@@ -33,19 +33,34 @@
     if ((e.key === 'p' || e.key === 'P' || e.key === 'Escape') && (G.mode === 'play')) G.paused = !G.paused;
   });
   window.addEventListener('keyup', e => { if (KEYMAP[e.key]) { keys[KEYMAP[e.key]] = false; e.preventDefault(); } });
+  // Touch: no on-screen buttons. The bike accelerates by itself; steering follows the finger's horizontal
+  // position (left of centre steers left, further out steers harder); two fingers brake. Menus: tap left / right / centre.
+  const touch = { steer: 0, active: false, fingers: 0 };
+  const pointers = new Map();
   function bindTouch() {
-    const touch = document.getElementById('touch');
-    const coarse = window.matchMedia && window.matchMedia('(pointer: coarse)').matches;
-    if (!('ontouchstart' in window) && !coarse) return;
-    touch.hidden = false;
-    touch.querySelectorAll('button').forEach(b => {
-      const k = b.dataset.k;
-      const on = e => { e.preventDefault(); A.init(); keys[k] = true; if (k === 'left') tuneDir = -1; if (k === 'right') tuneDir = 1; if (k === 'gas' && G.mode !== 'play') startPressed = true; };
-      const off = e => { e.preventDefault(); keys[k] = false; };
-      b.addEventListener('pointerdown', on); b.addEventListener('pointerup', off); b.addEventListener('pointercancel', off); b.addEventListener('pointerleave', off);
+    const cv = document.getElementById('screen');
+    G.touchMode = !!(window.matchMedia && window.matchMedia('(pointer: coarse)').matches);
+    const upd = () => {
+      touch.fingers = pointers.size;
+      if (!pointers.size) { touch.active = false; touch.steer = 0; return; }
+      let sx = 0; for (const x of pointers.values()) sx += x;
+      const r = cv.getBoundingClientRect(), rel = (sx / pointers.size - r.left) / r.width - 0.5;
+      touch.steer = OB.clamp(rel / 0.3, -1, 1); touch.active = true;
+    };
+    cv.addEventListener('pointerdown', e => {
+      A.init();
+      const r = cv.getBoundingClientRect(), fx = (e.clientX - r.left) / r.width;
+      if (e.pointerType !== 'mouse') G.touchMode = true;
+      if (G.mode === 'play' || G.mode === 'countdown') { if (e.pointerType !== 'mouse') { pointers.set(e.pointerId, e.clientX); upd(); } }
+      else if (G.mode === 'radio' || G.mode === 'course') { if (fx < 0.35) tuneDir = -1; else if (fx > 0.65) tuneDir = 1; else startPressed = true; }
+      else if (G.mode === 'over') { A.sfx('select'); G.mode = 'title'; newGame(); startPressed = false; }
+      else startPressed = true;
+      e.preventDefault();
     });
+    cv.addEventListener('pointermove', e => { if (pointers.has(e.pointerId)) { pointers.set(e.pointerId, e.clientX); upd(); } });
+    const end = e => { if (pointers.has(e.pointerId)) { pointers.delete(e.pointerId); upd(); } };
+    cv.addEventListener('pointerup', end); cv.addEventListener('pointercancel', end); cv.addEventListener('pointerleave', end);
   }
-  document.getElementById('screen').addEventListener('pointerdown', () => { A.init(); if (G.mode !== 'play') startPressed = true; });
 
   // ---------- game setup ----------
   function buildStage(key, no) {
@@ -244,8 +259,10 @@
     // ---- play / goal physics ----
     const seg = T.findSegment(G.position + G.playerZ);
     const pct = G.speed / G.maxSpeed;
-    const gas = mode === 'play' ? keys.gas : false, brake = mode === 'play' ? keys.brake : true;
-    const steerIn = mode === 'play' ? ((keys.left ? -1 : 0) + (keys.right ? 1 : 0)) : 0;
+    const usingTouch = G.touchMode && touch.active;
+    const gas = mode === 'play' ? (keys.gas || (G.touchMode && touch.fingers < 2)) : false;
+    const brake = mode === 'play' ? (keys.brake || (G.touchMode && touch.fingers >= 2)) : true;
+    const steerIn = mode === 'play' ? (usingTouch ? touch.steer : ((keys.left ? -1 : 0) + (keys.right ? 1 : 0))) : 0;
     G.steer += (steerIn - G.steer) * Math.min(1, dt * 9);
     G.lean += ((G.steer * Math.min(1, pct * 2 + 0.2)) - G.lean) * Math.min(1, dt * 8);
     const dx = pct > 0.01 ? dt * (0.35 + 2.1 * pct) : 0;
@@ -309,7 +326,6 @@
   }
   // start-press handling for 'over'
   window.addEventListener('keydown', e => { if ((e.key === 'Enter' || e.key === ' ') && G.mode === 'over') { A.sfx('select'); G.mode = 'title'; newGame(); startPressed = false; } });
-  document.getElementById('screen').addEventListener('pointerdown', () => { if (G.mode === 'over') { G.mode = 'title'; newGame(); startPressed = false; } });
 
   // debug/testing hook: jump straight into a given stage
   OB.debugStage = function (key, no) {

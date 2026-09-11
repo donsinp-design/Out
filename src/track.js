@@ -100,10 +100,12 @@
         if (rel % 95 === 60) { put(seg, 'vendor', edgeL - 0.02); if (rng.chance(0.7)) put(segs[i + 3] || seg, 'yen', edgeL + 0.12); }
         if (stage.theme === 'chinatown' && rel % 33 === 20) put(seg, 'redsign_pole', edgeL + 0.1);
       } else if (th.left === 'city') {
-        if (rel % 10 === 0) put(seg, rng.pick(TOWERS), edgeL - 0.45 - rng.range(0, 1.4), { anchor: 'left' });
-        if (rel % 12 === 3 && rng.chance(0.5)) put(seg, pickShop(rng, 'city', 'L'), edgeL - 0.12, { anchor: 'left' });
+        // street level stays the shophouse wall; towers rise behind it, the reference's own tower clusters further back
+        if (rel % 10 === 0) put(seg, pickShop(rng, 'city', 'L'), edgeL - 0.12, { anchor: 'left' });
+        if (rel % 26 === 13) put(seg, rng.pick(TOWERS), edgeL - 1.9 - rng.range(0, 0.9), { anchor: 'left' });
+        if (rel % 34 === 7) put(seg, rng.pick(['towers0', 'towers1', 'towers2']), edgeL - 4.5 - rng.range(0, 3), { anchor: 'left' });
         if (rel % 26 === 8) put(seg, 'lamp', edgeL + 0.06, { flip: true });
-        if (rel % 44 === 20) put(seg, rng.pick(['tree0', 'tree1', 'palm0']), edgeL - 0.1);
+        if (rel % 44 === 20) put(seg, rng.pick(['tree0', 'tree1', 'palm0']), edgeL + 0.03);
         if (th.skytrain && rel % 14 === 7) put(seg, 'pillar', edgeL + 0.05, { pillar: true });
       } else if (th.left === 'temple') {
         if (rel % 16 === 0) put(seg, 'wall', edgeL - 0.15, { anchor: 'left' });
@@ -128,10 +130,11 @@
         if (rel % 150 === 75) put(seg, 'vendor', edgeR + 0.02, { flip: true });
         if (rel % 120 === 100) put(seg, 'tuktuk_parked', edgeR - 0.32);
       } else if (th.right === 'city') {
-        if (rel % 10 === 5) put(seg, rng.pick(TOWERS), edgeR + 0.45 + rng.range(0, 1.4), { anchor: 'right' });
-        if (rel % 12 === 9 && rng.chance(0.5)) put(seg, pickShop(rng, 'city', 'R'), edgeR + 0.12, { anchor: 'right' });
+        if (rel % 10 === 5) put(seg, pickShop(rng, 'city', 'R'), edgeR + 0.12, { anchor: 'right' });
+        if (rel % 26 === 0) put(seg, rng.pick(TOWERS), edgeR + 1.9 + rng.range(0, 0.9), { anchor: 'right' });
+        if (rel % 34 === 24) put(seg, rng.pick(['towers0', 'towers1', 'towers2']), edgeR + 4.5 + rng.range(0, 3), { anchor: 'right' });
         if (rel % 26 === 21) put(seg, 'lamp', edgeR - 0.06);
-        if (rel % 44 === 30) put(seg, rng.pick(['tree2', 'tree3', 'palm2']), edgeR + 0.1);
+        if (rel % 44 === 30) put(seg, rng.pick(['tree2', 'tree3', 'palm2']), edgeR - 0.03);
         if (th.skytrain && rel % 14 === 7) put(seg, 'pillar', edgeR - 0.05, { pillar: true });
       } else if (th.right === 'park') {
         if (rel % 10 === 5) put(seg, rng.pick(['tree0', 'tree1', 'tree2', 'tree3']), edgeR + rng.range(0.1, 1.2));

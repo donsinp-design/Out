@@ -217,10 +217,8 @@
         drawSprite(img, cx + cs * c.offset * RW * seg.rw * K - destW / 2, cy - destH, destW, destH, seg.clip, false);
       }
     }
-    // ---- wires ----
+    // ---- wires (left-hand power lines only, as in the reference frame) ----
     drawWires(poles.L, G, -1, baseSeg, camX, camY, camZ, playerSeg);
-    drawWires(poles.R, G, 1, baseSeg, camX, camY, camZ, playerSeg);
-    if (T.THEMES[playerSeg.theme] && playerSeg.theme === 'chinatown') drawLanterns(poles);
     // ---- player ----
     drawPlayer(G);
     ctx.restore();
@@ -378,11 +376,11 @@
     ctx.fillStyle = '#c8102e'; ctx.fillRect(W / 2 - 170, 224, 340, 22); ctx.fillStyle = '#000'; ctx.fillRect(W / 2 - 170, 224, 340, 2); ctx.fillRect(W / 2 - 170, 244, 340, 2);
     TXT(ctx, 'HIDDEN STAGE - ICE RUN', W / 2 - 152, 240, { size: 8, sy: 1.4, fill: '#fff', align: 'left' });
     TXT(ctx, 'ภารกิจลับ', W / 2 + 152, 241, { size: 14, font: 'Kanit', weight: '500', fill: '#fff', align: 'right' });
-    if (Math.floor(G.t * 2) % 2 === 0) TXT(ctx, 'PRESS START', W / 2, 330, { size: 14, sy: 1.3, fill: '#fff', outline: '#000', outlineW: 5, align: 'center' });
+    if (Math.floor(G.t * 2) % 2 === 0) TXT(ctx, G.touchMode ? 'TAP TO START' : 'PRESS START', W / 2, 330, { size: 14, sy: 1.3, fill: '#fff', outline: '#000', outlineW: 5, align: 'center' });
     TXT(ctx, 'HI-SCORE ' + OB.pad(G.hiScore, 7), W / 2, 366, { size: 9, sy: 1.4, fill: '#ffd800', outline: '#000', outlineW: 4, align: 'center' });
     TXT(ctx, 'DELIVER THE ICE TO WAT PHO BEFORE IT MELTS', W / 2, 392, { size: 7, sy: 1.4, fill: '#bfefff', outline: '#000', outlineW: 3, align: 'center' });
     TXT(ctx, 'ส่งน้ำแข็งให้ถึงวัดโพธิ์ก่อนละลาย', W / 2, 412, { size: 14, font: 'Kanit', weight: '500', fill: '#fff', outline: '#000', outlineW: 3, align: 'center' });
-    TXT(ctx, 'LEFT/RIGHT STEER   UP GAS   DOWN BRAKE   M MUSIC', W / 2, H - 14, { size: 7, sy: 1.3, fill: '#fff', outline: '#000', outlineW: 3, align: 'center' });
+    TXT(ctx, G.touchMode ? 'FINGER LEFT / RIGHT STEERS   TWO FINGERS BRAKE   AUTO GAS' : 'LEFT/RIGHT STEER   UP GAS   DOWN BRAKE   M MUSIC', W / 2, H - 14, { size: 7, sy: 1.3, fill: '#fff', outline: '#000', outlineW: 3, align: 'center' });
     TXT(ctx, '1986 - 2024   A SECRET SEQUEL', W / 2, H - 30, { size: 6, sy: 1.3, fill: '#ffd800', outline: '#000', outlineW: 3, align: 'center' });
   };
   R.radio = function (G) {
@@ -402,7 +400,7 @@
     });
     // eq bars
     for (let i = 0; i < 12; i++) { const hh = 4 + Math.abs(Math.sin(G.t * 9 + i * 1.3)) * 22; ctx.fillStyle = i < 8 ? '#39f2b0' : '#ff5a5a'; ctx.fillRect(x + w - 150 + i * 9, y + 66 - hh, 6, hh); }
-    TXT(ctx, 'LEFT / RIGHT : TUNE      GAS / ENTER : START', W / 2, y + h + 26, { size: 8, sy: 1.4, fill: '#fff', outline: '#000', outlineW: 3, align: 'center' });
+    TXT(ctx, G.touchMode ? 'TAP LEFT / RIGHT : TUNE      TAP CENTER : START' : 'LEFT / RIGHT : TUNE      GAS / ENTER : START', W / 2, y + h + 26, { size: 8, sy: 1.4, fill: '#fff', outline: '#000', outlineW: 3, align: 'center' });
   };
   R.course = function (G) {
     dim(0.35);
@@ -430,7 +428,7 @@
     arrow(W / 2 - 220, capY - 6, -1, 8, '#ffd800', '#000'); arrow(W / 2 + 220, capY - 6, 1, 8, '#ffd800', '#000');
     TXT(ctx, (cur.label ? cur.label + '  -  ' : 'STAGE ' + cur.stageNo + '  -  ') + st.name.eng, W / 2, capY, { size: 9, sy: 1.5, fill: '#fff', outline: '#000', outlineW: 4, align: 'center' });
     TXT(ctx, st.name.thai, W / 2, capY + 24, { size: 16, font: 'Kanit', weight: '700', fill: '#ffd23f', outline: '#000', outlineW: 4, align: 'center' });
-    TXT(ctx, 'LEFT / RIGHT : COURSE      GAS / ENTER : START', W / 2, H - 14, { size: 7, sy: 1.4, fill: '#fff', outline: '#000', outlineW: 3, align: 'center' });
+    TXT(ctx, G.touchMode ? 'TAP LEFT / RIGHT : COURSE      TAP CENTER : START' : 'LEFT / RIGHT : COURSE      GAS / ENTER : START', W / 2, H - 14, { size: 7, sy: 1.4, fill: '#fff', outline: '#000', outlineW: 3, align: 'center' });
   };
   R.countdown = function (G) {
     const n = Math.ceil(G.countdown);
@@ -439,6 +437,7 @@
     ctx.save(); ctx.translate(W / 2, 200); ctx.scale(sc, sc);
     TXT(ctx, label, 0, 0, { size: 56, sy: 1.2, fill: n > 0 ? '#ffd800' : '#3cff6a', outline: '#000', outlineW: 10, align: 'center' });
     ctx.restore();
+    if (G.touchMode) TXT(ctx, 'HOLD A FINGER LEFT OR RIGHT TO STEER   TWO FINGERS TO BRAKE', W / 2, 300, { size: 7, sy: 1.4, fill: '#fff', outline: '#000', outlineW: 3, align: 'center' });
   };
   R.gameover = function (G) {
     band(120, 200, 0.6);

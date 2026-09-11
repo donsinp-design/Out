@@ -14,7 +14,7 @@ and the route forks after every stage.
 
 Controls: `← →` steer, `↑` gas, `↓` brake, `Enter`/`Space` start, `M` mute music, `P` pause.
 After the music select, a course select lets you start from any of the seven areas (Full Run starts at Charoen Krung).
-Touch devices get on-screen buttons.
+On touch devices there are no buttons: the bike accelerates by itself, a finger left or right of centre steers (further out steers harder), two fingers brake, and menus are tapped left / right / centre.
 
 ## Route map
 
