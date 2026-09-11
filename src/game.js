@@ -40,6 +40,9 @@
     if (e.repeat) { if (KEYMAP[e.key]) e.preventDefault(); return; }
     A.init(); A.unlock();
     if (G.mode === 'name') { nameKey(e); e.preventDefault(); return; }
+    if (e.key === 'f' || e.key === 'F') { toggleFullscreen(); e.preventDefault(); return; }
+    if (G.mode === 'play' && G.paused) { pauseKey(e); e.preventDefault(); return; }
+    if (G.mode === 'over' && (e.key === 'ArrowLeft' || e.key === 'ArrowRight' || e.key === 'a' || e.key === 'd')) { G.overSel = 1 - (G.overSel || 0); A.sfx('select'); e.preventDefault(); return; }
     if (KEYMAP[e.key]) { keys[KEYMAP[e.key]] = true; e.preventDefault(); }
     // drift: Shift / Space while steering hard, or a quick double tap of the steering key
     const dirKey = KEYMAP[e.key] === 'left' || KEYMAP[e.key] === 'right' ? KEYMAP[e.key] : null;
@@ -49,15 +52,45 @@
     if (e.key === 'ArrowLeft' || e.key === 'a') tuneDir -= 1; if (e.key === 'ArrowRight' || e.key === 'd') tuneDir += 1; // accumulate so fast double presses are not lost
     if (e.key === 'ArrowUp' && (G.mode === 'radio' || G.mode === 'course')) startPressed = true;
     if (e.key === 'm' || e.key === 'M') { G.muted = !G.muted; A.setMusicVolume(G.muted ? 0 : A.MUSIC_VOL); }
-    if ((e.key === 'p' || e.key === 'P' || e.key === 'Escape') && (G.mode === 'play')) G.paused = !G.paused;
+    if ((e.key === 'p' || e.key === 'P' || e.key === 'Escape') && (G.mode === 'play')) { G.paused = true; G.menuSel = 0; }
   });
+  // ---------- full screen + pause menu ----------
+  let fsFailed = false;
+  function toggleFullscreen(quiet) {
+    const el = document.documentElement;
+    try {
+      if (document.fullscreenElement || document.webkitFullscreenElement) { (document.exitFullscreen || document.webkitExitFullscreen).call(document); return; }
+      const fn = el.requestFullscreen || el.webkitRequestFullscreen;
+      if (!fn) { if (!quiet) fsUnavailable(); return; }
+      const p = fn.call(el, { navigationUI: 'hide' }); if (p && p.catch) p.catch(() => { if (!quiet) fsUnavailable(); });
+    } catch (e) { if (!quiet) fsUnavailable(); }
+  }
+  function fsUnavailable() { fsFailed = true; say('FULL SCREEN NOT AVAILABLE HERE', 'iPhone: เพิ่มไปยังหน้าจอโฮม / ใช้แนวนอน', 2.6, '#ffd800', 10); }
+  OB.isFullscreen = () => !!(document.fullscreenElement || document.webkitFullscreenElement);
+  const MENU = ['RESUME', 'RESTART', 'MUSIC', 'FULL SCREEN', 'QUIT TO TITLE'];
+  OB.MENU = MENU;
+  function menuAction(i) {
+    A.sfx('select');
+    if (i === 0) G.paused = false;
+    else if (i === 1) { G.paused = false; startRun(); }
+    else if (i === 2) { G.muted = !G.muted; A.setMusicVolume(G.muted ? 0 : A.MUSIC_VOL); }
+    else if (i === 3) toggleFullscreen();
+    else if (i === 4) { G.paused = false; A.stopMusic(); G.mode = 'title'; newGame(); }
+  }
+  function pauseKey(e) {
+    const n = MENU.length, k = e.key;
+    if (k === 'ArrowUp' || k === 'w' || k === 'W') { G.menuSel = ((G.menuSel || 0) + n - 1) % n; A.sfx('name'); }
+    else if (k === 'ArrowDown' || k === 's' || k === 'S') { G.menuSel = ((G.menuSel || 0) + 1) % n; A.sfx('name'); }
+    else if (k === 'Enter' || k === ' ') menuAction(G.menuSel || 0);
+    else if (k === 'Escape' || k === 'p' || k === 'P') G.paused = false;
+  }
+  function overAction(i) { if (G.pendingRecord) { leaveOver(); return; } A.sfx('select'); startPressed = false; if (i === 0) startRun(); else { G.mode = 'title'; newGame(); } }
   window.addEventListener('keyup', e => { if (KEYMAP[e.key]) { keys[KEYMAP[e.key]] = false; e.preventDefault(); } });
-  // Touch: no on-screen buttons. The bike accelerates by itself; steering follows the finger's horizontal
-  // position (left of centre steers left, further out steers harder); two fingers brake. Menus: tap left / right / centre.
-  // A quick double tap (either the steering finger re-tapping, or a second finger tapping twice) while steering hard drifts.
+  // Touch: no on-screen buttons. The bike accelerates by itself; steering follows the first finger's horizontal
+  // position (left of centre steers left, further out steers harder); a second finger held while steering hard drifts;
+  // three fingers brake. Menus are tapped. A small pause button sits top-right during play.
   const touch = { steer: 0, active: false, fingers: 0, twoT: 0 };
   const pointers = new Map();
-  let lastTapT = 0;
   function bindTouch() {
     const cv = document.getElementById('screen');
     G.touchMode = !!(window.matchMedia && window.matchMedia('(pointer: coarse)').matches);
@@ -74,9 +107,10 @@
       const r = cv.getBoundingClientRect(), ix = (e.clientX - r.left) / r.width * W, iy = (e.clientY - r.top) / r.height * H;
       const inBox = (b) => !!b && ix >= b.x && ix <= b.x + b.w && iy >= b.y && iy <= b.y + b.h;
       if (e.pointerType !== 'mouse') G.touchMode = true;
-      if (G.mode === 'play' || G.mode === 'countdown') {
+      if (G.mode === 'play' && G.paused) { const row = R.hit.rows.find(inBox); if (row) menuAction(row.i); else if (inBox(R.hit.pause)) G.paused = false; }
+      else if (G.mode === 'play' && inBox(R.hit.pause)) { G.paused = true; G.menuSel = 0; A.sfx('select'); }
+      else if (G.mode === 'play' || G.mode === 'countdown') {
         if (e.pointerType !== 'mouse') { pointers.set(e.pointerId, e.clientX); upd(); }
-        const now = performance.now(); if (G.mode === 'play' && now - lastTapT < 320) driftReq = true; lastTapT = now;
       }
       else if (G.mode === 'radio') { // tap a station row (tap the selected one again to start), START button, or swipe
         swipeX = ix;
@@ -87,8 +121,9 @@
         if (inBox(R.hit.start)) startPressed = true;
         else { const nd = R.hit.nodes.find(inBox); if (nd) { const ci = T.COURSES.findIndex(c => c.key === nd.key); if (ci === G.course) startPressed = true; else if (ci >= 0) { G.course = ci; store.set('ob_course', ci); A.sfx('select'); } } }
       } else if (G.mode === 'name') { const cell = R.hit.cells.find(inBox); if (cell) nameSelect(cell.i); }
-      else if (G.mode === 'over') leaveOver();
-      else startPressed = true;
+      else if (G.mode === 'over') { const row = R.hit.rows.find(inBox); if (row) overAction(row.i); else if (!R.hit.rows.length) leaveOver(); }
+      else if (G.mode === 'title' && inBox(R.hit.fs)) toggleFullscreen();
+      else { startPressed = true; if (G.mode === 'title' && G.touchMode && !OB.isFullscreen() && !fsFailed) toggleFullscreen(true); }
       e.preventDefault();
     });
     cv.addEventListener('pointermove', e => { if (pointers.has(e.pointerId)) { pointers.set(e.pointerId, e.clientX); upd(); } });
@@ -343,7 +378,7 @@
   // ---------- progression ----------
   function gameOver(reason) {
     if (G.mode === 'over') return;
-    G.mode = 'over'; G.overReason = reason; G.forkHint = null; A.stopMusic(); A.sfx('over');
+    G.mode = 'over'; G.overReason = reason; G.forkHint = null; G.overSel = 0; A.stopMusic(); A.sfx('over');
     if (qualifies(G.score)) G.pendingRecord = { score: G.score, route: routeStr() };
   }
   function progress(seg) {
@@ -439,12 +474,14 @@
     const pct = G.speed / G.maxSpeed;
     const usingTouch = G.touchMode && touch.active;
     const flipping = !!G.crash;
-    if (touch.fingers >= 2) touch.twoT += dt; else touch.twoT = 0; // a held second finger brakes; quick taps do not
-    const gas = mode === 'play' && !flipping ? (keys.gas || (G.touchMode && touch.twoT < 0.18)) : false;
-    const brake = mode === 'play' && !flipping ? (keys.brake || (G.touchMode && touch.twoT >= 0.18)) : true;
+    // touch: one finger steers, a second finger held drifts (sustained while held), three fingers brake
+    const gas = mode === 'play' && !flipping ? (keys.gas || (G.touchMode && touch.fingers < 3)) : false;
+    const brake = mode === 'play' && !flipping ? (keys.brake || (G.touchMode && touch.fingers >= 3)) : true;
     const steerIn = mode === 'play' && !flipping ? (usingTouch ? touch.steer : ((keys.left ? -1 : 0) + (keys.right ? 1 : 0))) : 0;
-    // drift: double tap (or Shift) while steering hard at speed. Sharper turn, less push from the curve, some speed scrubbed.
-    if (wantDrift && mode === 'play' && !flipping && G.drift <= 0 && pct > 0.3 && Math.abs(steerIn) > 0.5) { G.drift = 1.1; G.driftDir = Math.sign(steerIn); G.score += 300; A.sfx('drift'); G.skidCd = 0.4; }
+    let askDrift = wantDrift;
+    if (G.touchMode && touch.fingers === 2 && mode === 'play') { if (G.drift > 0 && Math.sign(steerIn) === G.driftDir) G.drift = Math.max(G.drift, 0.3); else askDrift = true; }
+    // drift: second finger / Shift while steering hard at speed. Sharper turn, less push from the curve, some speed scrubbed.
+    if (askDrift && mode === 'play' && !flipping && G.drift <= 0 && pct > 0.3 && Math.abs(steerIn) > 0.5) { G.drift = 1.1; G.driftDir = Math.sign(steerIn); G.score += 300; A.sfx('drift'); G.skidCd = 0.4; }
     if (G.drift > 0) { G.drift -= dt; if (Math.abs(steerIn) < 0.3 || pct < 0.15 || Math.sign(steerIn) !== G.driftDir) G.drift = 0; }
     const drifting = G.drift > 0;
     G.driftK += ((drifting ? 1 : 0) - G.driftK) * Math.min(1, dt * (drifting ? 12 : 5));
@@ -527,13 +564,13 @@
       case 'course': R.course(G); break;
       case 'name': R.name(G); break;
       case 'countdown': R.hud(G); R.countdown(G); break;
-      case 'play': R.hud(G); if (G.goT > 0) R.go(G); if (G.paused) { OB.text(R.ctx || document.getElementById('screen').getContext('2d'), 'PAUSE', W / 2, 200, { size: 24, sy: 1.3, fill: '#fff', outline: '#000', outlineW: 6, align: 'center' }); } break;
+      case 'play': R.hud(G); if (G.goT > 0) R.go(G); if (G.paused) R.pause(G); break;
       case 'goal': R.hud(G); R.goal(G); break;
       case 'over': R.hud(G); R.gameover(G); break;
     }
   }
   // start-press handling for 'over'
-  window.addEventListener('keydown', e => { if ((e.key === 'Enter' || e.key === ' ') && G.mode === 'over') leaveOver(); });
+  window.addEventListener('keydown', e => { if ((e.key === 'Enter' || e.key === ' ') && G.mode === 'over') overAction(G.overSel || 0); });
 
   // debug/testing hook: jump straight into a given stage
   OB.debugCrash = function (hx) { wipeout(3, hx); }; OB.debugDrift = function () { driftReq = true; };

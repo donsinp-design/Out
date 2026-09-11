@@ -298,16 +298,20 @@
   const RS = 178 / 137; // sheet rider frames drawn at the height the bike has always had on screen
   const ROWS = [0.30, 0.45, 0.60, 0.74]; // ice stack rows as fractions of a rider frame's height: top of row 3 ... bottom of row 1
   const ANCHOR = { BRAKE: 0.6, BUMP: 0.4 }; // where the bike sits inside the wider frames
+  // The sheet's lean frames, measured by their licence-plate tilt: L2, R1 and R3 lean LEFT (small, medium, hard) and
+  // L1 is the one hard RIGHT lean. Right turns below that use the ride frame rotated, so the plate is never mirrored.
+  const LEAN_L = ['L2', 'R1', 'R3'], LEAN_R_HARD = 'L1';
+  function leanOf(G) { return (G.lean || 0) + (G.driftK || 0) * (G.driftDir || 1) * 0.6; }
   function riderFrameName(G) {
     if (G.bumpT > 0) return 'BUMP';
-    const lean = (G.lean || 0) + (G.driftK || 0) * (G.driftDir || 1) * 0.6, al = Math.abs(lean);
-    if (al > 0.72) return lean < 0 ? 'L3' : 'R3';
-    if (al > 0.42) return lean < 0 ? 'L2' : 'R2';
-    if (al > 0.16) return lean < 0 ? 'L1' : 'R1';
+    const lean = leanOf(G), al = Math.abs(lean);
+    if (lean < -0.16) return LEAN_L[al > 0.72 ? 2 : al > 0.42 ? 1 : 0];
+    if (lean > 0.8) return LEAN_R_HARD;
     if (G.braking) return 'BRAKE';
     if (G.crouch) return 'ACCEL';
     return 'D' + (Math.floor(G.riderT || 0) % 6);
   }
+  function riderRotation(G, name) { const lean = leanOf(G); return (lean > 0 && name !== LEAN_R_HARD && name !== 'BUMP') ? lean * 0.27 : 0; }
   // A rider frame drawn in slices so the ice moves on its own: each bag row (and each half of it) vibrates at
   // speed, shifts outward in corners, lifts on knocks, squashes on hard landings, and shrinks as the ice goes.
   function drawRiderFrame(G, f, cx, by, scale, alpha) {
@@ -341,7 +345,7 @@
   function drawCrash(G, cx, by) {
     const c = G.crash, dir = c.dir, k = RS, WD = OB.world;
     const blit = (name, x, y, flip, alpha) => { const f = WD.F(name); if (f) WD.blit(ctx, f, x, y, f.w * k, f.h * k, flip, 0, alpha); };
-    if (c.phase === 'lose') { const f = WD.F(dir < 0 ? 'L3' : 'R3'); drawRiderFrame(G, f, cx + Math.round((Math.random() - 0.5) * 5), by, k, 1); return; }
+    if (c.phase === 'lose') { const f = WD.F(dir < 0 ? 'R3' : 'L1'); drawRiderFrame(G, f, cx + Math.round((Math.random() - 0.5) * 5), by, k, 1); return; }
     if (c.phase === 'eject') { blit('CL_EJECT', cx + c.rider.x * 0.4, by, false, 1); return; }
     const rx = cx + c.rider.x, ry = by + c.rider.y, bx = cx + c.bike.x;
     ctx.fillStyle = 'rgba(0,0,0,0.3)'; ctx.beginPath(); ctx.ellipse(bx, by - 4, 70, 8, 0, 0, Math.PI * 2); ctx.fill();
@@ -384,10 +388,10 @@
     if (G.splashT > 0) { const f = WD.F('WATER_SPLASH_L'); if (f) { const s = G.splashSide || 1, k = OB.clamp(G.splashT / 0.32, 0, 1); WD.blit(ctx, f, cx + s * 30, groundY + 2, f.w * 1.5 * (1.3 - k * 0.3), f.h * 1.5, s < 0, 0, Math.min(1, k * 2.5)); } }
     if (G.crash) { drawCrash(G, cx, by); }
     else {
-      const f = WD.F(riderFrameName(G));
+      const name = riderFrameName(G), f = WD.F(name);
       if (f) {
         const dk = G.driftK || 0, dd = G.driftDir || 1;
-        ctx.save(); ctx.translate(cx - dd * dk * 6, by); ctx.rotate(dk * dd * 0.22); ctx.translate(-(cx - dd * dk * 6), -by);
+        ctx.save(); ctx.translate(cx - dd * dk * 6, by); ctx.rotate(dk * dd * 0.22 + riderRotation(G, name)); ctx.translate(-(cx - dd * dk * 6), -by);
         drawRiderFrame(G, f, cx - dd * dk * 6, by, RS * zoom, (G.invuln > 0 && Math.floor(G.t * 8) % 2 === 0) ? 0.7 : 1);
         ctx.restore();
       }
@@ -433,6 +437,12 @@
     // score
     TXT(ctx, 'SCORE', 622, 34, { size: 12, sy: 1.7, fill: '#ff37a8', outline: '#000', outlineW: 6, outline2: '#fff', outline2W: 3 });
     TXT(ctx, OB.pad(G.score, 7), 704, 34, { size: 12, sy: 1.7, fill: '#fff', outline: '#000', outlineW: 5 });
+    // pause button (top-right corner)
+    if (G.mode === 'play') {
+      const bx = W - 40, by = 8, bw = 32, bh = 28;
+      ctx.fillStyle = 'rgba(0,0,0,0.45)'; ctx.fillRect(bx, by, bw, bh); ctx.fillStyle = G.paused ? '#ffd800' : '#fff'; ctx.fillRect(bx + 10, by + 7, 4, 14); ctx.fillRect(bx + 18, by + 7, 4, 14);
+      R.hit.pause = { x: bx - 6, y: by - 6, w: bw + 12, h: bh + 12 };
+    } else R.hit.pause = null;
     // speed
     const kmh = Math.round(G.speed / G.maxSpeed * 296);
     TXT(ctx, String(kmh), 74, H - 16, { size: 15, sy: 1.3, fill: '#fff', outline: '#000', outlineW: 4, align: 'right' });
@@ -464,7 +474,23 @@
 
   // ---------- overlays ----------
   // tap targets published for the input layer (rows: radio stations, nodes: course map, cells: name entry, start: START button)
-  R.hit = { rows: [], nodes: [], cells: [], start: null };
+  R.hit = { rows: [], nodes: [], cells: [], start: null, pause: null, fs: null };
+  // pause menu: resume / restart / music / full screen / quit
+  R.pause = function (G) {
+    dim(0.55); R.hit.rows = [];
+    const items = OB.MENU, RH = 40, x = W / 2 - 150, w = 300, y = 96, h = 60 + items.length * RH + 16;
+    ctx.fillStyle = '#1a1c22'; ctx.fillRect(x, y, w, h); ctx.fillStyle = '#3a3d46'; ctx.fillRect(x, y, w, 4); ctx.fillRect(x, y + h - 4, w, 4); ctx.fillRect(x, y, 4, h); ctx.fillRect(x + w - 4, y, 4, h);
+    TXT(ctx, 'PAUSE', W / 2, y + 34, { size: 14, sy: 1.5, fill: '#ffd800', outline: '#000', outlineW: 5, align: 'center' });
+    items.forEach((label, i) => {
+      const ry = y + 56 + i * RH, sel = i === (G.menuSel || 0);
+      let text = label; if (label === 'MUSIC') text = 'MUSIC ' + (G.muted ? 'OFF' : 'ON'); if (label === 'FULL SCREEN' && OB.isFullscreen && OB.isFullscreen()) text = 'EXIT FULL SCREEN';
+      ctx.fillStyle = sel ? 'rgba(255,216,0,0.2)' : 'rgba(255,255,255,0.05)'; ctx.fillRect(x + 14, ry, w - 28, RH - 6);
+      if (sel) arrow(x + 32, ry + RH / 2 - 3, 1, 6, '#ffd800', '#000');
+      TXT(ctx, text, W / 2 + 8, ry + RH / 2 + 4, { size: 9, sy: 1.4, fill: sel ? '#ffd800' : '#e8ecf4', outline: '#000', outlineW: 3, align: 'center' });
+      R.hit.rows.push({ x: x + 14, y: ry, w: w - 28, h: RH - 6, i });
+    });
+    TXT(ctx, G.touchMode ? 'TAP AN OPTION' : 'UP / DOWN   ENTER   ESC RESUMES', W / 2, y + h + 18, { size: 6, sy: 1.4, fill: '#fff', outline: '#000', outlineW: 3, align: 'center' });
+  };
   function button(x, y, w, h, label, thai) {
     ctx.fillStyle = '#000'; ctx.fillRect(x - 3, y - 3, w + 6, h + 6);
     ctx.fillStyle = '#ffd800'; ctx.fillRect(x, y, w, h); ctx.fillStyle = '#fff3a0'; ctx.fillRect(x, y, w, 3); ctx.fillStyle = '#b08a00'; ctx.fillRect(x, y + h - 3, w, 3);
@@ -512,6 +538,10 @@
         for (let i = 0; i < 3; i++) { const r = rk[i]; if (!r) break; TXT(ctx, (i + 1) + ['ST', 'ND', 'RD'][i] + ' ' + (r.name + '   ').slice(0, 3) + ' ' + OB.pad(r.score, 7), rx, ry + 16 + i * 14, { size: 6, sy: 1.4, fill: i === 0 ? '#ffd800' : '#fff', outline: '#000', outlineW: 3 }); }
       }
     }
+    // full screen toggle, top-right (F on a keyboard)
+    { const bx = W - 44, by = 10, s = 30; ctx.fillStyle = 'rgba(0,0,0,0.5)'; ctx.fillRect(bx, by, s, s); ctx.fillStyle = '#fff';
+      for (const [cx, cy] of [[0, 0], [1, 0], [0, 1], [1, 1]]) { const px = bx + 6 + cx * (s - 12 - 3), py = by + 6 + cy * (s - 12 - 3); ctx.fillRect(px, py + (cy ? 6 : 0), 9, 3); ctx.fillRect(px + (cx ? 6 : 0), py, 3, 9); }
+      R.hit.fs = { x: bx - 8, y: by - 8, w: s + 16, h: s + 16 }; }
     if (G.touchMode && window.innerHeight > window.innerWidth) TXT(ctx, 'ROTATE YOUR PHONE FOR FULL SCREEN', W / 2, 16, { size: 7, sy: 1.4, fill: '#ffd800', outline: '#000', outlineW: 3, align: 'center' });
   };
   R.radio = function (G) {
@@ -618,7 +648,14 @@
     TXT(ctx, reasons[r][0], W / 2, 212, { size: 13, sy: 1.4, fill: '#fff', outline: '#000', outlineW: 5, align: 'center' });
     TXT(ctx, reasons[r][1], W / 2, 240, { size: 20, font: 'Kanit', weight: '700', fill: '#ffd23f', outline: '#000', outlineW: 5, align: 'center' });
     TXT(ctx, 'SCORE ' + OB.pad(G.score, 7) + '    STAGE ' + G.stageNo, W / 2, 276, { size: 9, sy: 1.4, fill: '#fff', outline: '#000', outlineW: 4, align: 'center' });
-    if (Math.floor(G.t * 2) % 2 === 0) TXT(ctx, 'PRESS START', W / 2, 306, { size: 10, sy: 1.3, fill: '#ffd800', outline: '#000', outlineW: 4, align: 'center' });
+    R.hit.rows = [];
+    if (G.pendingRecord) { if (Math.floor(G.t * 2) % 2 === 0) TXT(ctx, 'PRESS START', W / 2, 306, { size: 10, sy: 1.3, fill: '#ffd800', outline: '#000', outlineW: 4, align: 'center' }); return; }
+    ['RETRY', 'TITLE'].forEach((label, i) => {
+      const bw = 150, bh = 34, bx = W / 2 - 160 + i * 170, by = 290, sel = i === (G.overSel || 0);
+      ctx.fillStyle = sel ? '#ffd800' : '#2b2f3a'; ctx.fillRect(bx, by, bw, bh); ctx.fillStyle = sel ? '#fff' : '#4a5060'; ctx.fillRect(bx, by, bw, 2); ctx.fillRect(bx, by + bh - 2, bw, 2);
+      TXT(ctx, label, bx + bw / 2, by + 22, { size: 10, sy: 1.3, fill: sel ? '#000' : '#cfd3da', align: 'center' });
+      R.hit.rows.push({ x: bx, y: by, w: bw, h: bh, i });
+    });
   };
   R.goal = function (G) {
     const r = G.result; if (!r) return;

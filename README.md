@@ -12,9 +12,9 @@ and the route forks after every stage.
 * `dist/index.html` — single self-contained file (fonts and sprites inlined). Open it in any browser.
 * Or serve the repo root (`python3 -m http.server`) and open `index.html`.
 
-Controls: `← →` steer, `↑` gas, `↓` brake, `Shift` (or a quick double tap of the steering arrow) while turning hard drifts, `Enter`/`Space` start, `M` mute music, `P` pause.
+Controls: `← →` steer, `↑` gas, `↓` brake, `Shift` (or a quick double tap of the steering arrow) while turning hard drifts, `Enter`/`Space` start, `M` mute music, `P`/`Esc` pause menu (resume, restart, music, full screen, quit), `F` full screen.
 After the music select, a course select lets you start from any of the seven areas (Full Run starts at Charoen Krung). The countdown is three seconds; the controls are shown during it, not on the title screen.
-On touch devices there are no buttons: the bike accelerates by itself, a finger left or right of centre steers (further out steers harder), holding a second finger brakes, a quick double tap while steering hard drifts, and menus are tapped.
+On touch devices there are no buttons: the bike accelerates by itself, one finger left or right of centre steers (further out steers harder), a second finger held while turning hard drifts, three fingers brake, the small ▮▮ button top-right opens the pause menu, and menus are tapped. The title screen has a full-screen button (top-right); on iPhone the browser offers no full-screen API, so use landscape or add the page to the home screen.
 A drift turns in sharper, resists the curve's push and scrubs speed, with tyre smoke and a rubber trail. Hitting oncoming traffic, a roadside object or the back of a car at speed throws the rider off (the sheet's fall-left / fall-right frames, then the get-up frames): lose control, eject, airborne, ground hit, slide, stop, recover in about two seconds; the ice becomes bags and cubes bouncing down the road.
 
 ## The living street (sprite sheet)

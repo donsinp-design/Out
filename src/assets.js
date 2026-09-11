@@ -469,6 +469,7 @@
     // roadside (from reference)
     add('tuktuk_parked', IMG.tuktuk, 900, { solid: true });
     add('spirit', IMG.spirit, 640, { solid: true });
+    add('spirit_small', IMG.spirit, 300, { solid: true }); // fits on the river walkway
     add('vendor', IMG.vendor, 640, { solid: true });
     add('yen', IMG.yen, 330, { solid: true });
     add('seven_pole', onPole(IMG.seven, 240, 1, 6), 1000, { solid: true, thin: 0.25 });
