@@ -231,8 +231,9 @@
     if (c) { if (c.hornT > 0 && !force) return; c.hornT = 2.2 + Math.random() * 2; }
     if (force) hornCd = 0;
     hornCd = 0.28 + Math.random() * 0.25;
-    A.sfx('horn');
-    if (urgency > 0.8 && Math.random() < 0.5) setTimeout(() => A.sfx('horn'), 150); // a second blast when it is close
+    A.sfx('horn', urgency);
+    // an angry driver gets a second blast in; leave room after the first so it reads as two, not one long one
+    if (urgency > 0.8 && Math.random() < 0.5) setTimeout(() => A.sfx('horn', urgency * 0.8), 620);
   }
   // any vehicle the bike is crowding from behind or alongside sounds off
   function proximityHorns(dt, G) {

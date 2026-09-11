@@ -131,7 +131,40 @@
     const wn = noise(); wn.loop = true; const whp = ctx.createBiquadFilter(); whp.type = 'highpass'; whp.frequency.value = 400; const wlp = ctx.createBiquadFilter(); wlp.type = 'lowpass'; wlp.frequency.value = 900; const wg = ctx.createGain(); wg.gain.value = 0;
     wn.connect(whp); whp.connect(wlp); wlp.connect(wg); wg.connect(sfxBus); wn.start();
     engine = { o1, o2, lp, g, rg, wg, wlp };
+    loadHorn();
   };
+
+  // ---------- recorded horn ----------
+  // A real car horn beats anything two square waves can do, so the build inlines one (window.__HORN__) and it is
+  // decoded once into a buffer that every honk plays a slice of. The recording is a pass-by: a blast that holds for
+  // about 1.7s and then drops away, so a short toot takes the front of it and an angry lean-on-it takes more.
+  const HORN = { buf: null, loading: false, in: 0.055 };  // skip the first few ms so every honk starts on the attack
+  function loadHorn() {
+    if (HORN.buf || HORN.loading || !ctx || !window.__HORN__) return;
+    HORN.loading = true;
+    fetch(window.__HORN__).then(r => r.arrayBuffer()).then(b => ctx.decodeAudioData(b))
+      .then(buf => { HORN.buf = buf; }).catch(() => { HORN.loading = false; }); // a failed decode falls back to the synth
+  }
+  A.hornReady = () => !!HORN.buf;
+  function playHorn(t, urgency) {
+    const u = Math.max(0, Math.min(1, urgency === undefined ? 0.5 : urgency));
+    if (!HORN.buf) { // no sample: the old two-tone stand-in
+      const len = 0.2 + 0.3 * u;
+      tone('square', 415, t, len, 0.08, sfxBus); tone('square', 350, t, len, 0.08, sfxBus); return;
+    }
+    const rate = 0.94 + Math.random() * 0.12;               // no two honks land on exactly the same pitch
+    const len = (0.2 + 0.55 * u) * rate;                    // a warning toot is short, an angry one leans on it
+    const rel = Math.min(0.12, len * 0.35);
+    const s = ctx.createBufferSource(), g = ctx.createGain();
+    s.buffer = HORN.buf; s.playbackRate.value = rate;
+    const peak = 0.5 + 0.45 * u;
+    g.gain.setValueAtTime(0.0001, t);
+    g.gain.exponentialRampToValueAtTime(peak, t + 0.012);
+    g.gain.setValueAtTime(peak, t + len - rel);
+    g.gain.exponentialRampToValueAtTime(0.0001, t + len);   // fade out rather than cut, so it never clicks
+    s.connect(g); g.connect(sfxBus);
+    s.start(t, HORN.in, len / rate + 0.02); s.stop(t + len + 0.02);
+  }
   A.unlock = function () { // call from a real user gesture (touchend / click / keydown)
     A.init(); if (!ctx) return;
     if (ctx.state === 'suspended') ctx.resume();
@@ -328,14 +361,14 @@
   };
 
   // ---------- sfx ----------
-  A.sfx = function (name) {
+  A.sfx = function (name, arg) {
     if (!ctx) return; const t = ctx.currentTime;
     switch (name) {
       case 'crash': { const n = noise(), f = ctx.createBiquadFilter(), g = ctx.createGain(); f.type = 'lowpass'; f.frequency.setValueAtTime(3000, t); f.frequency.exponentialRampToValueAtTime(200, t + 0.5);
         g.gain.setValueAtTime(0.5, t); g.gain.exponentialRampToValueAtTime(0.001, t + 0.55); n.connect(f); f.connect(g); g.connect(sfxBus); n.start(t); n.stop(t + 0.6);
         tone('sine', 110, t, 0.35, 0.5, sfxBus, { slide: 30 }); break; }
       case 'bump': { const n = noise(), f = ctx.createBiquadFilter(), g = ctx.createGain(); f.type = 'lowpass'; f.frequency.value = 400; g.gain.setValueAtTime(0.25, t); g.gain.exponentialRampToValueAtTime(0.001, t + 0.15); n.connect(f); f.connect(g); g.connect(sfxBus); n.start(t); n.stop(t + 0.2); break; }
-      case 'horn': tone('square', 415, t, 0.35, 0.08, sfxBus); tone('square', 350, t, 0.35, 0.08, sfxBus); break;
+      case 'horn': playHorn(t, arg); break;   // arg is urgency 0..1: how long they hold it down
       case 'skid': hit(t, 0.35, 0.16, 'bandpass', 2600, 2.5, sfxBus); break;
       case 'drift': { const n = noise(), f = ctx.createBiquadFilter(), g = ctx.createGain(); f.type = 'bandpass'; f.Q.value = 3; f.frequency.setValueAtTime(3200, t); f.frequency.exponentialRampToValueAtTime(1500, t + 0.5);
         g.gain.setValueAtTime(0.001, t); g.gain.exponentialRampToValueAtTime(0.3, t + 0.04); g.gain.exponentialRampToValueAtTime(0.001, t + 0.55); n.connect(f); f.connect(g); g.connect(sfxBus); n.start(t); n.stop(t + 0.6); break; }
