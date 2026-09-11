@@ -68,7 +68,7 @@
   };
   const CAST = { shop: ['manWhite', 'manClap', 'manBlue', 'womanYellow', 'womanBag', 'schoolgirl', 'schoolgirl', 'schoolboy', 'girlPink', 'photoWoman', 'monk'],
     city: ['manWhite', 'manBlue', 'womanBag', 'photoWoman', 'schoolgirl', 'manClap'], temple: ['monk', 'monk', 'monk', 'tourist', 'womanYellow'], park: ['tourist', 'photoWoman', 'girlPink', 'schoolboy', 'manWhite', 'monk'], water: ['tourist', 'photoWoman'] };
-  const UPX = { ped: 9, dog: 8, cat: 7, lizard: 7, stall: 10, cart: 10, chair: 7, cone: 6, box: 7, sign: 8, vendor: 9, fruit: 9, pot: 9, boxbit: 8, cube: 7, bag: 8, dust: 9, leaf: 7, splash: 8, drop: 6 };
+  const UPX = { ped: 9, dog: 8, cat: 7, lizard: 7, stall: 10, cart: 10, chair: 7, cone: 6, box: 7, sign: 8, vendor: 9, fruit: 9, pot: 9, boxbit: 8, cube: 2.7, bag: 8, dust: 9, leaf: 7, splash: 8, drop: 6 };
 
   // ---------- spawning ----------
   let rngS = null;
