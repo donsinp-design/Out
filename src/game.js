@@ -220,6 +220,35 @@
     const flow = 30 + 90 * (G.speed / G.maxSpeed); // recedes a little faster at speed (still far slower than the road, on purpose)
     for (let i = G.marks.length - 1; i >= 0; i--) { const p = G.marks[i]; p.t += dt; p.x -= dpx; p.y += flow * dt; if (p.t > 0.5) G.marks.splice(i, 1); }
   }
+  // ---------- online leaderboard ----------
+  // Published as an artifact, the page gets a shared document store, so the board is world-wide with no account,
+  // key or server of our own. Anywhere else (the standalone build, the iPhone app) claude.use is absent, the whole
+  // thing stays null and the game runs on its local ranking exactly as before. The whole board is ONE document
+  // holding a top-20 array rather than a document per score, so it can never grow into the store's document cap.
+  const NET = { db: null, board: [], state: 'off' };
+  OB.net = NET;
+  const BOARD_DOC = 'scores/global', BOARD_MAX = 20;
+  (async function () {
+    try {
+      if (!window.claude || typeof claude.use !== 'function') return;
+      const db = await claude.use('db');
+      if (!db) return;
+      NET.db = db; NET.state = 'on';
+      db.doc(BOARD_DOC).onSnapshot(
+        s => { const d = s.exists ? s.data() : null; NET.board = (d && Array.isArray(d.top)) ? d.top : []; },
+        () => { NET.state = 'off'; });
+    } catch (e) { NET.state = 'off'; }
+  })();
+  NET.submit = async function (name, score, route) {
+    if (!NET.db) return;
+    try {
+      const doc = NET.db.doc(BOARD_DOC), snap = await doc.get();
+      const cur = (snap.exists && Array.isArray((snap.data() || {}).top)) ? (snap.data().top || []).slice() : [];
+      cur.push({ name: name, score: Math.floor(score), route: route || '', at: Date.now() });
+      cur.sort((a, b) => b.score - a.score);
+      await doc.set({ top: cur.slice(0, BOARD_MAX) });
+    } catch (e) { /* a full store or a lost grant must never break the run */ }
+  };
   // ---------- records / name entry ----------
   function qualifies(score) { return score >= 1000 && (G.ranking.length < 5 || score > G.ranking[G.ranking.length - 1].score); }
   function routeStr() { return G.route.map(k => T.STAGES[k].name.eng.split(' ').map(w => w[0]).join('')).join('>'); }
@@ -227,6 +256,7 @@
   // the entry screen is skipped, so a crash restarts immediately. Hold RENAME on the game over screen to change it.
   function savedName() { const n = String(store.get('ob_name', '') || '').toUpperCase().replace(/[^A-Z0-9]/g, '').slice(0, 3); return n || null; }
   function fileRecord(rec, name) {
+    OB.net.submit(name, rec.score, rec.route);
     G.ranking.push({ name, score: Math.floor(rec.score), route: rec.route });
     G.ranking.sort((a, b) => b.score - a.score); G.ranking = G.ranking.slice(0, 5);
     store.set('ob_ranking', G.ranking); G.hiScore = G.ranking[0].score; G.pendingRecord = null; G.nameEntry = null;

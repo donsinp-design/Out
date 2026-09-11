@@ -556,12 +556,21 @@
     ctx.imageSmoothingEnabled = true; ctx.drawImage(art, ax, 0, aw, ah); ctx.imageSmoothingEnabled = false;
     // flashing start prompt between the wheel and the credit line
     if (Math.floor(G.t * 2.5) % 2 === 0) TXT(ctx, G.touchMode ? 'TAP TO START' : 'PRESS START', W / 2, 434, { size: 14, sy: 1.3, fill: '#fff', outline: '#000', outlineW: 6, align: 'center' });
+    // world board on the left margin when the page has one, this phone's best on the right
+    const net = OB.net || {}, wb = net.board || [];
+    if (wb.length && ax > 150) {
+      const wx = 12, wy = H - 132;
+      TXT(ctx, 'WORLD BEST', wx, wy, { size: 7, sy: 1.4, fill: '#7fe0ff', outline: '#000', outlineW: 3 });
+      for (let i = 0; i < 5; i++) { const r = wb[i]; if (!r) break;
+        TXT(ctx, (i + 1) + ' ' + ((r.name || '???') + '   ').slice(0, 3) + ' ' + OB.pad(r.score, 7), wx, wy + 16 + i * 13,
+          { size: 6, sy: 1.4, fill: i === 0 ? '#ffd800' : '#fff', outline: '#000', outlineW: 3 }); }
+    }
     // best riders in the right margin
     const rk = G.ranking || [];
     if (rk.length) {
       const rx = ax + aw + 14, ry = H - 120;
       if (W - rx > 150) {
-        TXT(ctx, 'BEST RIDERS', rx, ry, { size: 7, sy: 1.4, fill: '#ff37a8', outline: '#000', outlineW: 3 });
+        TXT(ctx, net.state === 'on' ? 'THIS PHONE' : 'BEST RIDERS', rx, ry, { size: 7, sy: 1.4, fill: '#ff37a8', outline: '#000', outlineW: 3 });
         for (let i = 0; i < 3; i++) { const r = rk[i]; if (!r) break; TXT(ctx, (i + 1) + ['ST', 'ND', 'RD'][i] + ' ' + (r.name + '   ').slice(0, 3) + ' ' + OB.pad(r.score, 7), rx, ry + 16 + i * 14, { size: 6, sy: 1.4, fill: i === 0 ? '#ffd800' : '#fff', outline: '#000', outlineW: 3 }); }
       }
     }
