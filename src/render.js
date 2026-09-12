@@ -303,29 +303,47 @@
     const rx = c.spr.w * acs * K * (moto ? 0.6 : 0.95); if (rx < 2) return;
     lights.push({ kind: 'pool', x: ax, y: ay, rx, ry: rx * 0.42, r: 205, g: 218, b: 255, a: 0.8 });
   }
-  // the bike's own beam: a strip of road ahead that follows the curve, widening and fading with distance
+  // The bike's own beam. It starts at the headlight, not at the contact patch: a point at height h above the road
+  // projects h/cameraH of the way from its ground point up to the horizon, so the lamp sits that far up the bike and
+  // the beam fans out from there along the road. The near end is dimmer than the middle because the lamp is aimed a
+  // few metres out, and the bike's silhouette is restored to ambient afterwards so it occludes its own light.
+  const HL_H = 583;                          // headlight height in world units (~0.85 m at 686 units/m)
+  const BEAM = [[520, 0.15], [1370, 0.26], [3400, 0.38], [8200, 0.5], [19000, 0.62]];  // [distance ahead, half-width as a fraction of the road]
+  // wide enough that the throw clears the bike on both sides -- a beam narrower than the rider is one you never see
+  function bikeGroundY(G) { const zoom = (G.cam && G.cam.zoom) || 1; return Math.round(HZ + (457 - HZ) * zoom + (G.bounce || 0)) - Math.round(G.hopY || 0); }
   function playerBeam(g, G, segs, segLen, RW, lim) {
     const pz = G.position + G.playerZ, lat = G.playerX * RW;
-    const bx = W / 2 + (G.drawShift || 0) + (G.playerDX || 0), by = 452;
-    const L = [[bx - 26, by]], Rr = [[bx + 26, by]];
-    let farY = by;
-    for (const [dz, half] of [[380, 0.13], [900, 0.2], [1500, 0.27], [2300, 0.34]]) {
+    const bx = W / 2 + (G.drawShift || 0) + (G.playerDX || 0), gy = bikeGroundY(G);
+    const hlY = gy - (gy - HZ) * (HL_H / G.cameraH);   // the lamp itself, part way up the bike
+    const L = [[bx - 5, hlY]], Rr = [[bx + 5, hlY]];
+    let farY = hlY;
+    for (const [dz, half] of BEAM) {
       const i = Math.floor((pz + dz) / segLen); if (i >= lim || i >= segs.length) break;
       const s = segs[i]; if (s.behind || s.hidden) break;
       const p = ((pz + dz) % segLen) / segLen, cs = OB.lerp(s.p1.screen.scale, s.p2.screen.scale, p);
       const x = OB.lerp(s.p1.screen.x, s.p2.screen.x, p) + cs * lat * K, y = OB.lerp(s.p1.screen.y, s.p2.screen.y, p), hw = cs * half * RW * K;
-      if (y > s.clip || y >= farY) break;
-      L.push([x - hw, y]); Rr.push([x + hw, y]); farY = y;
+      if (y > s.clip) break;
+      L.push([x - hw, Math.min(y, farY)]); Rr.push([x + hw, Math.min(y, farY)]); farY = Math.min(y, farY);
     }
-    if (L.length < 2) return;
-    const gr = g.createLinearGradient(0, by, 0, farY);
-    gr.addColorStop(0, 'rgba(255,238,205,0.8)'); gr.addColorStop(0.35, 'rgba(255,238,205,0.55)'); gr.addColorStop(1, 'rgba(255,238,205,0)');
+    if (L.length < 3) return;
+    // the throw, measured from the lamp: dim at the lamp, brightest a few metres out, gone by the end of the beam
+    const gr = g.createLinearGradient(0, hlY, 0, farY);
+    gr.addColorStop(0, 'rgba(255,238,205,0.34)'); gr.addColorStop(0.3, 'rgba(255,238,205,0.9)');
+    gr.addColorStop(0.65, 'rgba(255,238,205,0.5)'); gr.addColorStop(1, 'rgba(255,238,205,0)');
     g.fillStyle = gr; g.beginPath(); g.moveTo(L[0][0], L[0][1]);
     for (let i = 1; i < L.length; i++) g.lineTo(L[i][0], L[i][1]);
     for (let i = Rr.length - 1; i >= 0; i--) g.lineTo(Rr[i][0], Rr[i][1]);
     g.closePath(); g.fill();
-    // spill around the bike itself, so the rider is never a silhouette on their own headlight
-    ellipseLight(g, { x: bx, y: by + 6, rx: 150, ry: 60, r: 255, g: 226, b: 190, a: 0.5 });
+    // sideways spill, centred on the road the lamp is pointed at rather than on the bike
+    ellipseLight(g, { x: bx, y: (hlY + gy) / 2, rx: 175, ry: 46, r: 255, g: 226, b: 190, a: 0.34 });
+  }
+  // the bike blocks its own headlight, so it stays at ambient instead of sitting in the pool it casts
+  function occludeBike(g, G) {
+    const bx = W / 2 + (G.drawShift || 0) + (G.playerDX || 0), gy = bikeGroundY(G);
+    const gr = g.createRadialGradient(0, 0, 0, 0, 0, 1);
+    gr.addColorStop(0, AMBIENT); gr.addColorStop(0.72, AMBIENT); gr.addColorStop(1, AMBIENT + '00');
+    g.save(); g.globalCompositeOperation = 'source-over';
+    g.translate(bx, gy - 80); g.scale(50, 98); g.fillStyle = gr; g.fillRect(-1, -1, 2, 2); g.restore();
   }
   function ellipseLight(g, l) {
     const gr = g.createRadialGradient(0, 0, 0, 0, 0, 1);
@@ -349,6 +367,7 @@
       else if (l.kind === 'cone') coneLight(lg, l);
       else if (l.kind === 'rect') { lg.fillStyle = 'rgba(255,240,220,' + l.a.toFixed(2) + ')'; lg.fillRect(l.x, l.y, l.w, l.h); }
     }
+    if (!G.crash) occludeBike(lg, G);
     ctx.globalCompositeOperation = 'multiply'; ctx.drawImage(LM, 0, 0);
     ctx.globalCompositeOperation = 'lighter';
     for (const l of lights) if (l.kind === 'glow') ellipseLight(ctx, { x: l.x, y: l.y, rx: l.rx, ry: l.rx, r: l.r, g: l.g, b: l.b, a: l.a });
