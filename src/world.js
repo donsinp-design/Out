@@ -111,7 +111,7 @@
         if (env === 'shop' && (rel + (sd === 'L' ? 29 : 71)) % 130 === 0) spawn('cat', 'cat', z, pave(rng.range(0.04, 0.1)), { state: 'idle', flip: rng.chance(0.5) });
         // destructible props
         if (env === 'shop' || env === 'city' || env === 'park') {
-          if ((rel + (sd === 'L' ? 5 : 41)) % 73 === 0 && env !== 'park') { spawn('stall', 'stall', z, pave(0.06), { state: 'idle', flip: s > 0 }); if (rng.chance(0.7)) spawn('chair', 'chair', z + 2.5 * L, pave(0.03), { state: 'idle', flip: rng.chance(0.5) }); }
+          if ((rel + (sd === 'L' ? 5 : 41)) % 73 === 0 && env !== 'park') spawn('stall', 'stall', z, pave(0.06), { state: 'idle', flip: s > 0 });
           if ((rel + (sd === 'L' ? 17 : 63)) % 111 === 0 && env === 'shop') spawn('cart', 'cart', z, pave(0.05), { state: 'idle', flip: s > 0 });
           if ((rel + (sd === 'L' ? 23 : 89)) % 84 === 0 && rng.chance(0.7)) spawn('box', 'box', z, pave(rng.range(0.02, 0.08)), { state: 'idle', flip: rng.chance(0.5) });
           if ((rel + (sd === 'L' ? 37 : 97)) % 121 === 0 && env === 'shop') spawn('sign', 'sign', z, pave(0.04), { state: 'idle', flip: s > 0 });
