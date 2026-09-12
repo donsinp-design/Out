@@ -514,7 +514,7 @@
     OB.frameCanvas = FC;
     // vehicles
     add('bike', IMG.bike, 480);
-    add('moto', IMG.bike, 430, { car: true, moto: true }); // another delivery rider, weaving through at speed
+    add('moto', FC('D0'), 430, { car: true, moto: true }) // sheet rider, cut whole; bike.png was a photo cut with the helmet crown and rear wheel sliced off; // another delivery rider, weaving through at speed
     // Same-direction traffic comes from the sprite sheet's rear views. The old photo cut-outs of the cars were
     // sliced by the crop (the taxi lost the bottom of its wheels and the top of its roof), which is what read as
     // cars being cut off; the sheet versions are whole. Colour variants are hue-rotated copies of the one taxi so
