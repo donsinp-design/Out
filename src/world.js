@@ -425,8 +425,12 @@
     if (p.sx + dw < 0 || p.sx - dw > W) return;
     const clip = seg.clip;
     if (clip && p.sy - dh > clip) return;
+    // an actor whose feet have gone under the bottom of the frame would be cut flat across its body with the
+    // pavement still showing beside it; fade it out over the next third of its height instead
+    let alpha = a.alpha === undefined ? 1 : a.alpha;
+    if (p.sy > H) { alpha *= OB.clamp(1 - (p.sy - H) / (dh * 0.35), 0, 1); if (alpha <= 0.02) return; }
     ctx.save(); if (clip) { ctx.beginPath(); ctx.rect(0, 0, W, clip); ctx.clip(); }
-    WD.blit(ctx, f, p.sx, p.sy - (a.hop || 0) * p.cs * K * 12, dw, dh, a.flip, a.rot, a.alpha);
+    WD.blit(ctx, f, p.sx, p.sy - (a.hop || 0) * p.cs * K * 12, dw, dh, a.flip, a.rot, alpha);
     if (a.flash > 0) { ctx.fillStyle = 'rgba(255,255,255,0.9)'; ctx.fillRect(Math.round(p.sx - dw * 0.1), Math.round(p.sy - dh * 0.8), Math.max(2, dw * 0.2), Math.max(2, dh * 0.08)); }
     ctx.restore();
   };

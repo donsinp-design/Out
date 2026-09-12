@@ -64,7 +64,11 @@
 
   // ---------- projection ----------
   const roadW = () => OB.track.roadW;
-  const WATER_DROP = 0, SIDEWALK = 0.13, FOLLOW = 0.8; // camera follows the bike only partially so the road stays centred
+  // The camera follows the bike only partially so the road stays centred. 0.8 put the near kerb almost under the
+  // camera when the bike hugged it, so roadside props there projected straight down and left the frame through
+  // the floor, sliced flat, instead of out the side. At 0.45 they leave sideways (measured 1 floor-slice in 220
+  // frames of kerb-hugging against 6) and the bike still sits 148px inside the edge at full lock.
+  const WATER_DROP = 0, SIDEWALK = 0.13, FOLLOW = 0.45;
   function project(p, camX, camY, camZ, depth, rw) {
     p.camera.x = p.world.x - camX; p.camera.y = p.world.y - camY; p.camera.z = p.world.z - camZ;
     p.screen.scale = depth / p.camera.z;
@@ -227,6 +231,9 @@
         if (destX > W || destX + destW < 0) continue;
         let fa = 1;
         if (sp.flick) { const ph = (G.t * 6 + sp.flick * 1.7) % 4; if (ph < 0.07 || (ph > 0.5 && ph < 0.54)) fa = 0.45; } // a lit sign with a bad tube
+        // a prop whose base has gone under the bottom of the frame would otherwise be cut flat across its middle
+        // with pavement still showing beside it; fade it out over the next third of its height instead
+        if (sy > H) { fa *= OB.clamp(1 - (sy - H) / (destH * 0.35), 0, 1); if (fa <= 0.02) continue; }
         ctx.globalAlpha = fa;
         drawSprite(img, destX, destY, destW, destH, seg.clip, sp.flip);
         ctx.globalAlpha = 1;
