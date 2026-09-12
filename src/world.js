@@ -113,7 +113,6 @@
         if (env === 'shop' || env === 'city' || env === 'park') {
           if ((rel + (sd === 'L' ? 5 : 41)) % 73 === 0 && env !== 'park') spawn('stall', 'stall', z, pave(0.06), { state: 'idle', flip: s > 0 });
           if ((rel + (sd === 'L' ? 17 : 63)) % 111 === 0 && env === 'shop') spawn('cart', 'cart', z, pave(0.05), { state: 'idle', flip: s > 0 });
-          if ((rel + (sd === 'L' ? 37 : 97)) % 121 === 0 && env === 'shop') spawn('sign', 'sign', z, pave(0.04), { state: 'idle', flip: s > 0 });
           if ((rel + (sd === 'L' ? 47 : 101)) % 150 === 0 && (env === 'city' || rng.chance(0.4))) { const n = 1 + rng.int(3); for (let k = 0; k < n; k++) spawn('cone', 'cone', z + k * 1.6 * L, s * (rw - 0.04 - k * 0.02), { state: 'idle' }); }
         }
       }

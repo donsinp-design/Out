@@ -98,7 +98,6 @@
         if (rel % 160 === 40) put(seg, 'signs_pole', edgeL + 0.08);
         if (rel % 210 === 120) put(seg, 'ckrd_pole', edgeL + 0.1);
         if (rel % 260 === 200) put(seg, 'seven_pole', edgeL + 0.02);
-        if (rel % 140 === 90) put(seg, 'tuktuk_parked', edgeL + 0.32);
         if (rel % 95 === 60) { put(seg, 'vendor', edgeL - 0.02); if (rng.chance(0.7)) put(segs[i + 3] || seg, 'yen', edgeL + 0.12); }
         if (stage.theme === 'chinatown' && rel % 33 === 20) put(seg, 'redsign_pole', edgeL + 0.1);
       } else if (th.left === 'city') {
@@ -131,7 +130,6 @@
         if (rel % 16 === 4) put(seg, 'pole2', edgeR - 0.1, { pole: 'R', flip: true });
         if (rel % 33 === 20 && stage.theme === 'chinatown') put(seg, 'redsign_pole', edgeR - 0.1);
         if (rel % 150 === 75) put(seg, 'vendor', edgeR + 0.02, { flip: true });
-        if (rel % 120 === 100) put(seg, 'tuktuk_parked', edgeR - 0.32);
       } else if (th.right === 'city') {
         if (rel % 10 === 5) put(seg, pickShop(rng, 'city', 'R'), edgeR + 0.12, { anchor: 'right' });
         if (rel % 26 === 0) put(seg, rng.pick(TOWERS), edgeR + 1.9 + rng.range(0, 0.9), { anchor: 'right' });
