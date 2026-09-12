@@ -23,8 +23,8 @@
     city: { left: 'city', right: 'city', light: 'day', curv: 1.0, hills: 0.6, traffic: { density: 11, min: 0.35, max: 0.7, oncoming: 0 } },
     siam: { left: 'city', right: 'city', light: 'golden', curv: 1.15, hills: 0.5, traffic: { density: 12, min: 0.3, max: 0.68, oncoming: 0 }, skytrain: true },
     oldtown: { left: 'temple', right: 'park', light: 'golden', curv: 1.3, hills: 0.4, traffic: { density: 8, min: 0.25, max: 0.6, oncoming: 0 } },
-    final_park: { left: 'temple', right: 'park', light: 'dusk', curv: 1.4, hills: 0.5, traffic: { density: 10, min: 0.3, max: 0.65, oncoming: 0 } },
-    final_river: { left: 'temple', right: 'water', light: 'dusk', curv: 1.4, hills: 0.5, traffic: { density: 10, min: 0.3, max: 0.65, oncoming: 0 } }
+    final_park: { left: 'temple', right: 'park', light: 'night', curv: 1.4, hills: 0.5, traffic: { density: 10, min: 0.3, max: 0.65, oncoming: 0 } },
+    final_river: { left: 'temple', right: 'water', light: 'night', curv: 1.4, hills: 0.5, traffic: { density: 10, min: 0.3, max: 0.65, oncoming: 0 } }
   };
 
   T.reset = function () { T.segments.length = 0; };

@@ -142,7 +142,13 @@
   function loadHorn() {
     if (HORN.buf || HORN.loading || !ctx || !window.__HORN__) return;
     HORN.loading = true;
-    fetch(window.__HORN__).then(r => r.arrayBuffer()).then(b => ctx.decodeAudioData(b))
+    // Unpack the data URI by hand rather than fetch() it: the artifact host's CSP blocks fetch to anything but a few
+    // CDNs, data: included, so a fetch here fails silently and every honk falls back to the synth stand-in.
+    let bytes;
+    try { const bin = atob(window.__HORN__.slice(window.__HORN__.indexOf(',') + 1)); bytes = new Uint8Array(bin.length); for (let i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i); }
+    catch (e) { HORN.loading = false; return; }
+    // callback form as well as the promise: older iOS Safari only has the former
+    new Promise((res, rej) => { const p = ctx.decodeAudioData(bytes.buffer, res, rej); if (p && p.then) p.then(res, rej); })
       .then(buf => { HORN.buf = buf; }).catch(() => { HORN.loading = false; }); // a failed decode falls back to the synth
   }
   A.hornReady = () => !!HORN.buf;
@@ -168,6 +174,7 @@
   A.unlock = function () { // call from a real user gesture (touchend / click / keydown)
     A.init(); if (!ctx) return;
     if (ctx.state === 'suspended') ctx.resume();
+    loadHorn(); // a decode that failed or never ran while the context was still locked gets another go on a real gesture
     try { const b = ctx.createBuffer(1, 1, 22050), s = ctx.createBufferSource(); s.buffer = b; s.connect(ctx.destination); s.start(0); } catch (e) { }
     try {
       if (!silentEl) { silentEl = document.createElement('audio'); silentEl.setAttribute('playsinline', ''); silentEl.loop = true; silentEl.volume = 0.01; silentEl.src = silentWav(); document.body.appendChild(silentEl); }

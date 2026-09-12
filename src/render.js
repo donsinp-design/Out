@@ -23,6 +23,10 @@
     PAL.golden = mk(1.04, 0.97, 0.88);
     PAL.dusk = mk(0.72, 0.6, 0.78);
     PAL.dusk.water = ['#4a3f86', '#5a4a96'];
+    // night gets its darkness from the lightmap in the frame pass, so the base palette only cools a touch and
+    // keeps the lane paint bright enough to survive the ambient multiply
+    PAL.night = mk(0.9, 0.94, 1.1);
+    PAL.night.water = ['#1c2a5c', '#233468']; PAL.night.lane = '#f6f4ec'; PAL.night.edge = '#eeebe2';
   }
   R.PAL = PAL;
 
@@ -41,6 +45,10 @@
       // sun
       g.globalCompositeOperation = 'lighter'; g.fillStyle = 'rgba(255,190,90,0.55)'; g.beginPath(); g.arc(230, 178, 26, 0, Math.PI * 2); g.fill();
       g.fillStyle = 'rgba(255,220,150,0.35)'; g.beginPath(); g.arc(230, 178, 44, 0, Math.PI * 2); g.fill();
+    } else if (light === 'night') {
+      // the frame is darkened again by the night lightmap, so this only cools the sky and leaves the last of the sunset low down
+      g.globalCompositeOperation = 'multiply'; const gr = g.createLinearGradient(0, 0, 0, c.height); gr.addColorStop(0, '#3e4ca8'); gr.addColorStop(0.6, '#6a5cb0'); gr.addColorStop(1, '#d89068'); g.fillStyle = gr; g.fillRect(0, 0, c.width, c.height);
+      g.globalCompositeOperation = 'screen'; const gr2 = g.createLinearGradient(0, 0, 0, c.height); gr2.addColorStop(0, 'rgba(10,10,40,0)'); gr2.addColorStop(0.75, 'rgba(255,90,60,0.1)'); gr2.addColorStop(1, 'rgba(255,150,80,0.3)'); g.fillStyle = gr2; g.fillRect(0, 0, c.width, c.height);
     }
     g.globalCompositeOperation = 'source-over';
     BG[light] = c; return c;
@@ -50,7 +58,7 @@
     const bg = R.bgFor(G.light);
     const y0 = HZ - bg.height + Math.round(G.bgShift || 0);
     ctx.fillStyle = PAL[G.light].ground; ctx.fillRect(0, 0, W, H);
-    if (y0 > 0) { ctx.fillStyle = '#0558f0'; ctx.fillRect(0, 0, W, y0 + 1); }
+    if (y0 > 0) { ctx.fillStyle = G.light === 'night' ? '#2040a0' : '#0558f0'; ctx.fillRect(0, 0, W, y0 + 1); }
     ctx.drawImage(bg, Math.round((W - bg.width) / 2), y0);
   }
 
@@ -158,7 +166,9 @@
   R.frame = function (G) {
     const T = OB.track, segs = T.segments, segLen = T.segLen, RW = T.roadW;
     const pal = PAL[G.light] || PAL.day;
+    const night = G.light === 'night'; lights.length = 0;
     const baseSeg = T.findSegment(G.position), basePct = (G.position % segLen) / segLen;
+    const lim = baseSeg.index + G.drawDistance; // segments past this were not projected this frame
     const playerSeg = T.findSegment(G.position + G.playerZ), playerPct = ((G.position + G.playerZ) % segLen) / segLen;
     const playerY = OB.lerp(playerSeg.p1.world.y, playerSeg.p2.world.y, playerPct);
     G.bgShift = -(playerY) * 0.004;
@@ -215,9 +225,12 @@
         // pole tops are kept even off screen, so in a corner the wires leave the frame toward the real next pole
         if (sp.pole && s.poleTop) { const top = { x: destX + destW * s.poleTop.x, y: destY + destH * s.poleTop.y, w: destW, seg: seg.index }; poles[sp.pole].push(top); if (sp.pole === 'L') newPole = top; }
         if (destX > W || destX + destW < 0) continue;
-        if (sp.flick) { const ph = (G.t * 6 + sp.flick * 1.7) % 4; if (ph < 0.07 || (ph > 0.5 && ph < 0.54)) ctx.globalAlpha = 0.45; } // a lit sign with a bad tube
+        let fa = 1;
+        if (sp.flick) { const ph = (G.t * 6 + sp.flick * 1.7) % 4; if (ph < 0.07 || (ph > 0.5 && ph < 0.54)) fa = 0.45; } // a lit sign with a bad tube
+        ctx.globalAlpha = fa;
         drawSprite(img, destX, destY, destW, destH, seg.clip, sp.flip);
         ctx.globalAlpha = 1;
+        if (night) noteSpriteLight(s, destX, destY, destW, destH, sy, seg.clip, sp.flip, fa);
         if (sp.pillar) { /* pillars carry the deck */ }
       }
       // the wire span that ends at this segment's pole is drawn now, so nearer shophouses paint over it
@@ -235,6 +248,7 @@
           if (c.brake > 0) { const f = WD.F('BRAKE_LIGHT'); if (f) WD.blitC(ctx, f, dx0 + destW / 2, cy - destH * 0.3, destW * 0.7, destW * 0.7 * f.h / f.w, 0, 0.95); }
           if (c.ind && ((G.t * 2.5) % 1) < 0.62) { const f = WD.F(c.ind < 0 ? 'INDICATOR_L' : 'INDICATOR_R'); if (f) WD.blitC(ctx, f, dx0 + destW * (c.ind < 0 ? 0.12 : 0.88), cy - destH * 0.32, destW * 0.22, destW * 0.22 * f.h / f.w, 0, 1); }
         }
+        if (night && destW > 4 && cy <= seg.clip + destH) noteCarLight(c, dx0, cy, destW, destH, segs, segLen, RW, lim);
       }
       const al = actorsBySeg.get(seg.index); if (al) for (const a of al) WD.drawActor(ctx, a, seg);
       const dl = debrisBySeg.get(seg.index); if (dl) for (const d of dl) WD.drawDebris(ctx, d, seg);
@@ -245,11 +259,101 @@
     wireTail(poles.L, G, -1, baseSeg, camX, camY, camZ);
     // ---- player ----
     drawPlayer(G);
+    // ---- night: lightmap multiply, then the emissive bits, inside the camera transform so pools stay under their lamps ----
+    if (night) nightPass(G, segs, segLen, RW, lim);
     ctx.restore();
     // ---- light grading ----
     if (G.light === 'golden') { ctx.globalCompositeOperation = 'multiply'; ctx.fillStyle = '#fff1dc'; ctx.fillRect(0, 0, W, H); ctx.globalCompositeOperation = 'source-over'; }
     else if (G.light === 'dusk') { ctx.globalCompositeOperation = 'multiply'; ctx.fillStyle = '#d9a8c8'; ctx.fillRect(0, 0, W, H); ctx.globalCompositeOperation = 'screen'; ctx.fillStyle = 'rgba(120,40,90,0.18)'; ctx.fillRect(0, 0, W, H); ctx.globalCompositeOperation = 'source-over'; }
   };
+
+  // ---------- night ----------
+  // Night is a lightmap. The finished frame is multiplied by an ambient blue, but first every light source paints
+  // its pool into that map, so under a lamp or inside a headlight beam the road and pavement show through at full
+  // brightness and colour rather than being tinted. The lights themselves (lanterns, tail lights) go on top after.
+  const lights = [];              // this frame's sources, in screen space: pools and cones go into the map, glows on top
+  let LM = null, lg = null;       // the lightmap canvas, made once
+  const AMBIENT = '#4a5488';      // what the scene is multiplied by where nothing is lit
+  const LIT_SIGN = /sign|redsign|seven|thatien|ckrd/;   // the same set that flickers: neon and lightboxes stay lit after dark
+  function noteSpriteLight(s, destX, destY, destW, destH, groundY, clip, flip, fa) {
+    if (s.lampHead) {
+      if (destH < 5 || groundY > clip + 2) return;
+      const hx = destX + destW * (flip ? 1 - s.lampHead.x : s.lampHead.x), hy = destY + destH * s.lampHead.y;
+      lights.push({ kind: 'pool', x: hx, y: groundY, rx: destH * 0.85, ry: destH * 0.3, r: 255, g: 186, b: 104, a: 0.95 });
+      lights.push({ kind: 'cone', x: hx, y: hy, gy: groundY, rx: destH * 0.55 });
+      lights.push({ kind: 'glow', x: hx, y: hy, rx: Math.max(1.5, destW * 0.55), r: 255, g: 216, b: 150, a: 0.9 });
+    } else if (destW > 3 && s.name && LIT_SIGN.test(s.name)) {
+      const h = Math.min(destH, clip - destY); if (h <= 0) return;
+      lights.push({ kind: 'rect', x: destX, y: destY, w: destW, h, a: 0.72 * fa });
+    }
+  }
+  function noteCarLight(c, dx0, cy, destW, destH, segs, segLen, RW, lim) {
+    const moto = !!c.spr.moto, braking = c.brake > 0;
+    // tail lights: a pair on a car, one on a bike, and brighter under braking
+    const ty = cy - destH * (moto ? 0.36 : 0.3), tr = Math.max(1.2, destW * (moto ? 0.12 : 0.085)) * (braking ? 1.7 : 1);
+    if (moto) lights.push({ kind: 'glow', x: dx0 + destW / 2, y: ty, rx: tr, r: 255, g: 40, b: 30, a: 0.9 });
+    else { lights.push({ kind: 'glow', x: dx0 + destW * 0.2, y: ty, rx: tr, r: 255, g: 40, b: 30, a: 0.9 }); lights.push({ kind: 'glow', x: dx0 + destW * 0.8, y: ty, rx: tr, r: 255, g: 40, b: 30, a: 0.9 }); }
+    // headlights: seen from behind, what shows is the beam landing on the road a little way ahead of the vehicle
+    const az = c.z + (moto ? 520 : 820), ai = Math.floor(az / segLen);
+    if (ai >= lim || ai >= segs.length) return;
+    const as = segs[ai]; if (as.behind || as.hidden) return;
+    const ap = (az % segLen) / segLen, acs = OB.lerp(as.p1.screen.scale, as.p2.screen.scale, ap);
+    const ax = OB.lerp(as.p1.screen.x, as.p2.screen.x, ap) + acs * c.offset * RW * as.rw * K, ay = OB.lerp(as.p1.screen.y, as.p2.screen.y, ap);
+    if (ay > as.clip) return;
+    const rx = c.spr.w * acs * K * (moto ? 0.6 : 0.95); if (rx < 2) return;
+    lights.push({ kind: 'pool', x: ax, y: ay, rx, ry: rx * 0.42, r: 205, g: 218, b: 255, a: 0.8 });
+  }
+  // the bike's own beam: a strip of road ahead that follows the curve, widening and fading with distance
+  function playerBeam(g, G, segs, segLen, RW, lim) {
+    const pz = G.position + G.playerZ, lat = G.playerX * RW;
+    const bx = W / 2 + (G.drawShift || 0) + (G.playerDX || 0), by = 452;
+    const L = [[bx - 26, by]], Rr = [[bx + 26, by]];
+    let farY = by;
+    for (const [dz, half] of [[380, 0.13], [900, 0.2], [1500, 0.27], [2300, 0.34]]) {
+      const i = Math.floor((pz + dz) / segLen); if (i >= lim || i >= segs.length) break;
+      const s = segs[i]; if (s.behind || s.hidden) break;
+      const p = ((pz + dz) % segLen) / segLen, cs = OB.lerp(s.p1.screen.scale, s.p2.screen.scale, p);
+      const x = OB.lerp(s.p1.screen.x, s.p2.screen.x, p) + cs * lat * K, y = OB.lerp(s.p1.screen.y, s.p2.screen.y, p), hw = cs * half * RW * K;
+      if (y > s.clip || y >= farY) break;
+      L.push([x - hw, y]); Rr.push([x + hw, y]); farY = y;
+    }
+    if (L.length < 2) return;
+    const gr = g.createLinearGradient(0, by, 0, farY);
+    gr.addColorStop(0, 'rgba(255,238,205,0.8)'); gr.addColorStop(0.35, 'rgba(255,238,205,0.55)'); gr.addColorStop(1, 'rgba(255,238,205,0)');
+    g.fillStyle = gr; g.beginPath(); g.moveTo(L[0][0], L[0][1]);
+    for (let i = 1; i < L.length; i++) g.lineTo(L[i][0], L[i][1]);
+    for (let i = Rr.length - 1; i >= 0; i--) g.lineTo(Rr[i][0], Rr[i][1]);
+    g.closePath(); g.fill();
+    // spill around the bike itself, so the rider is never a silhouette on their own headlight
+    ellipseLight(g, { x: bx, y: by + 6, rx: 150, ry: 60, r: 255, g: 226, b: 190, a: 0.5 });
+  }
+  function ellipseLight(g, l) {
+    const gr = g.createRadialGradient(0, 0, 0, 0, 0, 1);
+    gr.addColorStop(0, 'rgba(' + l.r + ',' + l.g + ',' + l.b + ',' + l.a + ')');
+    gr.addColorStop(0.45, 'rgba(' + l.r + ',' + l.g + ',' + l.b + ',' + (l.a * 0.45).toFixed(3) + ')');
+    gr.addColorStop(1, 'rgba(' + l.r + ',' + l.g + ',' + l.b + ',0)');
+    g.save(); g.translate(l.x, l.y); g.scale(l.rx, l.ry); g.fillStyle = gr; g.fillRect(-1, -1, 2, 2); g.restore();
+  }
+  function coneLight(g, l) { // the haze under a lantern, apex at the lamp, spreading to the pool
+    const gr = g.createLinearGradient(0, l.y, 0, l.gy);
+    gr.addColorStop(0, 'rgba(255,200,120,0.3)'); gr.addColorStop(1, 'rgba(255,190,110,0.04)');
+    g.fillStyle = gr; g.beginPath(); g.moveTo(l.x - l.rx * 0.08, l.y); g.lineTo(l.x + l.rx * 0.08, l.y); g.lineTo(l.x + l.rx, l.gy); g.lineTo(l.x - l.rx, l.gy); g.closePath(); g.fill();
+  }
+  function nightPass(G, segs, segLen, RW, lim) {
+    if (!LM) { LM = OB.makeCanvas(W, H); lg = LM.getContext('2d'); }
+    lg.globalCompositeOperation = 'source-over'; lg.fillStyle = AMBIENT; lg.fillRect(0, 0, W, H);
+    lg.globalCompositeOperation = 'lighter';
+    playerBeam(lg, G, segs, segLen, RW, lim);
+    for (const l of lights) {
+      if (l.kind === 'pool') ellipseLight(lg, l);
+      else if (l.kind === 'cone') coneLight(lg, l);
+      else if (l.kind === 'rect') { lg.fillStyle = 'rgba(255,240,220,' + l.a.toFixed(2) + ')'; lg.fillRect(l.x, l.y, l.w, l.h); }
+    }
+    ctx.globalCompositeOperation = 'multiply'; ctx.drawImage(LM, 0, 0);
+    ctx.globalCompositeOperation = 'lighter';
+    for (const l of lights) if (l.kind === 'glow') ellipseLight(ctx, { x: l.x, y: l.y, rx: l.rx, ry: l.rx, r: l.r, g: l.g, b: l.b, a: l.a });
+    ctx.globalCompositeOperation = 'source-over';
+  }
 
   // one bundle of five sagging lines between two pole tops (a farther, b nearer)
   function wireSpan(a, b) {

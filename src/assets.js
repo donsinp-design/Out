@@ -568,7 +568,7 @@
     const tx = texturize;
     const p = pole(300); add('pole', tx(p.c, { amp: 0.05 }), 520, { solid: true, thin: 0.35, poleTop: { x: p.topX / 40, y: p.topY / 300 } });
     const p2 = pole(300, { noTx: true }); add('pole2', tx(p2.c, { amp: 0.05 }), 520, { solid: true, thin: 0.35, poleTop: { x: p2.topX / 40, y: p2.topY / 300 } });
-    add('lamp', tx(lampPost(), { amp: 0.04 }), 600, { solid: true, thin: 0.3 });
+    add('lamp', tx(lampPost(), { amp: 0.04 }), 600, { solid: true, thin: 0.3, lampHead: { x: 36 / 44, y: 13 / 180 } }); // where the lantern sits, for the night pool
     add('pillar', tx(pillar(), { amp: 0.06 }), 640, { solid: true });
     // shophouses: the reference's own facade (rectified) with drawn upper storeys and swappable shop modules
     const AWN = [null, null, null, '#c8322b', '#1f8a4c', '#d99a1c', '#8a1c8c', '#2b6fb0'];
