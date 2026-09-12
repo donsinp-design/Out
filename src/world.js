@@ -76,6 +76,7 @@
     const a = actors.get(); if (!a) return null;
     a.kind = kind; a.sub = sub; a.z = z; a.x = x; a.y = 0; a.vx = 0; a.vz = 0; a.state = 'idle'; a.t = 0; a.age = 0; a.seed = Math.random() * 1000;
     a.frame = null; a.flip = false; a.rot = 0; a.hop = 0; a.side = x < 0 ? -1 : 1; a.home = x; a.dir = 1; a.hit = false; a.alpha = 1; a.chased = false; a.timer = 0; a.walkPh = 0;
+    a.body = null; a.runF = null;   // locked frames are per-life: a pooled actor must not inherit the last one's body
     a.calm = Math.random(); a.notice = 900 + Math.random() * 1400; a.risk = 0.3 + Math.random() * 0.35; a.reactDelay = 0.05 + Math.random() * 0.35;
     if (extra) Object.assign(a, extra);
     return a;
@@ -169,6 +170,12 @@
 
   // ---------- state machines ----------
   const pick = (arr) => arr[Math.floor(Math.random() * arr.length)];
+  // Several characters' walk and run lists hold frames of DIFFERENT people at different heights - the
+  // monk's two walk frames differ by 13% - so cycling them three times a second made the character
+  // swap identity and change size on the spot. Each pedestrian locks one body for standing and walking
+  // and one for running; the walk is carried by the hop, as it already is for the dogs and cats.
+  function pedBody(a, ch) { if (!a.body) a.body = ch.idle[Math.abs(a.seed | 0) % ch.idle.length]; return a.body; }
+  function pedRun(a, ch) { if (!a.runF) a.runF = ch.run[Math.abs((a.seed | 0) + 1) % ch.run.length]; return a.runF; }
   function pedUpdate(a, dt, G, pz, px, pct) {
     const ch = PEDS[a.sub], dz = a.z - pz, rw = T.findSegment(a.z).rw;
     const outer = a.side * (rw + 0.02), inner = outer, kerb = a.side * (rw + 0.005), wall = a.side * (rw + 0.125);
@@ -178,9 +185,9 @@
     switch (a.state) {
       case 'idle': case 'walk': case 'talk':
         if (a.state === 'walk') {
-          a.z -= 150 * dt; a.frame = ch.walk[Math.floor(a.walkPh * 3) % ch.walk.length]; a.hop = Math.abs(Math.sin(a.walkPh * 5.5)) * 1.5; // front-view sprites: they walk toward the camera
+          a.z -= 150 * dt; a.frame = pedBody(a, ch); a.hop = Math.abs(Math.sin(a.walkPh * 5.5)) * 1.5; // front-view sprites: they walk toward the camera
           if (a.t > 4 + (a.seed % 5)) { a.state = 'idle'; a.t = 0; }
-        } else { a.frame = ch.idle[0]; a.hop = 0; if (ch.skip) a.hop = Math.abs(Math.sin(a.walkPh * 5)) * 6; if (a.t > 3 + (a.seed % 6) && !ch.still && !a.talk) { a.state = 'walk'; a.t = 0; a.dir = Math.random() < 0.5 ? 1 : -1; } }
+        } else { a.frame = pedBody(a, ch); a.hop = 0; if (ch.skip) a.hop = Math.abs(Math.sin(a.walkPh * 5)) * 6; if (a.t > 3 + (a.seed % 6) && !ch.still && !a.talk) { a.state = 'walk'; a.t = 0; a.dir = Math.random() < 0.5 ? 1 : -1; } }
         if ((danger && (a.calm < 0.75 || late)) || late) { a.state = 'notice'; a.t = 0; a.frame = ch.react; a.reactType = (Math.random() < 0.45 || ch.still) ? 'jump' : 'run'; if (ch.calm) a.reactType = 'step'; }
         break;
       case 'notice':
@@ -195,7 +202,7 @@
         a.frame = ch.jump; a.x += a.side * 0.14 * dt; if (a.t > 0.5) { a.state = 'recover'; a.t = 0; }
         break;
       case 'run': // runs away from the bike along the pavement
-        a.frame = ch.run[Math.floor(a.t * 8) % ch.run.length]; a.x += a.side * 0.25 * dt; a.z -= 380 * dt; a.hop = Math.abs(Math.sin(a.t * 14)) * 3;
+        a.frame = pedRun(a, ch); a.x += a.side * 0.25 * dt; a.z -= 380 * dt; a.hop = Math.abs(Math.sin(a.t * 14)) * 3;
         if (a.t > 0.7) { a.state = 'recover'; a.t = 0; }
         break;
       case 'recover': // watches / points after the bike, then goes back to what they were doing
