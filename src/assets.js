@@ -552,7 +552,9 @@
     add('truck', FC('TRUCK'), 1150, { car: true }); add('pickup', FC('PICKUP'), 960, { car: true }); add('pickup_w', FC('PICKUP_W'), 960, { car: true });
     add('songthaew', FC('SONGTHAEW'), 1100, { car: true, oncoming: true });
     // roadside (from reference)
-    add('tuktuk_parked', IMG.tuktuk, 900, { solid: true });
+    // the photo cut-out of the tuk-tuk was cropped through the subject - its roof, its rear and the bottom of its
+    // front wheel are all sliced off - so the parked one uses the sheet's tuk-tuk, which is cut whole
+    add('tuktuk_parked', FC('TUKTUK'), 780, { solid: true });
     add('spirit', IMG.spirit, 640, { solid: true });
     add('spirit_small', IMG.spirit, 300, { solid: true }); // fits on the river walkway
     // the photo cut-out of the vendor carries the shop interior behind it as opaque pixels; the sheet's stall is
