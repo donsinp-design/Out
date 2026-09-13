@@ -22,7 +22,7 @@ css = (ROOT / 'src/style.css').read_text()
 js = '\n'.join((ROOT / 'src' / n).read_text() for n in ['util.js', 'assets.js', 'atlas_frames.js', 'audio.js', 'track.js', 'world.js', 'render.js', 'game.js'])
 build_stamp = datetime.datetime.now(datetime.timezone.utc).strftime('%Y-%m-%d %H:%M UTC')
 audio_js = ''
-for name, var in (('track', '__TRACK__'), ('horn', '__HORN__')):
+for name, var in (('track', '__TRACK__'), ('horn', '__HORN__'), ('bark', '__BARK__'), ('meow', '__MEOW__')):
     if (ROOT / ('audio/%s.mp3' % name)).exists():
         audio_js += 'window.%s=%s;' % (var, json.dumps(b64('audio/%s.mp3' % name, 'audio/mpeg')))
 assets_js = ('window.__BUILD__=%s;' % json.dumps(build_stamp) + audio_js

@@ -77,6 +77,7 @@
     a.kind = kind; a.sub = sub; a.z = z; a.x = x; a.y = 0; a.vx = 0; a.vz = 0; a.state = 'idle'; a.t = 0; a.age = 0; a.seed = Math.random() * 1000;
     a.frame = null; a.flip = false; a.rot = 0; a.hop = 0; a.side = x < 0 ? -1 : 1; a.home = x; a.dir = 1; a.hit = false; a.alpha = 1; a.chased = false; a.timer = 0; a.walkPh = 0;
     a.body = null; a.runF = null;   // locked frames are per-life: a pooled actor must not inherit the last one's body
+    a.called = false; a.callWait = 0;   // and so is the one bark or meow it gets as the bike goes past
     a.calm = Math.random(); a.notice = 900 + Math.random() * 1400; a.risk = 0.3 + Math.random() * 0.35; a.reactDelay = 0.05 + Math.random() * 0.35;
     if (extra) Object.assign(a, extra);
     return a;
@@ -218,8 +219,22 @@
   const DOG_BODIES = ['DOG_IDLE', 'DOG_WALK', 'DOG_RUN', 'DOG_BARK'];
   const CAT_BODIES = ['CAT_IDLE', 'CAT_WALK', 'CAT_RUN'];
   function bodyOf(a, list) { if (!a.body) a.body = list[Math.abs(a.seed | 0) % list.length]; return a.body; }
+  // An animal calls out as the bike comes past — the recorded bark or meow, not a synth stand-in. The window is
+  // measured in seconds to the pass rather than in metres, so the call lands just ahead of the bike whether it is
+  // crawling or flat out, and the level follows how close the pass is: one on the far kerb is a bark down the
+  // street, one you nearly clip is right in your ear. One call per animal per approach, never two in a breath.
+  function call(a, sfx, near) { if ((a.callWait || 0) > 0) return; a.callWait = 1.1; a.called = true; OB.audio.sfx(sfx, near); }
+  function passingCall(a, dt, G, dz, px, sfx) {
+    if (a.callWait > 0) a.callWait -= dt;
+    if (dz < -1600) { a.called = false; return; }          // well past
+    if (a.called || dz < -700) return;
+    const lat = Math.abs(a.x - px), lead = dz / Math.max(G.speed, 900);
+    if (lat > 1.6 || lead > 0.55) return;                  // the far pavement still carries, the next street over does not
+    call(a, sfx, OB.clamp(1 - lat * 0.32 - Math.max(0, lead) * 0.45, 0.28, 1));
+  }
   function dogUpdate(a, dt, G, pz, px, pct) {
     const dz = a.z - pz, rw = T.findSegment(a.z).rw; a.t += dt;
+    if (a.state !== 'sleep') passingCall(a, dt, G, dz, px, 'bark');   // let sleeping dogs lie
     const near = dz > -segLen() && dz < 1400;
     switch (a.state) {
       case 'sleep': a.frame = 'DOG_SLEEP'; break;
@@ -227,7 +242,7 @@
         a.frame = bodyOf(a, DOG_BODIES); a.hop = 0;
         if (a.t > 3 + (a.seed % 4)) { a.state = 'walk'; a.t = 0; a.dir = Math.random() < 0.5 ? 1 : -1; }
         if (near && Math.abs(px) > rw * 0.85 && Math.sign(px) === a.side) { a.state = 'flee'; a.t = 0; }
-        if (dz < -segLen() && dz > -3 * segLen() && !a.chased && pct < 0.45 && a.dogSeed < 0.3) { a.state = 'chase'; a.t = 0; a.chased = true; OB.audio.sfx('bark'); }
+        if (dz < -segLen() && dz > -3 * segLen() && !a.chased && pct < 0.45 && a.dogSeed < 0.3) { a.state = 'chase'; a.t = 0; a.chased = true; call(a, 'bark', 1); }
         break;
       case 'walk':
         a.frame = bodyOf(a, DOG_BODIES); a.hop = Math.abs(Math.sin(a.t * 8)) * 0.5; a.z += a.dir * 160 * dt; a.flip = a.dir < 0 ? a.side < 0 : a.side > 0;
@@ -267,6 +282,7 @@
   }
   function catUpdate(a, dt, G, pz, px) {
     const dz = a.z - pz, rw = T.findSegment(a.z).rw; a.t += dt;
+    passingCall(a, dt, G, dz, px, 'meow');
     switch (a.state) {
       case 'idle': a.frame = bodyOf(a, CAT_BODIES); a.hop = 0; if (a.t > 4 + (a.seed % 5)) { a.state = 'walk'; a.t = 0; a.dir = Math.random() < 0.5 ? 1 : -1; }
         if (dz > -segLen() && dz < 800 && (Math.abs(a.x - px) < 0.45)) { a.state = 'run'; a.t = 0; } break;
@@ -429,6 +445,10 @@
     // pavement still showing beside it; fade it out over the next third of its height instead
     let alpha = a.alpha === undefined ? 1 : a.alpha;
     if (p.sy > H) { alpha *= OB.clamp(1 - (p.sy - H) / (dh * 0.35), 0, 1); if (alpha <= 0.02) return; }
+    // and across the side edges, so a stall or a pedestrian half out of frame dissolves rather than sitting as a
+    // hard-cut fragment when the bike is stopped beside it
+    const over = Math.max(0, dw / 2 - p.sx) + Math.max(0, p.sx + dw / 2 - W);
+    if (over > 0) { alpha *= OB.clamp(1 - over / (dw * 0.6), 0, 1); if (alpha <= 0.02) return; }
     ctx.save(); if (clip) { ctx.beginPath(); ctx.rect(0, 0, W, clip); ctx.clip(); }
     WD.blit(ctx, f, p.sx, p.sy - (a.hop || 0) * p.cs * K * 12, dw, dh, a.flip, a.rot, alpha);
     if (a.flash > 0) { ctx.fillStyle = 'rgba(255,255,255,0.9)'; ctx.fillRect(Math.round(p.sx - dw * 0.1), Math.round(p.sy - dh * 0.8), Math.max(2, dw * 0.2), Math.max(2, dh * 0.08)); }

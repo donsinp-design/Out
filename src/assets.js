@@ -1,7 +1,7 @@
 // OutRun Bangkok — asset loading + procedural pixel sprites
 (function (OB) {
   'use strict';
-  const FILES = ['bg','bike','portrait','taxi','taxi_orange','taxi_blue','taxi_green','sedan','sedan_black','sedan_red',
+  const FILES = ['bg','bike','portrait','face_ok','face_hurt','face_crit','taxi','taxi_orange','taxi_blue','taxi_green','sedan','sedan_black','sedan_red',
     'green','green_yellow','green_purple','bus','tuktuk','seven','signs','ckrd','spirit','thatien','yen','vendor',
     'noodle','storepanel','sangchai','thongbai','redsign','chedi',
     'facade0','facade1','facade2','facade3','facade4','facade5','towers0','towers1','towers2','title','atlas'];
@@ -472,35 +472,11 @@
     return c;
   }
 
-  // Rider portrait by condition: the helmet cracks, then the face is cut and bleeding. Drawn over the one photo so
-  // the damage lines up with the art rather than needing three separate cut-outs.
-  function portraits() {
-    const src = IMG.portrait, W = src.width, H = src.height;
-    const make = (stage) => {
-      const c = mk(W, H), g = c.getContext('2d');
-      g.drawImage(src, 0, 0);
-      if (stage === 0) return c;
-      g.lineCap = 'round';
-      // cracked helmet: a few splits running off the crown
-      g.strokeStyle = 'rgba(20,22,30,0.92)'; g.lineWidth = 1.4;
-      const cracks = [[[20, 8], [24, 14], [21, 19], [27, 24]], [[33, 7], [31, 13], [36, 17]], [[13, 12], [17, 17]]];
-      for (const path of cracks) { g.beginPath(); g.moveTo(path[0][0], path[0][1]); for (let i = 1; i < path.length; i++) g.lineTo(path[i][0], path[i][1]); g.stroke(); }
-      g.strokeStyle = 'rgba(210,220,235,0.5)'; g.lineWidth = 0.7;
-      g.beginPath(); g.moveTo(21, 9); g.lineTo(25, 15); g.stroke();
-      // a scuff across the shell
-      g.fillStyle = 'rgba(232,236,245,0.35)'; g.fillRect(15, 10, 9, 2);
-      if (stage === 1) return c;
-      // bleeding: a cut on the brow and a run down the cheek
-      g.fillStyle = 'rgba(150,18,18,0.95)';
-      g.fillRect(30, 26, 6, 2); g.fillRect(31, 28, 2, 6); g.fillRect(31, 34, 2, 4);
-      g.fillRect(18, 31, 4, 2); g.fillRect(19, 33, 2, 3);
-      g.fillStyle = 'rgba(200,40,40,0.75)'; g.fillRect(33, 29, 1, 8);
-      // split lip
-      g.fillStyle = 'rgba(120,14,14,0.9)'; g.fillRect(24, 40, 5, 2);
-      return c;
-    };
-    OB.PORTRAITS = [make(0), make(1), make(2)];
-  }
+  // Rider portrait by condition: the drawn helmet icons — clean, cracked-and-scuffed, and shattered visor with the
+  // rider's cut face showing through. Three separate cut-outs now, so the damage is real art rather than scratches
+  // painted over one photo. Scaled to the HUD box once here instead of on every frame.
+  // They are cut at the size the HUD draws them (52px), so nothing here resamples them.
+  function portraits() { OB.PORTRAITS = [IMG.face_ok, IMG.face_hurt, IMG.face_crit]; }
   // ---------- registry ----------
   // w = world width (road half width = 1800 units ≈ 3.4 m per 1000)
   OB.SPR = {};
@@ -555,12 +531,12 @@
     // the reference's own three-quarter tuk-tuk, re-cut whole: the first crop ran through the canopy, the rear
     // and the front wheel. Wider than that crop was, so the width is raised to keep the vehicle the same size
     add('tuktuk_parked', IMG.tuktuk, 1000, { solid: true });
-    add('spirit', IMG.spirit, 640, { solid: true });
-    add('spirit_small', IMG.spirit, 300, { solid: true }); // fits on the river walkway
+    add('spirit', IMG.spirit, 640, { solid: true, street: true });
+    add('spirit_small', IMG.spirit, 300, { solid: true, street: true }); // fits on the river walkway
     // the photo cut-out of the vendor carries the shop interior behind it as opaque pixels; the sheet's stall is
     // cut properly, so the roadside vendor uses that instead
-    add('vendor', FC('STALL_IDLE'), 700, { solid: true });
-    add('yen', IMG.yen, 330, { solid: true });
+    add('vendor', FC('STALL_IDLE'), 700, { solid: true, street: true });
+    add('yen', IMG.yen, 330, { solid: true, street: true });
     add('seven_pole', onPole(sign247(), 240, 1, 6), 1000, { solid: true, thin: 0.25 });
     add('signs_pole', onPole(IMG.signs, 300, 1, 8), 1300, { solid: true, thin: 0.2 });
     add('ckrd_pole', onPole(IMG.ckrd, 190, 1, 5), 900, { solid: true, thin: 0.2 });

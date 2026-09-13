@@ -212,6 +212,10 @@
     // ---- sprite pass (back to front): every projected slice, clipped by the crest line, so nothing pops ----
     const poles = { L: [], R: [] };
     let lastPole = null;
+    // Street-level props - stalls, signs, shrines - stand between the road and the shophouses, so they must paint
+    // over every building whatever segment it is on. Drawn in segment order they were sliced clean down one side by
+    // any facade one segment nearer. They are collected here and drawn after the segment pass, still back to front.
+    const deferred = [];
     for (let n = projected.length - 1; n >= 0; n--) {
       const seg = projected[n];
       const th = T.THEMES[seg.theme];
@@ -234,6 +238,7 @@
         // a prop whose base has gone under the bottom of the frame would otherwise be cut flat across its middle
         // with pavement still showing beside it; fade it out over the next third of its height instead
         if (sy > H) { fa *= OB.clamp(1 - (sy - H) / (destH * 0.35), 0, 1); if (fa <= 0.02) continue; }
+        if (s.street) { deferred.push({ s, sp, seg, destX, destY, destW, destH, sy, fa }); continue; }
         ctx.globalAlpha = fa;
         drawSprite(img, destX, destY, destW, destH, seg.clip, sp.flip);
         ctx.globalAlpha = 1;
@@ -259,6 +264,18 @@
       }
       const al = actorsBySeg.get(seg.index); if (al) for (const a of al) WD.drawActor(ctx, a, seg);
       const dl = debrisBySeg.get(seg.index); if (dl) for (const d of dl) WD.drawDebris(ctx, d, seg);
+    }
+    // ---- street-level props, over every building, still back to front ----
+    for (const d of deferred) {
+      // and the same across the side edges: a prop half out of the frame is a hard-cut fragment, and with the bike
+      // stopped beside it that fragment just sits there. Dissolve it over the outer 60% of its width instead.
+      const over = Math.max(0, -d.destX) + Math.max(0, d.destX + d.destW - W);
+      const ea = OB.clamp(1 - over / (d.destW * 0.6), 0, 1);
+      if (ea <= 0.02) continue;
+      ctx.globalAlpha = d.fa * ea;
+      drawSprite(d.s.img, d.destX, d.destY, d.destW, d.destH, d.seg.clip, d.sp.flip);
+      ctx.globalAlpha = 1;
+      if (night) noteSpriteLight(d.s, d.destX, d.destY, d.destW, d.destH, d.sy, d.seg.clip, d.sp.flip, d.fa);
     }
     // speed streaks radiate from the road's vanishing point (only near top speed)
     if (WD.streaks.n) WD.drawStreaks(ctx, G, W / 2 + (G.drawShift || 0) + (G.playerDX || 0), 457 - 95);
@@ -569,9 +586,9 @@
   }
   R.hud = function (G) {
     const IMG = OB.IMG;
-    // portrait: unhurt, cracked helmet, then bleeding
+    // portrait: clean helmet while untouched, cracked once anything has hit him, shattered visor under half health
     const faces = OB.PORTRAITS;
-    ctx.drawImage(faces ? faces[G.health > 66 ? 0 : G.health > 33 ? 1 : 2] : IMG.portrait, 23, 14);
+    ctx.drawImage(faces ? faces[G.health >= 100 ? 0 : G.health >= 50 ? 1 : 2] : IMG.portrait, 22, 15);
     TXT(ctx, 'HEALTH', 80, 34, { size: 7, sy: 1.8, fill: '#fff', outline: '#000', outlineW: 3 });
     bar(127, 22, 12, 4, 1, 13, Math.ceil(G.health / 100 * 12), '#ff0e00', '#ff6a5a', '#3a0806');
     TXT(ctx, 'ICE', 80, 52, { size: 7, sy: 1.8, fill: '#e9fbff', outline: '#000', outlineW: 3 });

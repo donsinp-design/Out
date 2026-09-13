@@ -131,50 +131,70 @@
     const wn = noise(); wn.loop = true; const whp = ctx.createBiquadFilter(); whp.type = 'highpass'; whp.frequency.value = 400; const wlp = ctx.createBiquadFilter(); wlp.type = 'lowpass'; wlp.frequency.value = 900; const wg = ctx.createGain(); wg.gain.value = 0;
     wn.connect(whp); whp.connect(wlp); wlp.connect(wg); wg.connect(sfxBus); wn.start();
     engine = { o1, o2, lp, g, rg, wg, wlp };
-    loadHorn();
+    loadSamples();
   };
 
-  // ---------- recorded horn ----------
-  // A real car horn beats anything two square waves can do, so the build inlines one (window.__HORN__) and it is
-  // decoded once into a buffer that every honk plays a slice of. The recording is a pass-by: a blast that holds for
-  // about 1.7s and then drops away, so a short toot takes the front of it and an angry lean-on-it takes more.
-  const HORN = { buf: null, loading: false, in: 0.055 };  // skip the first few ms so every honk starts on the attack
-  function loadHorn() {
-    if (HORN.buf || HORN.loading || !ctx || !window.__HORN__) return;
-    HORN.loading = true;
-    // Unpack the data URI by hand rather than fetch() it: the artifact host's CSP blocks fetch to anything but a few
-    // CDNs, data: included, so a fetch here fails silently and every honk falls back to the synth stand-in.
-    let bytes;
-    try { const bin = atob(window.__HORN__.slice(window.__HORN__.indexOf(',') + 1)); bytes = new Uint8Array(bin.length); for (let i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i); }
-    catch (e) { HORN.loading = false; return; }
-    // callback form as well as the promise: older iOS Safari only has the former
-    new Promise((res, rej) => { const p = ctx.decodeAudioData(bytes.buffer, res, rej); if (p && p.then) p.then(res, rej); })
-      .then(buf => { HORN.buf = buf; }).catch(() => { HORN.loading = false; }); // a failed decode falls back to the synth
-  }
-  A.hornReady = () => !!HORN.buf;
-  function playHorn(t, urgency) {
-    const u = Math.max(0, Math.min(1, urgency === undefined ? 0.5 : urgency));
-    if (!HORN.buf) { // no sample: the old two-tone stand-in
-      const len = 0.2 + 0.3 * u;
-      tone('square', 415, t, len, 0.08, sfxBus); tone('square', 350, t, len, 0.08, sfxBus); return;
+  // ---------- recorded samples: horn, dog, cat ----------
+  // Real recordings beat anything a pair of square waves can do, so the build inlines them (window.__HORN__ and
+  // friends) and each is decoded once into a buffer that every play takes a slice of. `in` skips the leading
+  // silence so a play always starts on the attack; `dur` caps how much of the recording one play uses.
+  const SAMPLES = {
+    horn: { g: '__HORN__', in: 0.055 },   // a pass-by blast: holds ~1.7s then drops away
+    bark: { g: '__BARK__', in: 0.02, dur: 0.85 },
+    meow: { g: '__MEOW__', in: 0.03, dur: 1.5 },
+  };
+  function loadSamples() {
+    if (!ctx) return;
+    for (const key in SAMPLES) {
+      const S = SAMPLES[key], uri = window[S.g];
+      if (S.buf || S.loading || !uri) continue;
+      S.loading = true;
+      // Unpack the data URI by hand rather than fetch() it: the artifact host's CSP blocks fetch to anything but a
+      // few CDNs, data: included, so a fetch here fails silently and every play falls back to the synth stand-in.
+      let bytes;
+      try { const bin = atob(uri.slice(uri.indexOf(',') + 1)); bytes = new Uint8Array(bin.length); for (let i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i); }
+      catch (e) { S.loading = false; continue; }
+      // callback form as well as the promise: older iOS Safari only has the former
+      new Promise((res, rej) => { const p = ctx.decodeAudioData(bytes.buffer, res, rej); if (p && p.then) p.then(res, rej); })
+        .then(buf => { S.buf = buf; }).catch(() => { S.loading = false; }); // a failed decode falls back to the synth
     }
-    const rate = 0.94 + Math.random() * 0.12;               // no two honks land on exactly the same pitch
-    const len = (0.2 + 0.55 * u) * rate;                    // a warning toot is short, an angry one leans on it
+  }
+  A.sampleReady = (k) => !!(SAMPLES[k] && SAMPLES[k].buf);   // tests check the recordings really decoded
+  A.hornReady = () => A.sampleReady('horn');
+  // one play of a decoded sample, gated in and out so it never clicks
+  function playSample(key, t, peak, rate, len) {
+    const S = SAMPLES[key]; if (!S || !S.buf) return false;
+    const room = S.buf.duration - S.in;
+    len = Math.min(len === undefined ? (S.dur || room) : len, room / rate);
     const rel = Math.min(0.12, len * 0.35);
     const s = ctx.createBufferSource(), g = ctx.createGain();
-    s.buffer = HORN.buf; s.playbackRate.value = rate;
-    const peak = 0.5 + 0.45 * u;
+    s.buffer = S.buf; s.playbackRate.value = rate;
     g.gain.setValueAtTime(0.0001, t);
-    g.gain.exponentialRampToValueAtTime(peak, t + 0.012);
-    g.gain.setValueAtTime(peak, t + len - rel);
-    g.gain.exponentialRampToValueAtTime(0.0001, t + len);   // fade out rather than cut, so it never clicks
+    g.gain.exponentialRampToValueAtTime(Math.max(0.0002, peak), t + 0.012);
+    g.gain.setValueAtTime(Math.max(0.0002, peak), t + Math.max(0.02, len - rel));
+    g.gain.exponentialRampToValueAtTime(0.0001, t + len);   // fade out rather than cut
     s.connect(g); g.connect(sfxBus);
-    s.start(t, HORN.in, len / rate + 0.02); s.stop(t + len + 0.02);
+    s.start(t, S.in, len / rate + 0.02); s.stop(t + len + 0.02);
+    return true;
+  }
+  function playHorn(t, urgency) {
+    const u = Math.max(0, Math.min(1, urgency === undefined ? 0.5 : urgency));
+    const rate = 0.94 + Math.random() * 0.12;               // no two honks land on exactly the same pitch
+    // a warning toot is short, an angry one leans on it
+    if (playSample('horn', t, 0.5 + 0.45 * u, rate, (0.2 + 0.55 * u) * rate)) return;
+    const len = 0.2 + 0.3 * u;                              // no sample: the old two-tone stand-in
+    tone('square', 415, t, len, 0.08, sfxBus); tone('square', 350, t, len, 0.08, sfxBus);
+  }
+  // A dog barking or a cat calling out as the bike goes past. `near` is 0..1 for how close the pass is, and it
+  // drives the level; the pitch wanders a little so the same recording is not obviously the same animal twice.
+  function playAnimal(key, t, near) {
+    const n = Math.max(0, Math.min(1, near === undefined ? 0.7 : near));
+    return playSample(key, t, 0.18 + 0.62 * n, 0.9 + Math.random() * 0.22);
   }
   A.unlock = function () { // call from a real user gesture (touchend / click / keydown)
     A.init(); if (!ctx) return;
     if (ctx.state === 'suspended') ctx.resume();
-    loadHorn(); // a decode that failed or never ran while the context was still locked gets another go on a real gesture
+    loadSamples(); // a decode that failed or never ran while the context was still locked gets another go on a real gesture
     try { const b = ctx.createBuffer(1, 1, 22050), s = ctx.createBufferSource(); s.buffer = b; s.connect(ctx.destination); s.start(0); } catch (e) { }
     try {
       if (!silentEl) { silentEl = document.createElement('audio'); silentEl.setAttribute('playsinline', ''); silentEl.loop = true; silentEl.volume = 0.01; silentEl.src = silentWav(); document.body.appendChild(silentEl); }
@@ -394,7 +414,9 @@
       case 'clank': tone('square', 1900, t, 0.09, 0.08, sfxBus, { slide: 900 }); tone('triangle', 2500, t + 0.02, 0.12, 0.07, sfxBus); break;
       case 'clunk': hit(t, 0.12, 0.35, 'lowpass', 260, 0.8, sfxBus); tone('sine', 85, t, 0.12, 0.2, sfxBus, { slide: 50 }); break;
       case 'thud': hit(t, 0.2, 0.4, 'lowpass', 190, 0.8, sfxBus); tone('sine', 62, t, 0.2, 0.25, sfxBus, { slide: 35 }); break;
-      case 'bark': tone('square', 340, t, 0.07, 0.11, sfxBus, { slide: 230, filter: 1300 }); tone('square', 360, t + 0.11, 0.07, 0.11, sfxBus, { slide: 220, filter: 1300 }); break;
+      // arg is 0..1 for how close the animal is; both fall back to the synth stand-in until the mp3 has decoded
+      case 'bark': if (!playAnimal('bark', t, arg)) { tone('square', 340, t, 0.07, 0.11, sfxBus, { slide: 230, filter: 1300 }); tone('square', 360, t + 0.11, 0.07, 0.11, sfxBus, { slide: 220, filter: 1300 }); } break;
+      case 'meow': if (!playAnimal('meow', t, arg)) { tone('triangle', 700, t, 0.18, 0.09, sfxBus, { slide: 520 }); tone('triangle', 560, t + 0.18, 0.22, 0.07, sfxBus, { slide: 430 }); } break;
       case 'clink': [2600, 3300, 4100].forEach((f, i) => tone('sine', f, t + i * 0.035, 0.06, 0.1, sfxBus)); break;
       case 'beep': tone('square', 880, t, 0.12, 0.12, sfxBus); break;
       case 'go': tone('square', 1760, t, 0.5, 0.12, sfxBus); tone('square', 1320, t, 0.5, 0.06, sfxBus); break;
