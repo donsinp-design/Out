@@ -80,6 +80,10 @@
   { const legacy = parseInt(store.get('ob_hiscore', 0)) || 0; if (legacy > 0 && !G.ranking.length) G.ranking.push({ name: 'ICE', score: legacy, route: '' }); }
   G.hiScore = G.ranking.length ? G.ranking[0].score : 0;
   G.station = Math.min(A.stations.length - 1, Math.max(0, store.get('ob_station', 0) | 0)); G.course = Math.min(6, Math.max(0, store.get('ob_course', 0) | 0));
+  // TEST MODE, off the pause menu: every stage runs at night and the ยาดม jar is always sitting there, so the
+  // night lighting and the power-up can be looked at on any stage without riding for them. It sticks between runs.
+  G.test = !!store.get('ob_test', 0);
+  OB.lightFor = (themeKey) => G.test ? 'night' : T.THEMES[themeKey].light;
   OB.NAME_CHARS = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789'.split('').concat(['<', 'END']);
 
   // ---------- input ----------
@@ -122,7 +126,7 @@
   }
   function fsUnavailable() { fsFailed = true; say('FULL SCREEN NOT AVAILABLE HERE', 'iPhone: เพิ่มไปยังหน้าจอโฮม / ใช้แนวนอน', 2.6, '#ffd800', 10); }
   OB.isFullscreen = () => STANDALONE || !!(document.fullscreenElement || document.webkitFullscreenElement);
-  const MENU = STANDALONE ? ['RESUME', 'RESTART', 'MUSIC', 'QUIT TO TITLE'] : ['RESUME', 'RESTART', 'MUSIC', 'FULL SCREEN', 'QUIT TO TITLE'];
+  const MENU = STANDALONE ? ['RESUME', 'RESTART', 'MUSIC', 'TEST MODE', 'QUIT TO TITLE'] : ['RESUME', 'RESTART', 'MUSIC', 'FULL SCREEN', 'TEST MODE', 'QUIT TO TITLE'];
   OB.MENU = MENU;
   function menuAction(i) {
     A.sfx('select');
@@ -131,6 +135,11 @@
     else if (m === 'RESTART') { G.paused = false; startRun(); }
     else if (m === 'MUSIC') { G.muted = !G.muted; A.setMusicVolume(G.muted ? 0 : A.MUSIC_VOL); }
     else if (m === 'FULL SCREEN') toggleFullscreen();
+    else if (m === 'TEST MODE') {
+      G.test = !G.test; store.set('ob_test', G.test ? 1 : 0);
+      G.light = OB.lightFor(T.STAGES[G.stageKey].theme);   // takes on the stage you are already riding
+      if (!G.test && G.yadomT <= 0) G.yadom = 0;
+    }
     else if (m === 'QUIT TO TITLE') { G.paused = false; A.stopMusic(); G.mode = 'title'; newGame(); }
   }
   function pauseKey(e) {
@@ -231,7 +240,7 @@
     G.crash = null; G.bumpT = 0; G.hopY = 0; G.hopV = 0; G.stackY = 0; G.stackV = 0; G.stackC = 0; G.splashT = 0; G.flutter = 0; G.cam.pitch = 0; G.cam.lean = 0; G.cam.squash = 0; G.cam.zoom = 1;
     G.stageNo = stageNo || 1; G.stageKey = key || 'charoenkrung'; G.route = [G.stageKey]; G.nextKey = null; G.nextInfo = null;
     G.cur = buildStage(G.stageKey, G.stageNo);
-    G.light = T.THEMES[T.STAGES[G.stageKey].theme].light;
+    G.light = OB.lightFor(T.STAGES[G.stageKey].theme);
     G.position = 0; G.playerX = 0; G.speed = 0; G.steer = 0; G.lean = 0; G.bgOffset = 0;
     G.health = 100; G.ice = 100; G.score = 0; G.time = T.STAGES[G.stageKey].time + (G.stageNo > 1 ? 10 : 0);
     G.nearMiss = 0; G.yadom = 0; G.yadomT = 0;
@@ -628,7 +637,7 @@
       const bonus = Math.ceil(G.time) * 1000; G.score += bonus;
       G.stageNo++; G.stageKey = G.nextKey; G.route.push(G.nextKey); G.cur = G.nextInfo; G.nextInfo = null;
       const st = T.STAGES[G.stageKey]; G.time += st.time; G.ice = Math.min(100, G.ice + 22); G.health = Math.min(100, G.health + 12);
-      G.light = T.THEMES[st.theme].light;
+      G.light = OB.lightFor(st.theme);
       say('CHECK POINT', 'ต่อเวลา +' + st.time + '  ·  ' + st.name.thai, 2.6, '#ffd800', 22); A.sfx('check');
     }
     if (cur.goalAt && !cur.goalDone && i >= cur.goalAt) {
@@ -761,6 +770,7 @@
     if (mode === 'play') checkCollisions(seg);
     advance(dt, true);
     if (mode === 'play') {
+      if (G.test && !G.yadom && G.yadomT <= 0) G.yadom = 1;   // test mode: the jar is always sitting there
       if (G.yadomT > 0) { G.yadomT = Math.max(0, G.yadomT - dt); if (G.yadomT === 0) A.sfx('melt'); }
       else { G.time -= dt; if (G.time <= 0) { G.time = 0; gameOver('time'); return; } }   // the clock is held for the five seconds
       G.ice -= dt * (100 / 290) * (pct < 0.08 ? 1.6 : 1);
@@ -831,7 +841,7 @@
   OB.debugCrash = function (hx) { wipeout(3, hx); }; OB.debugDrift = function () { driftReq = true; };
   OB.debugStage = function (key, no) {
     T.reset(); WD.clear(); G.stageNo = no || 2; G.stageKey = key; G.route = ['charoenkrung', key]; G.nextKey = null; G.nextInfo = null;
-    G.cur = buildStage(key, G.stageNo); G.light = T.THEMES[T.STAGES[key].theme].light;
+    G.cur = buildStage(key, G.stageNo); G.light = OB.lightFor(T.STAGES[key].theme);
     G.position = 0; G.playerX = -0.3; G.speed = G.maxSpeed * 0.5; G.cars = []; G.time = 90; G.mode = 'play'; G.drawShift = 0; G.smoke = []; G.parts = [];
     G.flip = null; G.rider = null; G.drift = 0; G.driftK = 0; G.marks = []; markLast = -1; G.goT = 0; G.crash = null; G.pops = []; G.mult = 1; G.multStep = 1; G.multArmed = false; G.draft = 0;
     for (let i = 0; i < 8; i++) spawnCar(40 + i * 45);
