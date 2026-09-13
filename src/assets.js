@@ -467,6 +467,15 @@
   // Narrow one part of a sprite harder than the rest. A uniform squash thins the lamp's post only by pinching its
   // lantern with it, and the lantern is the part that has to stay readable; splitting the art at the end of the
   // head lets the pole, the arm's reach and the base plinth come in to two fifths while the head barely moves.
+  // Lengthen a sprite by stretching one band of it. A lamp is made taller by lengthening its pole, not by
+  // scaling the whole drawing, which would stretch the lantern with it.
+  function taller(img, top, bot, newH) {
+    const c = mk(img.width, newH), g = c.getContext('2d'), mid = newH - top - (img.height - bot);
+    g.drawImage(img, 0, 0, img.width, top, 0, 0, img.width, top);
+    g.drawImage(img, 0, top, img.width, bot - top, 0, top, img.width, mid);
+    g.drawImage(img, 0, bot, img.width, img.height - bot, 0, top + mid, img.width, img.height - bot);
+    return c;
+  }
   function slimX(img, split, kHead, kTail) {
     const a = Math.max(1, Math.round(split * kHead)), b = Math.max(1, Math.round((img.width - split) * kTail));
     const c = mk(a + b, img.height), g = c.getContext('2d');
@@ -590,12 +599,14 @@
     // Drawn street lamp: the lantern hangs off an arm well to one side of the post, so the sprite is anchored on
     // the post (ax) rather than on its own centre - otherwise every placement offset would put the post where the
     // arm is. lampHead is where the lantern sits, for the night pool.
-    // ...and slimmed on the way in. The sprite pass takes a sprite's proportions from its image, so a lamp that is
-    // thinner AND taller than the art has to be reshaped here. The post is 22px of a 116px drawing - about six
-    // times too thick for its height against a real lamp - so it and the plinth come in to 0.38 while the lantern
-    // holds at 0.85: the pole ends up half the thickness it was drawn and the lamp a quarter taller.
-    const lampImg = slimX(IMG.lamp, 62, 0.85, 0.38);   // 116x256 -> 74x256
-    add('lamp', lampImg, 880, { solid: true, thin: 0.14, ax: 64.7 / 74, lampHead: { x: 25.1 / 74, y: 24 / 256 } });
+    // ...and reshaped on the way in, because the sprite pass takes a sprite's proportions from its image. Two
+    // steps: the post is 22px of a 116px drawing, about six times too thick for its height against a real lamp,
+    // so it and the plinth come in to 0.38 while the lantern holds at 0.85 (a uniform squash would pinch the
+    // lantern, which is the part that has to stay readable); then the pole alone is stretched to double the
+    // sprite's height, leaving the lantern and the plinth their own size. The world width is unchanged, so the
+    // post stays the thickness it was and the lamp is twice as tall - half as thick for its height again.
+    const lampImg = taller(slimX(IMG.lamp, 62, 0.85, 0.38), 38, 236, 512);   // 116x256 -> 74x256 -> 74x512
+    add('lamp', lampImg, 880, { solid: true, thin: 0.14, ax: 64.7 / 74, lampHead: { x: 25.1 / 74, y: 24 / 512 } });
     add('pillar', tx(pillar(), { amp: 0.06 }), 640, { solid: true });
     // shophouses: the reference's own facade (rectified) with drawn upper storeys and swappable shop modules
     const AWN = [null, null, null, '#c8322b', '#1f8a4c', '#d99a1c', '#8a1c8c', '#2b6fb0'];
