@@ -468,7 +468,13 @@
     const clip = seg.clip; ctx.save(); if (clip) { ctx.beginPath(); ctx.rect(0, 0, W, clip); ctx.clip(); }
     if (d.kind === 'dust' || d.kind === 'smoke' || d.kind === 'splash' || d.kind === 'drop') WD.blit(ctx, f, p.sx, p.sy, dw, dh, d.flip, 0, alpha);
     else WD.blitC(ctx, f, p.sx, p.sy - dh / 2, dw, dh, d.rot, alpha, d.flip);
-    if (d.sparkle && (d.sparkT > 0 || ((Math.floor(d.t * 20) + Math.floor(d.z)) % 9 === 0))) { ctx.fillStyle = '#ffffff'; const s = Math.max(1, Math.round(dw * 0.25)); ctx.fillRect(Math.round(p.sx - dw * 0.3), Math.round(p.sy - dh * 0.8), s, s); }
+    // the glint off a tumbling cube. It was sized as a quarter of the cube, which is fine at a distance and a
+    // 20px white block on one that lands by the front wheel - the square that showed up around a wipeout. A glint
+    // is a glint at any range, so it is capped at three pixels.
+    if (d.sparkle && (d.sparkT > 0 || ((Math.floor(d.t * 20) + Math.floor(d.z)) % 9 === 0))) {
+      ctx.fillStyle = '#ffffff'; const s = OB.clamp(Math.round(dw * 0.22), 1, 3);
+      ctx.fillRect(Math.round(p.sx - dw * 0.3), Math.round(p.sy - dh * 0.8), s, s);
+    }
     ctx.restore();
   };
   // ground decals for one segment (called by the ground pass right after the road surface)
