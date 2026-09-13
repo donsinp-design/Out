@@ -6,6 +6,7 @@
   const G = {
     mode: 'loading', t: 0, position: 0, playerX: 0, playerZ: 0, cameraH: 1000, cameraDepth: 0, fov: 100, drawDistance: 300,
     speed: 0, maxSpeed: 12000, steer: 0, lean: 0, bgOffset: 0, bgShift: 0, cars: [], health: 100, ice: 100, time: 80, score: 0,
+    nearMiss: 0, yadom: 0, yadomT: 0,   // พลังยาดม: near misses banked, the jar waiting to be tapped, seconds of it left
     stageNo: 1, stageKey: 'charoenkrung', light: 'day', station: 0, hiScore: 0, msg: null, shake: 0, invuln: 0, bounce: 0,
     forkHint: null, wallCd: 0, countdown: 0, overReason: null, result: null, seed: 20240808, paused: false, route: [], cur: null, nextInfo: null, nextKey: null,
     muted: false, drawShift: -200, playerDX: 0, course: 0, touchMode: false,
@@ -23,6 +24,54 @@
   G.cameraDepth = 1 / Math.tan((G.fov / 2) * Math.PI / 180);
   G.playerZ = G.cameraDepth * G.cameraH * K / (457 - OB.HORIZON);
   const PLAYER_W = 480 / T.roadW;
+  // พลังยาดม - inhaler power. Fifteen near misses puts the jar in the corner; tapping it freezes the clock for
+  // five seconds while the bike runs 30% over its own top speed and picks its own line through the traffic.
+  const YADOM_NEED = 15, YADOM_TIME = 5, YADOM_SPEED = 1.3;
+  // The line the bike takes on its own during พลังยาดม. Every place across the road is scored on the room it
+  // leaves against the traffic ahead, weighted by how soon each car arrives, against how far it is from where the
+  // bike already is so it does not weave for the sake of it, and against how far it is from the middle - the first
+  // version had no such pull and happily picked the kerb, which is a wall, so it dodged the cars straight into it.
+  // The samples stop well inside the road edge for the same reason.
+  function dodgeLine(seg) {
+    const pz = G.position + G.playerZ, RW = T.roadW, rw = seg.rw, ahead = [];
+    for (const c of G.cars) {
+      const dz = c.z - pz;
+      if (dz < -250 || dz > 6500) continue;
+      ahead.push({ x: c.offset * T.findSegment(c.z).rw, half: (PLAYER_W + c.spr.w / RW) / 2 + 0.06, near: OB.clamp(1 - dz / 6500, 0, 1) });
+    }
+    // and what is standing at the kerb, which is what caught it out next: a parked tuk-tuk is wide enough to
+    // reach a bike sitting in the outside lane, so the line has to account for the roadside too
+    const si = Math.floor(pz / T.segLen);
+    for (let k = 0; k < 22; k++) {
+      const s2 = T.segments[si + k]; if (!s2) break;
+      for (const sp of s2.sprites) {
+        const spr = sp.spr; if (!spr.solid) continue;
+        const full = spr.w / RW, anchor = sp.anchor || 'center';
+        let cx = sp.offset; if (anchor === 'left') cx -= full / 2; else if (anchor === 'right') cx += full / 2;
+        ahead.push({ x: cx, half: (PLAYER_W + full * (spr.thin || 1)) / 2 + 0.05, near: OB.clamp(1 - k / 22, 0, 1) });
+      }
+    }
+    const LIM = 0.78 * rw;
+    if (!ahead.length) return Math.abs(G.playerX) > LIM ? Math.sign(G.playerX) * LIM : null;
+    let best = G.playerX, bestScore = -1e9;
+    for (let i = -12; i <= 12; i++) {
+      const x = (i / 12) * LIM;
+      let sc = -Math.abs(x - G.playerX) * 0.5 - Math.abs(x) * 0.3;
+      for (const a of ahead) {
+        const gap = Math.abs(x - a.x) - a.half;
+        if (gap < 0) sc -= (3 + 7 * a.near) * (1 - gap); else sc += Math.min(gap, 0.25) * a.near;
+      }
+      if (sc > bestScore) { bestScore = sc; best = x; }
+    }
+    return best;
+  }
+  function yadomTap() {
+    if (G.mode !== 'play' || !G.yadom || G.yadomT > 0) return false;
+    G.yadom = 0; G.yadomT = YADOM_TIME;
+    A.sfx('go'); A.sfx('clink');
+    pop('พลังยาดม!', '#ff2d2d');
+    return true;
+  }
   const CARS = ['taxi', 'taxi', 'taxi_orange', 'taxi_blue', 'taxi_green', 'sedan', 'sedan', 'sedan_black', 'sedan_red', 'green', 'green_yellow', 'green_purple', 'truck', 'pickup', 'pickup_w', 'moto', 'moto', 'moto', 'moto',
     'tuktuk0', 'tuktuk1', 'tuktuk2', 'tuktuk3', 'tuktuk4'];
   const ONCOMING = []; // no traffic comes the other way; every theme's oncoming rate is 0 so all lanes run with us
@@ -42,6 +91,7 @@
     A.init(); A.unlock();
     if (G.mode === 'name') { nameKey(e); e.preventDefault(); return; }
     if (e.key === 'f' || e.key === 'F') { toggleFullscreen(); e.preventDefault(); return; }
+    if ((e.key === 'e' || e.key === 'E') && yadomTap()) { e.preventDefault(); return; }   // the jar, for anyone without a screen to tap
     if (G.mode === 'play' && G.paused) { pauseKey(e); e.preventDefault(); return; }
     if (G.mode === 'over' && (e.key === 'ArrowLeft' || e.key === 'ArrowRight' || e.key === 'a' || e.key === 'd')) { const n = (OB.MENU_OVER || ['RETRY', 'TITLE']).length, d = (e.key === 'ArrowLeft' || e.key === 'a') ? n - 1 : 1; G.overSel = ((G.overSel || 0) + d) % n; A.sfx('select'); e.preventDefault(); return; }
     if (KEYMAP[e.key]) { keys[KEYMAP[e.key]] = true; e.preventDefault(); }
@@ -134,6 +184,7 @@
       const pc = toCanvas(e), ix = pc.x, iy = pc.y;
       const inBox = (b) => !!b && ix >= b.x && ix <= b.x + b.w && iy >= b.y && iy <= b.y + b.h;
       if (e.pointerType !== 'mouse' && !G.touchMode) { G.touchMode = true; fitPortrait(); }
+      if (G.mode === 'play' && !G.paused && G.yadom && inBox(R.hit.yadom) && yadomTap()) { e.preventDefault(); return; }
       if (G.mode === 'play' && G.paused) { const row = R.hit.rows.find(inBox); if (row) menuAction(row.i); else if (inBox(R.hit.pause)) G.paused = false; }
       else if (G.mode === 'play' && inBox(R.hit.pause)) { G.paused = true; G.menuSel = 0; A.sfx('select'); }
       else if (G.mode === 'play' || G.mode === 'countdown') {
@@ -183,6 +234,7 @@
     G.light = T.THEMES[T.STAGES[G.stageKey].theme].light;
     G.position = 0; G.playerX = 0; G.speed = 0; G.steer = 0; G.lean = 0; G.bgOffset = 0;
     G.health = 100; G.ice = 100; G.score = 0; G.time = T.STAGES[G.stageKey].time + (G.stageNo > 1 ? 10 : 0);
+    G.nearMiss = 0; G.yadom = 0; G.yadomT = 0;
     G.cars = []; G.msg = null; G.shake = 0; G.invuln = 0; G.forkHint = null; G.result = null; G.overReason = null; G.paused = false; G.mult = 1; G.multStep = 1; G.multArmed = false; G.multBreak = 0; G.draft = 0;
     G.wipe = 0; G.parts = []; G.skidCd = 0; G.smoke = []; G.smokeAcc = 0; G.pops = [];
     G.flip = null; G.rider = null; G.drift = 0; G.driftK = 0; G.marks = []; markLast = -1; G.goT = 0;
@@ -530,12 +582,16 @@
             G.playerX += (G.playerX >= c.offset * cseg.rw ? 1 : -1) * (big ? 0.03 : 0.02); G.stackKick(big ? 0.5 : 0.35);
             const pts = Math.round((c.oncoming ? 600 : 300) * G.mult); G.score += pts;
           pop('NEAR MISS +' + pts, c.oncoming ? '#ff6a5a' : '#ffd800');
+          if (!G.yadom && G.yadomT <= 0 && ++G.nearMiss >= YADOM_NEED) { G.nearMiss = 0; G.yadom = 1; A.sfx('check'); pop('ยาดม READY', '#3fd07a'); }
           horn(c, 0.9, true);                              // they lean on it as you cut past
           }
         }
       }
       c.pdz = dz; c.plat = lat;
       if (dz < -segLen * 0.6 || dz > segLen * 1.4) continue;
+      // the near-miss scoring above still counts during พลังยาดม; only the contact does not, so a car that moves
+      // across the line the bike had already committed to cannot end a run inside its own five seconds
+      if (G.yadomT > 0) continue;
       if (OB.overlap(G.playerX, PLAYER_W, c.offset * cseg.rw, c.spr.w / RW, 0.8)) {
         if (c.oncoming) { crash('car', c); c.z = pz + segLen * 2; return; }
         if (G.speed > c.speed) {
@@ -647,12 +703,20 @@
     // ---- play / goal physics ----
     const seg = T.findSegment(G.position + G.playerZ);
     const pct = G.speed / G.maxSpeed;
+    const yk = G.yadomT > 0 ? YADOM_SPEED : 1;
     const usingTouch = G.touchMode && touch.active;
     const flipping = !!G.crash;
     // touch: one finger steers, a second finger held drifts (sustained while held), three fingers brake
     const gas = mode === 'play' && !flipping ? (keys.gas || (G.touchMode && touch.fingers < 3)) : false;
     const brake = mode === 'play' && !flipping ? (keys.brake || (G.touchMode && touch.fingers >= 3)) : true;
-    const steerIn = mode === 'play' && !flipping ? (usingTouch ? touch.steer : ((keys.left ? -1 : 0) + (keys.right ? 1 : 0))) : 0;
+    let steerIn = mode === 'play' && !flipping ? (usingTouch ? touch.steer : ((keys.left ? -1 : 0) + (keys.right ? 1 : 0))) : 0;
+    if (G.yadomT > 0 && mode === 'play' && !flipping) {
+      // steer for the line, damped by how fast the bike is already moving sideways. Proportional control alone
+      // overshot every target and put it on the kerb: at this speed the bike crosses a lane in a few frames.
+      const t = dodgeLine(seg);
+      if (t !== null) steerIn = OB.clamp((t - G.playerX) * 2.6 - (G.vxLat || 0) * 0.4, -1, 1);
+      if (Math.abs(G.playerX) > 0.82 * seg.rw) steerIn = -Math.sign(G.playerX);   // never let it reach the wall
+    }
     let askDrift = wantDrift;
     if (G.touchMode && touch.fingers === 2 && mode === 'play') { if (G.drift > 0 && Math.sign(steerIn) === G.driftDir) G.drift = Math.max(G.drift, 0.3); else askDrift = true; }
     // drift: second finger / Shift while steering hard at speed. Sharper turn, less push from the curve, some speed scrubbed.
@@ -676,13 +740,13 @@
     G.riderT += dt * (3 + 9 * pct + 6 * Math.max(0, G.flutter));
     G.cam.lean += ((-G.steer * 3) - G.cam.lean) * Math.min(1, dt * 6);
     if (flipping) G.speed = Math.max(0, G.speed - G.maxSpeed * 2 * dt);
-    else if (gas) G.speed += (G.maxSpeed / 3.4) * (1.2 - pct * 0.85) * dt * (1 + 0.55 * (G.draft || 0)); // the tow pulls harder than the engine alone
+    else if (gas) G.speed += (G.maxSpeed / 3.4) * (1.2 - pct * 0.85 / yk) * dt * (1 + 0.55 * (G.draft || 0)) * yk; // the tow pulls harder than the engine alone
     else if (brake) G.speed -= G.maxSpeed * 0.85 * dt;
     else G.speed -= G.maxSpeed / 7 * dt;
     if (drifting) G.speed -= G.maxSpeed * 0.12 * dt; else if (pct > 0.8 && Math.abs(G.steer) > 0.85) G.speed -= G.maxSpeed * 0.04 * dt; // tyres scrub speed
     if (offroad) { if (G.speed > G.maxSpeed * 0.45) G.speed -= G.maxSpeed * 0.7 * dt; if (pct > 0.1) { G.bounce = (Math.random() - 0.5) * 4 * pct; if (Math.random() < dt * 3) { G.bumpT = 0.2; G.stackKick(0.4 * pct); } } }
     // a slipstream lets you run past your own top speed while you stay in it
-    G.speed = OB.clamp(G.speed, 0, G.maxSpeed * (1 + 0.07 * (G.draft || 0)));
+    G.speed = OB.clamp(G.speed, 0, G.maxSpeed * yk * (1 + 0.07 * (G.draft || 0)));
     const accel = (G.speed - speedPrev) / dt;
     G.crouch = !flipping && ((gas && accel > G.maxSpeed * 0.12 && pct < 0.5) || pct > 0.9);
     G.cam.pitch += (((gas && accel > G.maxSpeed * 0.1 && pct < 0.7) ? 2 : 0) - G.cam.pitch) * Math.min(1, dt * 8);
@@ -697,7 +761,8 @@
     if (mode === 'play') checkCollisions(seg);
     advance(dt, true);
     if (mode === 'play') {
-      G.time -= dt; if (G.time <= 0) { G.time = 0; gameOver('time'); return; }
+      if (G.yadomT > 0) { G.yadomT = Math.max(0, G.yadomT - dt); if (G.yadomT === 0) A.sfx('melt'); }
+      else { G.time -= dt; if (G.time <= 0) { G.time = 0; gameOver('time'); return; } }   // the clock is held for the five seconds
       G.ice -= dt * (100 / 290) * (pct < 0.08 ? 1.6 : 1);
       if (G.ice <= 0) { G.ice = 0; gameOver('ice'); return; }
       if (G.ice < 25 && Math.floor(G.t * 2) !== Math.floor((G.t - dt) * 2) && Math.floor(G.t * 2) % 4 === 0) A.sfx('melt');

@@ -698,10 +698,20 @@
     TXT(ctx, 'HEALTH', 80, 45, { size: 7, sy: 1.8, fill: '#fff', outline: '#000', outlineW: 3 });
     bar(127, 33, 12, 4, 1, 13, Math.ceil(G.health / 100 * 12), '#ff0e00', '#ff6a5a', '#3a0806');
     if (G.ice < 25 && Math.floor(G.t * 4) % 2 === 0) TXT(ctx, 'MELTING!', 200, 45, { size: 7, sy: 1.4, fill: '#7fe0ff', outline: '#000', outlineW: 3 });
-    // time
-    TXT(ctx, 'TIME', 352, 34, { size: 12, sy: 1.7, fill: '#f90000', outline: '#000', outlineW: 6, outline2: '#fff', outline2W: 3 });
-    const tcol = (G.time <= 10 && Math.floor(G.t * 4) % 2 === 0) ? '#ff3b3b' : '#ffd800';
-    TXT(ctx, String(Math.max(0, Math.ceil(G.time))), 418, 38, { size: 19, sy: 1.4, fill: tcol, outline: '#000', outlineW: 5 });
+    // time - or, while พลังยาดม is running, the banner in its place, because the clock is not moving
+    if (G.yadomT > 0 && IMG.plang) {
+      const bw = IMG.plang.width, bh = IMG.plang.height, bx = Math.round(420 - bw / 2);
+      const k = 1 + 0.05 * Math.sin(G.t * 14);
+      ctx.save(); ctx.translate(420, 40); ctx.scale(k, k); ctx.translate(-420, -40);
+      ctx.drawImage(IMG.plang, bx, 20);
+      ctx.restore();
+      const seg = Math.floor((bw - 10) / 5);
+      bar(bx + Math.round((bw - (seg * 5 + 1)) / 2), 20 + bh + 3, seg, 4, 1, 7, Math.ceil(G.yadomT / 5 * seg), '#ff2d2d', '#ff9a9a', '#3a0806');
+    } else {
+      TXT(ctx, 'TIME', 352, 34, { size: 12, sy: 1.7, fill: '#f90000', outline: '#000', outlineW: 6, outline2: '#fff', outline2W: 3 });
+      const tcol = (G.time <= 10 && Math.floor(G.t * 4) % 2 === 0) ? '#ff3b3b' : '#ffd800';
+      TXT(ctx, String(Math.max(0, Math.ceil(G.time))), 418, 38, { size: 19, sy: 1.4, fill: tcol, outline: '#000', outlineW: 5 });
+    }
     // score
     TXT(ctx, 'SCORE', 622, 34, { size: 12, sy: 1.7, fill: '#ff37a8', outline: '#000', outlineW: 6, outline2: '#fff', outline2W: 3 });
     TXT(ctx, OB.pad(G.score, 7), 704, 34, { size: 12, sy: 1.7, fill: '#fff', outline: '#000', outlineW: 5 });
@@ -715,6 +725,22 @@
       ctx.restore();
       // while the combo is dormant the label is the instruction for waking it, not a bonus name
       if (G.multWhy && !brk && (!armed || m > 1.2)) TXT(ctx, G.multWhy, 762, 74, { size: 6, sy: 1.4, fill: armed ? col : '#7fe0ff', outline: '#000', outlineW: 3, align: 'center' });
+    }
+    // the ยาดม jar, bottom right, waiting to be tapped. It bobs on its own nine frames and sits over a soft
+    // pulse so it reads as something to press rather than scenery; the hit box is generous for a thumb.
+    R.hit.yadom = null;
+    if (G.mode === 'play' && G.yadom && OB.YADOM) {
+      const f = OB.YADOM[Math.floor(G.t * 3.7) % OB.YADOM.length], iw = f.width, ih = f.height;
+      const ix = W - iw - 24, iy = H - ih - 104, pu = 0.5 + 0.5 * Math.sin(G.t * 5);   // clear of the stage name in the corner
+      ctx.save();
+      ctx.globalCompositeOperation = 'lighter';
+      const gr = ctx.createRadialGradient(ix + iw / 2, iy + ih / 2, 0, ix + iw / 2, iy + ih / 2, iw * 0.9);
+      gr.addColorStop(0, 'rgba(90,255,160,' + (0.3 + 0.25 * pu).toFixed(2) + ')'); gr.addColorStop(1, 'rgba(90,255,160,0)');
+      ctx.fillStyle = gr; ctx.fillRect(ix - iw / 2, iy - ih / 2, iw * 2, ih * 2);
+      ctx.restore();
+      ctx.drawImage(f, ix, iy);
+      TXT(ctx, G.touchMode ? 'TAP!' : 'PRESS E', ix + iw / 2, iy - 12, { size: 7, sy: 1.4, fill: pu > 0.5 ? '#fff' : '#3fd07a', outline: '#000', outlineW: 3, align: 'center' });
+      R.hit.yadom = { x: ix - 18, y: iy - 22, w: iw + 36, h: ih + 40 };
     }
     // pause button (top-right corner)
     if (G.mode === 'play') {
@@ -764,7 +790,7 @@
 
   // ---------- overlays ----------
   // tap targets published for the input layer (rows: radio stations, nodes: course map, cells: name entry, start: START button)
-  R.hit = { rows: [], nodes: [], cells: [], start: null, pause: null, fs: null };
+  R.hit = { rows: [], nodes: [], cells: [], start: null, pause: null, fs: null, yadom: null };
   // pause menu: resume / restart / music / full screen / quit
   R.pause = function (G) {
     dim(0.55); R.hit.rows = [];

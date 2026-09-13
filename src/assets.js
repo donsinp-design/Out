@@ -3,7 +3,7 @@
   'use strict';
   const FILES = ['bg','bike','portrait','face_ok','face_hurt','face_crit','taxi','taxi_orange','taxi_blue','taxi_green','sedan','sedan_black','sedan_red',
     'green','green_yellow','green_purple','bus','tuktuk','tuktukp','seven','signs','ckrd','spirit','thatien','yen','vendor',
-    'noodle','storepanel','sangchai','thongbai','redsign','chedi','lamp','fence','boat0','boat1','boat2',
+    'noodle','storepanel','sangchai','thongbai','redsign','chedi','lamp','fence','boat0','boat1','boat2','yadom','plang',
     'water0','water1','water2','water3','water4','water5','water6','water7',
     'facade0','facade1','facade2','facade3','facade4','facade5','towers0','towers1','towers2','title','atlas'];
   const IMG = {};
@@ -533,6 +533,9 @@
     const S = OB.SPR;
     portraits();
     waterStrips();
+    // the ยาดม jar, nine frames of a slow bob cut off one strip
+    OB.YADOM = [];
+    for (let i = 0; i < 9; i++) { const c = mk(54, 58); c.getContext('2d').drawImage(IMG.yadom, i * 54, 0, 54, 58, 0, 0, 54, 58); OB.YADOM.push(c); }
     const rng = OB.rng(1986);
     const add = (name, img, w, extra) => { S[name] = Object.assign({ img, w, h: w * img.height / img.width, name }, extra || {}); return S[name]; };
     // a frame of the sprite atlas as its own canvas (for sprites that go through the static sprite path)
