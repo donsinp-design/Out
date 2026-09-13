@@ -285,7 +285,8 @@
         const s = sp.spr;
         // an animated sprite (the river ferry) cycles its frames on the clock, not on the segment, so every boat
         // on screen is on the same beat; all its frames share one canvas size so nothing jitters between them
-        const img = s.anim ? s.anim.frames[Math.floor(G.t * s.anim.fps) % s.anim.frames.length] : s.img;
+        const img = s.anim ? s.anim.frames[Math.floor(G.t * s.anim.fps) % s.anim.frames.length]
+          : (night && s.night) ? s.night : s.img;
         const destW = s.w * scale * K, destH = destW * img.height / img.width;
         let destX = sx + scale * sp.offset * RW * K;
         const anchor = sp.anchor || 'center';
@@ -316,7 +317,8 @@
       if (cars) for (const c of cars) {
         const pct = (c.z % segLen) / segLen;
         const cs = OB.lerp(seg.p1.screen.scale, seg.p2.screen.scale, pct), cx = OB.lerp(seg.p1.screen.x, seg.p2.screen.x, pct), cy = OB.lerp(seg.p1.screen.y, seg.p2.screen.y, pct);
-        const img = c.spr.img, destW = c.spr.w * cs * K, destH = destW * img.height / img.width;
+        const img = (night && c.spr.night) ? c.spr.night : c.spr.img;
+        const destW = c.spr.w * cs * K, destH = destW * img.height / img.width;
         const dx0 = cx + cs * c.offset * RW * seg.rw * K - destW / 2;
         drawSprite(img, dx0, cy - destH, destW, destH, seg.clip, false);
         // brake lights and indicators (rear views only; the indicator sits on the side it announces)
@@ -370,17 +372,28 @@
       lights.push({ kind: 'pool', x: hx, y: groundY, rx: destH * 0.85, ry: destH * 0.3, r: 255, g: 186, b: 104, a: 0.95 });
       lights.push({ kind: 'cone', x: hx, y: hy, gy: groundY, rx: destH * 0.55 });
       lights.push({ kind: 'glow', x: hx, y: hy, rx: Math.max(1.5, destW * 0.55), r: 255, g: 216, b: 150, a: 0.9 });
+    } else if (s.neon && destW > 5) {
+      // a tuk-tuk's underglow: the road beneath it takes the colour of the strip, and the strip reads as a source
+      const n = s.neon;
+      lights.push({ kind: 'pool', x: destX + destW / 2, y: groundY, rx: destW * 0.78, ry: destH * 0.3, r: n[0], g: n[1], b: n[2], a: 0.9 });
+      lights.push({ kind: 'glow', x: destX + destW * (flip ? 0.42 : 0.58), y: destY + destH * 0.22, rx: destW * 0.3, r: n[0], g: n[1], b: n[2], a: 0.5 });
     } else if (destW > 3 && s.name && LIT_SIGN.test(s.name)) {
       const h = Math.min(destH, clip - destY); if (h <= 0) return;
       lights.push({ kind: 'rect', x: destX, y: destY, w: destW, h, a: 0.72 * fa });
     }
   }
   function noteCarLight(c, dx0, cy, destW, destH, segs, segLen, RW, lim) {
-    const moto = !!c.spr.moto, braking = c.brake > 0;
-    // tail lights: a pair on a car, one on a bike, and brighter under braking
+    const moto = !!c.spr.moto, braking = c.brake > 0, neon = c.spr.neon;
+    // tail lights: a pair on a car, one on a bike, and brighter under braking. A tuk-tuk running its neon has
+    // them in its own colour instead of red, plus the strip over the cab and the wash it throws on the road.
+    const tc = neon || [255, 40, 30];
     const ty = cy - destH * (moto ? 0.36 : 0.3), tr = Math.max(1.2, destW * (moto ? 0.12 : 0.085)) * (braking ? 1.7 : 1);
-    if (moto) lights.push({ kind: 'glow', x: dx0 + destW / 2, y: ty, rx: tr, r: 255, g: 40, b: 30, a: 0.9 });
-    else { lights.push({ kind: 'glow', x: dx0 + destW * 0.2, y: ty, rx: tr, r: 255, g: 40, b: 30, a: 0.9 }); lights.push({ kind: 'glow', x: dx0 + destW * 0.8, y: ty, rx: tr, r: 255, g: 40, b: 30, a: 0.9 }); }
+    if (moto) lights.push({ kind: 'glow', x: dx0 + destW / 2, y: ty, rx: tr, r: tc[0], g: tc[1], b: tc[2], a: 0.9 });
+    else { lights.push({ kind: 'glow', x: dx0 + destW * 0.2, y: ty, rx: tr, r: tc[0], g: tc[1], b: tc[2], a: 0.9 }); lights.push({ kind: 'glow', x: dx0 + destW * 0.8, y: ty, rx: tr, r: tc[0], g: tc[1], b: tc[2], a: 0.9 }); }
+    if (neon && destW > 5) {
+      lights.push({ kind: 'pool', x: dx0 + destW / 2, y: cy, rx: destW * 0.85, ry: destW * 0.3, r: neon[0], g: neon[1], b: neon[2], a: 0.9 });
+      lights.push({ kind: 'glow', x: dx0 + destW / 2, y: cy - destH * 0.72, rx: destW * 0.34, r: neon[0], g: neon[1], b: neon[2], a: 0.55 });
+    }
     // headlights: seen from behind, what shows is the beam landing on the road a little way ahead of the vehicle
     const az = c.z + (moto ? 520 : 820), ai = Math.floor(az / segLen);
     if (ai >= lim || ai >= segs.length) return;

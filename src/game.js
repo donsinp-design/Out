@@ -23,7 +23,8 @@
   G.cameraDepth = 1 / Math.tan((G.fov / 2) * Math.PI / 180);
   G.playerZ = G.cameraDepth * G.cameraH * K / (457 - OB.HORIZON);
   const PLAYER_W = 480 / T.roadW;
-  const CARS = ['taxi', 'taxi', 'taxi_orange', 'taxi_blue', 'taxi_green', 'sedan', 'sedan', 'sedan_black', 'sedan_red', 'green', 'green_yellow', 'green_purple', 'truck', 'pickup', 'pickup_w', 'moto', 'moto', 'moto', 'moto'];
+  const CARS = ['taxi', 'taxi', 'taxi_orange', 'taxi_blue', 'taxi_green', 'sedan', 'sedan', 'sedan_black', 'sedan_red', 'green', 'green_yellow', 'green_purple', 'truck', 'pickup', 'pickup_w', 'moto', 'moto', 'moto', 'moto',
+    'tuktuk0', 'tuktuk1', 'tuktuk2', 'tuktuk3', 'tuktuk4'];
   const ONCOMING = []; // no traffic comes the other way; every theme's oncoming rate is 0 so all lanes run with us
   const store = { get(k, d) { try { const v = localStorage.getItem(k); return v === null ? d : JSON.parse(v); } catch (e) { return d; } }, set(k, v) { try { localStorage.setItem(k, JSON.stringify(v)); } catch (e) { } } };
   G.ranking = store.get('ob_ranking', []); if (!Array.isArray(G.ranking)) G.ranking = [];

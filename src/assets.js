@@ -2,7 +2,7 @@
 (function (OB) {
   'use strict';
   const FILES = ['bg','bike','portrait','face_ok','face_hurt','face_crit','taxi','taxi_orange','taxi_blue','taxi_green','sedan','sedan_black','sedan_red',
-    'green','green_yellow','green_purple','bus','tuktuk','seven','signs','ckrd','spirit','thatien','yen','vendor',
+    'green','green_yellow','green_purple','bus','tuktuk','tuktukp','seven','signs','ckrd','spirit','thatien','yen','vendor',
     'noodle','storepanel','sangchai','thongbai','redsign','chedi','lamp','fence','boat0','boat1','boat2',
     'water0','water1','water2','water3','water4','water5','water6','water7',
     'facade0','facade1','facade2','facade3','facade4','facade5','towers0','towers1','towers2','title','atlas'];
@@ -574,13 +574,17 @@
       add('green_yellow', hueShift(taxi, 60, 1.1), 880, { car: true });
       add('green_purple', hueShift(taxi, 205, 0.8), 880, { car: true }); }
     add('bus', IMG.bus, 1240, { car: true, oncoming: true });
-    add('tuktuk', IMG.tuktuk, 900, { car: true, oncoming: true });
     add('truck', FC('TRUCK'), 1150, { car: true }); add('pickup', FC('PICKUP'), 960, { car: true }); add('pickup_w', FC('PICKUP_W'), 960, { car: true });
     add('songthaew', FC('SONGTHAEW'), 1100, { car: true, oncoming: true });
-    // roadside (from reference)
-    // the reference's own three-quarter tuk-tuk, re-cut whole: the first crop ran through the canopy, the rear
-    // and the front wheel. Wider than that crop was, so the width is raised to keep the vehicle the same size
-    add('tuktuk_parked', IMG.tuktuk, 1000, { solid: true });
+    // Tuk-tuks come as two sheets of five liveries, each with a day row and a night row that carries the neon
+    // underglow. A sprite holds both pictures and the colour of its own neon, so the renderer can swap the art by
+    // stage and light the road in the same colour the strip is glowing.
+    const TUK_NEON = [[255, 55, 245], [255, 74, 90], [23, 226, 255], [255, 224, 32], [184, 60, 255]];
+    const cell = (img, cw, ch, col, row) => { const c = mk(cw, ch); c.getContext('2d').drawImage(img, col * cw, row * ch, cw, ch, 0, 0, cw, ch); return c; };
+    for (let i = 0; i < 5; i++) {
+      add('tuktuk' + i, cell(IMG.tuktuk, 118, 127, i, 0), 880, { car: true, night: cell(IMG.tuktuk, 118, 127, i, 1), neon: TUK_NEON[i] });
+      add('tuktuk_parked' + i, cell(IMG.tuktukp, 136, 133, i, 0), 1000, { solid: true, street: true, night: cell(IMG.tuktukp, 136, 133, i, 1), neon: TUK_NEON[i] });
+    }
     add('spirit', IMG.spirit, 640, { solid: true, street: true });
     add('spirit_small', IMG.spirit, 300, { solid: true, street: true }); // fits on the river walkway
     // the photo cut-out of the vendor carries the shop interior behind it as opaque pixels; the sheet's stall is

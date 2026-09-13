@@ -99,6 +99,7 @@
         if (rel % 210 === 120) put(seg, 'ckrd_pole', edgeL + 0.1);
         if (rel % 260 === 200) put(seg, 'seven_pole', edgeL + 0.02);
         if (rel % 95 === 60) { put(seg, 'vendor', edgeL - 0.02); if (rng.chance(0.7)) put(segs[i + 3] || seg, 'yen', edgeL + 0.12); }
+        if (rel % 62 === 27) put(seg, 'tuktuk_parked' + rng.int(5), edgeL + 0.11, { flip: true });   // waiting at the kerb
         if (stage.theme === 'chinatown' && rel % 33 === 20) put(seg, 'redsign_pole', edgeL + 0.1);
       } else if (th.left === 'city') {
         // street level stays the shophouse wall; towers rise behind it, the reference's own tower clusters further back
@@ -107,6 +108,7 @@
         if (rel % 34 === 7) put(seg, rng.pick(['towers0', 'towers1', 'towers2']), edgeL - 4.5 - rng.range(0, 3), { anchor: 'left' });
         if (rel % 26 === 8) put(seg, 'lamp', edgeL + 0.06, { flip: true });
         if (rel % 44 === 20) put(seg, rng.pick(['tree0', 'tree1', 'palm0']), edgeL + 0.03);
+        if (rel % 70 === 46) put(seg, 'tuktuk_parked' + rng.int(5), edgeL + 0.11, { flip: true });
         if (th.skytrain && rel % 14 === 7) put(seg, 'pillar', edgeL + 0.05, { pillar: true });
       } else if (th.left === 'temple') {
         if (rel % 16 === 0) put(seg, 'wall', edgeL - 0.15, { anchor: 'left' });
@@ -115,6 +117,7 @@
         if (rel % 18 === 9) put(seg, rng.pick(['tree0', 'tree1', 'tree2', 'tree3', 'palm1']), edgeL - 0.25);
         if (rel % 34 === 4) put(seg, 'pole2', edgeL + 0.06, { pole: 'L' });
         if (rel % 120 === 100) put(seg, 'spirit', edgeL + 0.1);
+        if (rel % 66 === 31) put(seg, 'tuktuk_parked' + rng.int(5), edgeL + 0.11, { flip: true });
       }
       // ---- RIGHT ----
       if (th.right === 'water') {
@@ -130,18 +133,21 @@
         if (rel % 16 === 4) put(seg, 'pole2', edgeR - 0.1, { pole: 'R', flip: true });
         if (rel % 33 === 20 && stage.theme === 'chinatown') put(seg, 'redsign_pole', edgeR - 0.1);
         if (rel % 150 === 75) put(seg, 'vendor', edgeR + 0.02, { flip: true });
+        if (rel % 62 === 41) put(seg, 'tuktuk_parked' + rng.int(5), edgeR - 0.11);
       } else if (th.right === 'city') {
         if (rel % 10 === 5) put(seg, pickShop(rng, 'city', 'R'), edgeR + 0.12, { anchor: 'right' });
         if (rel % 26 === 0) put(seg, rng.pick(TOWERS), edgeR + 1.9 + rng.range(0, 0.9), { anchor: 'right' });
         if (rel % 34 === 24) put(seg, rng.pick(['towers0', 'towers1', 'towers2']), edgeR + 4.5 + rng.range(0, 3), { anchor: 'right' });
         if (rel % 26 === 21) put(seg, 'lamp', edgeR - 0.06);
         if (rel % 44 === 30) put(seg, rng.pick(['tree2', 'tree3', 'palm2']), edgeR - 0.03);
+        if (rel % 70 === 12) put(seg, 'tuktuk_parked' + rng.int(5), edgeR - 0.11);
         if (th.skytrain && rel % 14 === 7) put(seg, 'pillar', edgeR - 0.05, { pillar: true });
       } else if (th.right === 'park') {
         if (rel % 10 === 5) put(seg, rng.pick(['tree0', 'tree1', 'tree2', 'tree3']), edgeR + rng.range(0.1, 1.2));
         if (rel % 17 === 3) put(seg, rng.pick(['palm0', 'palm1', 'palm2']), edgeR + rng.range(0, 0.4));
         if (rel % 26 === 12) put(seg, 'lamp', edgeR - 0.06);
         if (rel % 200 === 140) put(seg, 'spirit', edgeR - 0.1);
+        if (rel % 66 === 52) put(seg, 'tuktuk_parked' + rng.int(5), edgeR - 0.11);
         if (rel % 240 === 60) put(seg, 'chedi', edgeR + rng.range(2, 5));
       }
       if (th.skytrain && rel > 60 && rel < to - from - 60) seg.deck = true;
