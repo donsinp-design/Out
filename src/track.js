@@ -95,6 +95,7 @@
         if (rel % 10 === 0) put(seg, pickShop(rng, stage.theme, 'L'), edgeL - 0.12, { anchor: 'left' });
         if (rel % 14 === 5) put(seg, rng.pick(BACKROW), edgeL - 1.6, { anchor: 'left' });
         if (rel % 16 === 4) { put(seg, rng.chance(0.7) ? 'pole' : 'pole2', edgeL + 0.1, { pole: 'L' }); }
+        if (rel % 26 === 17) put(seg, 'lamp', edgeL + 0.06, { flip: true });   // the shop streets had power poles but no street lighting
         if (rel % 160 === 40) put(seg, 'signs_pole', edgeL + 0.08);
         if (rel % 210 === 120) put(seg, 'ckrd_pole', edgeL + 0.1);
         if (rel % 260 === 200) put(seg, 'seven_pole', edgeL + 0.02);
@@ -131,6 +132,7 @@
         if (rel % 10 === 5) put(seg, pickShop(rng, stage.theme, 'R'), edgeR + 0.12, { anchor: 'right' });
         if (rel % 14 === 12) put(seg, rng.pick(BACKROW), edgeR + 1.6, { anchor: 'right' });
         if (rel % 16 === 4) put(seg, 'pole2', edgeR - 0.1, { pole: 'R', flip: true });
+        if (rel % 26 === 9) put(seg, 'lamp', edgeR - 0.06);
         if (rel % 33 === 20 && stage.theme === 'chinatown') put(seg, 'redsign_pole', edgeR - 0.1);
         if (rel % 150 === 75) put(seg, 'vendor', edgeR + 0.02, { flip: true });
         if (rel % 62 === 41) put(seg, 'tuktuk_parked' + rng.int(5), edgeR - 0.11);

@@ -307,7 +307,7 @@
         ctx.globalAlpha = fa;
         drawSprite(img, destX, destY, destW, destH, seg.clip, sp.flip);
         ctx.globalAlpha = 1;
-        if (night) noteSpriteLight(s, destX, destY, destW, destH, sy, seg.clip, sp.flip, fa);
+        if (night) noteSpriteLight(s, img, destX, destY, destW, destH, sy, seg.clip, sp.flip, fa);
         if (sp.pillar) { /* pillars carry the deck */ }
       }
       // the wire span that ends at this segment's pole is drawn now, so nearer shophouses paint over it
@@ -339,9 +339,10 @@
       const ea = OB.clamp(1 - over / (d.destW * 0.6), 0, 1);
       if (ea <= 0.02) continue;
       ctx.globalAlpha = d.fa * ea;
-      drawSprite(d.s.img, d.destX, d.destY, d.destW, d.destH, d.seg.clip, d.sp.flip);
+      const dimg = (night && d.s.night) ? d.s.night : d.s.img;
+      drawSprite(dimg, d.destX, d.destY, d.destW, d.destH, d.seg.clip, d.sp.flip);
       ctx.globalAlpha = 1;
-      if (night) noteSpriteLight(d.s, d.destX, d.destY, d.destW, d.destH, d.sy, d.seg.clip, d.sp.flip, d.fa);
+      if (night) noteSpriteLight(d.s, dimg, d.destX, d.destY, d.destW, d.destH, d.sy, d.seg.clip, d.sp.flip, d.fa);
     }
     // speed streaks radiate from the road's vanishing point (only near top speed)
     if (WD.streaks.n) WD.drawStreaks(ctx, G, W / 2 + (G.drawShift || 0) + (G.playerDX || 0), 457 - 95);
@@ -365,12 +366,19 @@
   let LM = null, lg = null;       // the lightmap canvas, made once
   const AMBIENT = '#4a5488';      // what the scene is multiplied by where nothing is lit
   const LIT_SIGN = /sign|redsign|seven|thatien|ckrd/;   // the same set that flickers: neon and lightboxes stay lit after dark
-  function noteSpriteLight(s, destX, destY, destW, destH, groundY, clip, flip, fa) {
+  function noteSpriteLight(s, img, destX, destY, destW, destH, groundY, clip, flip, fa) {
     if (s.lampHead) {
       if (destH < 5 || groundY > clip + 2) return;
       const hx = destX + destW * (flip ? 1 - s.lampHead.x : s.lampHead.x), hy = destY + destH * s.lampHead.y;
-      lights.push({ kind: 'pool', x: hx, y: groundY, rx: destH * 0.85, ry: destH * 0.3, r: 255, g: 186, b: 104, a: 0.95 });
-      lights.push({ kind: 'cone', x: hx, y: hy, gy: groundY, rx: destH * 0.55 });
+      // the pool is capped so that a lamp going past the camera lays down a patch of light rather than a warm
+      // wash over the whole frame
+      lights.push({ kind: 'pool', x: hx, y: groundY, rx: Math.min(destH * 0.85, 300), ry: Math.min(destH * 0.3, 106), r: 255, g: 186, b: 104, a: 0.95 });
+      // The haze shaft belongs to a lamp down the street. On one going past the camera its head is off the top of
+      // the frame and its foot is halfway down, so the shaft became a pale wedge across the sky with a hard edge
+      // down each side. It is capped in width and fades out as the lamp grows; up close the lantern's own glare
+      // and the pool under it carry the light, which is what standing under a lamp actually looks like.
+      const ca = OB.clamp((520 - destH) / 240, 0, 1);
+      if (ca > 0.01) lights.push({ kind: 'cone', x: hx, y: hy, gy: groundY, rx: Math.min(destH * 0.55, 150), a: ca });
       lights.push({ kind: 'glow', x: hx, y: hy, rx: Math.max(1.5, destW * 0.55), r: 255, g: 216, b: 150, a: 0.9 });
     } else if (s.neon && destW > 5) {
       // a tuk-tuk's underglow: the road beneath it takes the colour of the strip, and the strip reads as a source
@@ -378,8 +386,13 @@
       lights.push({ kind: 'pool', x: destX + destW / 2, y: groundY, rx: destW * 0.78, ry: destH * 0.3, r: n[0], g: n[1], b: n[2], a: 0.9 });
       lights.push({ kind: 'glow', x: destX + destW * (flip ? 0.42 : 0.58), y: destY + destH * 0.22, rx: destW * 0.3, r: n[0], g: n[1], b: n[2], a: 0.5 });
     } else if (destW > 3 && s.name && LIT_SIGN.test(s.name)) {
-      const h = Math.min(destH, clip - destY); if (h <= 0) return;
-      lights.push({ kind: 'rect', x: destX, y: destY, w: destW, h, a: 0.72 * fa });
+      // A lit sign was noted as a filled rectangle over the sprite's whole destination box. On a panel carried up
+      // a post that box is mostly empty air, so the shopfront behind it, the pavement and anyone standing there
+      // were painted as one pale slab - a bright rectangle with nothing in the scene casting it. The sign's own
+      // art is the emitter instead: a mask of it goes into the map, so only the panel lights, and the light it
+      // throws on its surroundings is a soft pool round the panel rather than a hard edge round the canvas.
+      if (destY > clip) return;
+      lights.push({ kind: 'sign', img, x: destX, y: destY, w: destW, h: destH, clip, flip, a: 0.95 * fa });
     }
   }
   function noteCarLight(c, dx0, cy, destW, destH, segs, segLen, RW, lim) {
@@ -469,6 +482,40 @@
     const b = bikeBox(G);
     g.save(); g.globalCompositeOperation = 'source-over'; g.drawImage(BM, b.x, b.y); g.restore();
   }
+  // A lit sign's emission, worked out from its own art once and kept. The mask is warm white carrying the sprite's
+  // shape, with each pixel's opacity set by how bright that pixel is: the panel reaches full white in the lightmap
+  // so it renders at its daylight colours, the post it stands on only catches a little, and the outline stays dark.
+  // The box is the panel's own extent, used to place the pool of light the sign throws on what is beside it.
+  const EMIT = new WeakMap();
+  function emitMask(img) {
+    let m = EMIT.get(img); if (m) return m;
+    const iw = img.width, ih = img.height, c = OB.makeCanvas(iw, ih), g = c.getContext('2d');
+    g.drawImage(img, 0, 0);
+    const d = g.getImageData(0, 0, iw, ih), px = d.data;
+    let minx = iw, miny = ih, maxx = -1, maxy = -1;
+    for (let i = 0; i < px.length; i += 4) {
+      const lum = (px[i] * 0.3 + px[i + 1] * 0.59 + px[i + 2] * 0.11) / 255;
+      const a = (px[i + 3] / 255) * OB.clamp(lum * 2.2, 0, 1);
+      px[i] = 255; px[i + 1] = 240; px[i + 2] = 220; px[i + 3] = Math.round(a * 255);
+      if (a > 0.55) { const n = i >> 2, x = n % iw, y = (n / iw) | 0; if (x < minx) minx = x; if (x > maxx) maxx = x; if (y < miny) miny = y; if (y > maxy) maxy = y; }
+    }
+    g.putImageData(d, 0, 0);
+    m = maxx < 0 ? { c, bx: 0.15, by: 0.1, bw: 0.7, bh: 0.35 }
+      : { c, bx: minx / iw, by: miny / ih, bw: (maxx - minx + 1) / iw, bh: (maxy - miny + 1) / ih };
+    EMIT.set(img, m); return m;
+  }
+  function signLight(g, l) {
+    const m = emitMask(l.img);
+    g.save();
+    g.beginPath(); g.rect(0, 0, W, Math.max(0, l.clip)); g.clip();
+    const bw = l.w * m.bw, bh = l.h * m.bh;
+    const bx = l.x + l.w * (l.flip ? 1 - m.bx - m.bw : m.bx) + bw / 2, by = l.y + l.h * m.by + bh / 2;
+    ellipseLight(g, { x: bx, y: by, rx: bw * 1.5 + 5, ry: bh * 1.6 + 5, r: 255, g: 238, b: 214, a: 0.4 * l.a });
+    g.globalAlpha = l.a;
+    if (l.flip) { g.translate(l.x + l.w, l.y); g.scale(-1, 1); g.drawImage(m.c, 0, 0, l.w, l.h); }
+    else g.drawImage(m.c, l.x, l.y, l.w, l.h);
+    g.restore();
+  }
   function ellipseLight(g, l) {
     const gr = g.createRadialGradient(0, 0, 0, 0, 0, 1);
     gr.addColorStop(0, 'rgba(' + l.r + ',' + l.g + ',' + l.b + ',' + l.a + ')');
@@ -477,8 +524,9 @@
     g.save(); g.translate(l.x, l.y); g.scale(l.rx, l.ry); g.fillStyle = gr; g.fillRect(-1, -1, 2, 2); g.restore();
   }
   function coneLight(g, l) { // the haze under a lantern, apex at the lamp, spreading to the pool
+    const a = l.a === undefined ? 1 : l.a;
     const gr = g.createLinearGradient(0, l.y, 0, l.gy);
-    gr.addColorStop(0, 'rgba(255,200,120,0.3)'); gr.addColorStop(1, 'rgba(255,190,110,0.04)');
+    gr.addColorStop(0, 'rgba(255,200,120,' + (0.3 * a).toFixed(3) + ')'); gr.addColorStop(1, 'rgba(255,190,110,' + (0.04 * a).toFixed(3) + ')');
     g.fillStyle = gr; g.beginPath(); g.moveTo(l.x - l.rx * 0.08, l.y); g.lineTo(l.x + l.rx * 0.08, l.y); g.lineTo(l.x + l.rx, l.gy); g.lineTo(l.x - l.rx, l.gy); g.closePath(); g.fill();
   }
   function nightPass(G, segs, segLen, RW, lim) {
@@ -489,7 +537,7 @@
     for (const l of lights) {
       if (l.kind === 'pool') ellipseLight(lg, l);
       else if (l.kind === 'cone') coneLight(lg, l);
-      else if (l.kind === 'rect') { lg.fillStyle = 'rgba(255,240,220,' + l.a.toFixed(2) + ')'; lg.fillRect(l.x, l.y, l.w, l.h); }
+      else if (l.kind === 'sign') signLight(lg, l);
     }
     const occlude = !G.crash;
     if (occlude) grabBike(G);
