@@ -464,6 +464,11 @@
   // as d = k / (y - horizon), so the tile has to shrink toward the horizon; the strip is built as bands whose
   // depth doubles as they climb, each filled with the tile scaled for its own distance, which is how the arcade
   // racers faked a receding sea. The joins between bands land inside the noise of the art and do not read.
+  function squashX(img, k) {   // the same art, drawn narrower, so a sprite can be slimmer than it was drawn
+    const w = Math.max(1, Math.round(img.width * k)), c = mk(w, img.height);
+    c.getContext('2d').drawImage(img, 0, 0, w, img.height);
+    return c;
+  }
   const meanCache = {};
   function meanColour(img, alpha) {   // the average of a tile, as an rgba() at the given opacity
     let m = meanCache[img.src || img];
@@ -580,7 +585,11 @@
     // Drawn street lamp: the lantern hangs off an arm well to one side of the post, so the sprite is anchored on
     // the post (ax) rather than on its own centre - otherwise every placement offset would put the post where the
     // arm is. lampHead is where the lantern sits, for the night pool.
-    add('lamp', IMG.lamp, 1120, { solid: true, thin: 0.14, ax: 0.81, lampHead: { x: 22 / 116, y: 24 / 256 } });
+    // ...and narrowed on the way in. The sprite pass takes a sprite's proportions from its image, so a lamp that
+    // is slimmer AND taller than the art has to be squashed here: at 0.62 the post comes out a quarter thinner
+    // and the whole lamp a fifth taller than the drawing, which is the slender pole a street lamp actually is,
+    // and the lantern still reads at that width (0.55 starts to pinch it).
+    add('lamp', squashX(IMG.lamp, 0.62), 830, { solid: true, thin: 0.14, ax: 0.81, lampHead: { x: 22 / 116, y: 24 / 256 } });
     add('pillar', tx(pillar(), { amp: 0.06 }), 640, { solid: true });
     // shophouses: the reference's own facade (rectified) with drawn upper storeys and swappable shop modules
     const AWN = [null, null, null, '#c8322b', '#1f8a4c', '#d99a1c', '#8a1c8c', '#2b6fb0'];
