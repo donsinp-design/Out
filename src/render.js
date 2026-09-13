@@ -271,12 +271,32 @@
     // ---- sprite pass (back to front): every projected slice, clipped by the crest line, so nothing pops ----
     const poles = { L: [], R: [] };
     let lastPole = null;
-    // Street-level props - stalls, signs, shrines - stand between the road and the shophouses, so they must paint
-    // over every building whatever segment it is on. Drawn in segment order they were sliced clean down one side by
-    // any facade one segment nearer. They are collected here and drawn after the segment pass, still back to front.
-    const deferred = [];
+    // Street-level props - stalls, shrines, parked tuk-tuks - stand between the road and the shophouses. A facade
+    // is one wide billboard rather than a wall with depth, so a block one segment nearer sliced the prop in front
+    // of it clean down one side; they used to be held back and painted over every building in the frame, whatever
+    // segment it was on. That is right for the block a prop is standing against and wrong for everything beyond
+    // it: on a bend the inside terrace sweeps across the view, and a tuk-tuk parked far down the road came out
+    // pasted on top of buildings that are genuinely in front of it. Each prop is instead held for DEFER slices and
+    // drawn then, so it beats the terrace it belongs to and loses to anything well in front of it.
+    const DEFER = 12;   // a little more than the 10 segments between one block and the next
+    const held = new Map();
+    const drawStreet = (list) => {
+      for (const d of list) {
+        // a prop half out of the frame is a hard-cut fragment, and with the bike stopped beside it that fragment
+        // just sits there. Dissolve it over the outer 60% of its width instead.
+        const over = Math.max(0, -d.destX) + Math.max(0, d.destX + d.destW - W);
+        const ea = OB.clamp(1 - over / (d.destW * 0.6), 0, 1);
+        if (ea <= 0.02) continue;
+        const dimg = (night && d.s.night) ? d.s.night : d.s.img;
+        ctx.globalAlpha = d.fa * ea;
+        drawSprite(dimg, d.destX, d.destY, d.destW, d.destH, d.seg.clip, d.sp.flip);
+        ctx.globalAlpha = 1;
+        if (night) noteSpriteLight(d.s, dimg, d.destX, d.destY, d.destW, d.destH, d.sy, d.seg.clip, d.sp.flip, d.fa);
+      }
+    };
     for (let n = projected.length - 1; n >= 0; n--) {
       const seg = projected[n];
+      const due = held.get(seg.index); if (due) { drawStreet(due); held.delete(seg.index); }
       const th = T.THEMES[seg.theme];
       if (seg.rail && !seg.hidden) renderRail(seg, pal);
       const scale = seg.p1.screen.scale, sx = seg.p1.screen.x, sy = seg.p1.screen.y;
@@ -303,7 +323,7 @@
         // a prop whose base has gone under the bottom of the frame would otherwise be cut flat across its middle
         // with pavement still showing beside it; fade it out over the next third of its height instead
         if (sy > H) { fa *= OB.clamp(1 - (sy - H) / (destH * 0.35), 0, 1); if (fa <= 0.02) continue; }
-        if (s.street) { deferred.push({ s, sp, seg, destX, destY, destW, destH, sy, fa }); continue; }
+        if (s.street) { const k = seg.index - DEFER; let q = held.get(k); if (!q) held.set(k, q = []); q.push({ s, sp, seg, destX, destY, destW, destH, sy, fa }); continue; }
         ctx.globalAlpha = fa;
         drawSprite(img, destX, destY, destW, destH, seg.clip, sp.flip);
         ctx.globalAlpha = 1;
@@ -331,19 +351,8 @@
       const al = actorsBySeg.get(seg.index); if (al) for (const a of al) WD.drawActor(ctx, a, seg);
       const dl = debrisBySeg.get(seg.index); if (dl) for (const d of dl) WD.drawDebris(ctx, d, seg);
     }
-    // ---- street-level props, over every building, still back to front ----
-    for (const d of deferred) {
-      // and the same across the side edges: a prop half out of the frame is a hard-cut fragment, and with the bike
-      // stopped beside it that fragment just sits there. Dissolve it over the outer 60% of its width instead.
-      const over = Math.max(0, -d.destX) + Math.max(0, d.destX + d.destW - W);
-      const ea = OB.clamp(1 - over / (d.destW * 0.6), 0, 1);
-      if (ea <= 0.02) continue;
-      ctx.globalAlpha = d.fa * ea;
-      const dimg = (night && d.s.night) ? d.s.night : d.s.img;
-      drawSprite(dimg, d.destX, d.destY, d.destW, d.destH, d.seg.clip, d.sp.flip);
-      ctx.globalAlpha = 1;
-      if (night) noteSpriteLight(d.s, dimg, d.destX, d.destY, d.destW, d.destH, d.sy, d.seg.clip, d.sp.flip, d.fa);
-    }
+    // the props on the nearest slices never reached their drawing point, so they go down now, still back to front
+    if (held.size) { const keys = [...held.keys()].sort((a, b) => b - a); for (const k of keys) drawStreet(held.get(k)); held.clear(); }
     // speed streaks radiate from the road's vanishing point (only near top speed)
     if (WD.streaks.n) WD.drawStreaks(ctx, G, W / 2 + (G.drawShift || 0) + (G.playerDX || 0), 457 - 95);
     // ---- wires: the last span carries on toward the pole beside the camera (left-hand lines only, as in the reference) ----

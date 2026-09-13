@@ -424,7 +424,20 @@
       px(o, 6, 286, W - 16, 14, '#b8b4aa'); any = true;
     } else if (it === 'shutter') {
       px(o, 6, 150, W - 16, 150, '#9aa0a8'); for (let yy = 154; yy < 300; yy += 4) px(o, 6, yy, W - 16, 1, '#6f757d'); px(o, 6, 150, W - 16, 4, '#4a4f56'); px(o, 6, 294, W - 16, 6, '#5a5f66');
-      px(o, W / 2 - 12, 262, 24, 10, '#4a4f56'); const pc = rng.pick(['#c8322b', '#1f4fa3', '#e0b030']); px(o, 30, 185, 56, 70, pc); px(o, 34, 189, 48, 62, shade(pc, 1.25)); any = true;
+      px(o, W / 2 - 12, 262, 24, 10, '#4a4f56');
+      // The bill pasted on the shutter. It was a flat coloured slab with a lighter slab inside it and nothing
+      // else, so at a distance - and especially after dark, where the shutter around it goes to ambient and the
+      // slab does not - it read as a lit rectangle stuck to the wall for no reason. Now it carries a headline
+      // block, a picture and lines of body copy, which at this size is all a poster needs to read as a poster.
+      const pc = rng.pick(['#c8322b', '#1f4fa3', '#e0b030']), pl = shade(pc, 1.22), pd = shade(pc, 0.62);
+      const pox = 30, poy = 185, pw = 56, ph = 70;
+      px(o, pox, poy, pw, ph, pd); px(o, pox + 2, poy + 2, pw - 4, ph - 4, pl);
+      px(o, pox + 5, poy + 5, pw - 10, 13, pc);                                   // headline band
+      px(o, pox + 7, poy + 8, pw - 22, 3, shade(pc, 1.7)); px(o, pox + 7, poy + 13, pw - 28, 2, shade(pc, 1.7));
+      px(o, pox + 6, poy + 22, pw - 12, 26, shade(pc, 0.82));                     // the picture on it
+      px(o, pox + 9, poy + 30, pw - 18, 15, shade(pc, 1.45));
+      for (let r = 0; r < 4; r++) px(o, pox + 6, poy + 52 + r * 4, pw - 12 - (r % 2) * 9, 2, pd);   // body copy
+      any = true;
     } else if (it === 'gold') {
       px(o, 6, 150, W - 16, 150, '#5a1414'); px(o, 6, 150, W - 16, 5, '#c9a227');
       for (let i = 0; i < 5; i++) { px(o, 16 + i * 48, 172, 40, 62, '#7a1f1f'); px(o, 18 + i * 48, 174, 36, 58, '#8a2a2a'); for (let j = 0; j < 6; j++) px(o, 22 + i * 48 + (j % 3) * 10, 182 + Math.floor(j / 3) * 22, 6, 12, '#f3cf5a'); }
@@ -474,6 +487,28 @@
     g.drawImage(img, 0, 0, img.width, top, 0, 0, img.width, top);
     g.drawImage(img, 0, top, img.width, bot - top, 0, top, img.width, mid);
     g.drawImage(img, 0, bot, img.width, img.height - bot, 0, top + mid, img.width, img.height - bot);
+    return c;
+  }
+  // The lamp's plinth. In the photo it is a pale concrete block, and the post above it has been squeezed to a
+  // ninth of the canvas while the plinth kept its width, so on a lamp you ride past it came out as a bright box
+  // standing on the pavement on its own - one of the "lit rectangles" after dark, where the shutter behind it
+  // goes to ambient and the block does not. It is replaced by a short foot made from the post's own pixels,
+  // widening as it reaches the ground: the same tone as the post, so there is nothing left to catch the eye.
+  function lampFoot(c) {
+    const W = c.width, H = c.height, g = c.getContext('2d');
+    const d = g.getImageData(0, 0, W, H).data;
+    const span = (y) => { let x0 = -1, x1 = -1; for (let x = 0; x < W; x++) { if (d[(y * W + x) * 4 + 3] > 40) { if (x0 < 0) x0 = x; x1 = x; } } return [x0, x1]; };
+    // where the post stops being a post: the first row below halfway that is wider than the post itself
+    const midY = Math.round(H * 0.7), [mx0, mx1] = span(midY), postW = mx1 - mx0 + 1;
+    let base = H; for (let y = midY; y < H; y++) { const [a, b] = span(y); if (b - a + 1 > postW + 1) { base = y; break; } }
+    const FOOT = 12, footTop = H - FOOT;
+    const src = mk(W, H); src.getContext('2d').drawImage(c, 0, 0);
+    g.clearRect(0, base, W, H - base);
+    for (let y = base; y < footTop; y++) g.drawImage(src, mx0, midY, postW, 1, mx0, y, postW, 1);   // carry the post down
+    for (let y = 0; y < FOOT; y++) {   // then a short splayed foot in the post's own tone
+      const w = Math.round(postW * (1 + 0.7 * ((y + 1) / FOOT)));
+      g.drawImage(src, mx0, midY, postW, 1, Math.round(mx0 + (postW - w) / 2), footTop + y, w, 1);
+    }
     return c;
   }
   function slimX(img, split, kHead, kTail) {
@@ -612,7 +647,7 @@
     // lantern, which is the part that has to stay readable); then the pole alone is stretched to double the
     // sprite's height, leaving the lantern and the plinth their own size. The world width is unchanged, so the
     // post stays the thickness it was and the lamp is twice as tall - half as thick for its height again.
-    const lampImg = taller(slimX(IMG.lamp, 62, 0.85, 0.38), 38, 236, 512);   // 116x256 -> 74x256 -> 74x512
+    const lampImg = lampFoot(taller(slimX(IMG.lamp, 62, 0.85, 0.38), 38, 236, 512));   // 116x256 -> 74x256 -> 74x512
     add('lamp', lampImg, 880, { solid: true, thin: 0.14, ax: 64.7 / 74, lampHead: { x: 25.1 / 74, y: 24 / 512 } });
     add('pillar', tx(pillar(), { amp: 0.06 }), 640, { solid: true });
     // shophouses: the reference's own facade (rectified) with drawn upper storeys and swappable shop modules

@@ -59,11 +59,16 @@
     // a central reservation is a wall down the middle of the road, so the line has to pick a side of it
     if (seg.median > 0) ahead.push({ x: 0, half: seg.median * rw + PLAYER_W * 0.5 + 0.04, near: 1 });
     const LIM = 0.78 * rw;
-    if (!ahead.length) return Math.abs(G.playerX) > LIM ? Math.sign(G.playerX) * LIM : null;
+    // With nothing in the way the line is the middle of the road. It used to return nothing at all here, which
+    // left the steering untouched, so the bike simply held whatever line the last dodge had left it on - usually
+    // out by the kerb. The middle is also what the scoring pulls towards once the traffic clears: the pull is now
+    // the stronger of the two soft terms, so a dodge is a deliberate move off centre and back again, rather than
+    // a drift that never comes back. Both are still small beside the penalty for sharing a lane with anything.
+    if (!ahead.length) return 0;
     let best = G.playerX, bestScore = -1e9;
     for (let i = -12; i <= 12; i++) {
       const x = (i / 12) * LIM;
-      let sc = -Math.abs(x - G.playerX) * 0.5 - Math.abs(x) * 0.3;
+      let sc = -Math.abs(x - G.playerX) * 0.25 - Math.abs(x) * 0.9;
       for (const a of ahead) {
         const gap = Math.abs(x - a.x) - a.half;
         if (gap < 0) sc -= (3 + 7 * a.near) * (1 - gap); else sc += Math.min(gap, 0.25) * a.near;
