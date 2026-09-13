@@ -26,7 +26,10 @@
   const PLAYER_W = 480 / T.roadW;
   // พลังยาดม - inhaler power. Fifteen near misses puts the jar in the corner; tapping it freezes the clock for
   // five seconds while the bike runs 30% over its own top speed and picks its own line through the traffic.
-  const YADOM_NEED = 15, YADOM_TIME = 5, YADOM_SPEED = 1.3;
+  // YADOM_LIM is how far out the auto-line is allowed to end up. The line itself never asks to go past 0.78 of the
+  // half width, but at 30% over top speed the curve pushes the bike outward faster than the steering can answer, so
+  // it was arriving at the railing anyway; the lane is held here so the drift has nowhere to take it.
+  const YADOM_NEED = 15, YADOM_TIME = 5, YADOM_SPEED = 1.3, YADOM_LIM = 0.95;
   // The line the bike takes on its own during พลังยาดม. Every place across the road is scored on the room it
   // leaves against the traffic ahead, weighted by how soon each car arrives, against how far it is from where the
   // bike already is so it does not weave for the sake of it, and against how far it is from the middle - the first
@@ -51,6 +54,10 @@
         ahead.push({ x: cx, half: (PLAYER_W + full * (spr.thin || 1)) / 2 + 0.05, near: OB.clamp(1 - k / 22, 0, 1) });
       }
     }
+    // and the stalls and carts standing on the tarmac, which are actors rather than segment sprites
+    for (const p of WD.propsAhead(pz, 6500, [])) ahead.push({ x: p.x, half: p.half + PLAYER_W / 2 + 0.04, near: OB.clamp(1 - p.dz / 6500, 0, 1) });
+    // a central reservation is a wall down the middle of the road, so the line has to pick a side of it
+    if (seg.median > 0) ahead.push({ x: 0, half: seg.median * rw + PLAYER_W * 0.5 + 0.04, near: 1 });
     const LIM = 0.78 * rw;
     if (!ahead.length) return Math.abs(G.playerX) > LIM ? Math.sign(G.playerX) * LIM : null;
     let best = G.playerX, bestScore = -1e9;
@@ -547,16 +554,23 @@
   function checkCollisions(seg) {
     if (G.crash) return; // down already: nothing else can hit the bike
     const pz = G.position + G.playerZ, rw = seg.rw, RW = T.roadW;
+    // พลังยาดม dodges the traffic, so the sides must not be what ends the run instead: for its five seconds the
+    // railing, the median and everything standing at the kerb hold the bike off rather than put it down, the same
+    // deal the traffic already gets. The auto-line still steers around all of it - this is only the backstop.
+    const yadom = G.yadomT > 0;
     // hard edges: the pavement is rideable, but the railing / shopfront line at its outer edge is a wall (never into the river)
     const EDGE = 1.03; // bike centre; its outer side then just touches the railing, never beyond it
-    if (Math.abs(G.playerX) > EDGE * rw) { G.playerX = Math.sign(G.playerX) * EDGE * rw; if (G.speed > G.maxSpeed * 0.2) G.speed *= 0.97; crash('wall'); }
+    if (Math.abs(G.playerX) > EDGE * rw) {
+      G.playerX = Math.sign(G.playerX) * EDGE * rw;
+      if (!yadom) { if (G.speed > G.maxSpeed * 0.2) G.speed *= 0.97; crash('wall'); }
+    }
     // median
     if (seg.median > 0) {
       const mw = seg.median * rw + PLAYER_W * 0.5;
-      if (Math.abs(G.playerX) < mw) { const s = G.playerX >= 0 ? 1 : -1; G.playerX = s * (mw + 0.02); crash('median'); }
+      if (Math.abs(G.playerX) < mw) { const s = G.playerX >= 0 ? 1 : -1; G.playerX = s * (mw + 0.02); if (!yadom) crash('median'); }
     }
     // roadside sprites (this + next segment)
-    for (let k = 0; k < 2; k++) {
+    if (!yadom) for (let k = 0; k < 2; k++) {
       const s2 = T.segments[seg.index + k]; if (!s2) break;
       for (const sp of s2.sprites) {
         const s = sp.spr; if (!s.solid) continue;
@@ -741,6 +755,7 @@
     const prevX = G.playerX;
     G.playerX += G.steer * dx * (offroad ? 0.75 : 1) * (1 + 0.35 * G.driftK);
     G.playerX -= dx * pct * seg.curve * 0.25 * (1 - 0.55 * G.driftK);
+    if (G.yadomT > 0 && mode === 'play' && !flipping) G.playerX = OB.clamp(G.playerX, -YADOM_LIM * seg.rw, YADOM_LIM * seg.rw);
     updateMarks(dt, (G.playerX - prevX) * T.roadW * 0.8 * (G.cameraDepth / G.playerZ) * K); // the road (and rubber on it) slides the other way as the camera follows
     G.vxLat += ((G.playerX - prevX) / dt - G.vxLat) * Math.min(1, dt * 12);
     // rider pose inputs and short camera cues

@@ -306,10 +306,26 @@
   }
   // props: what happens when the bike ploughs through them
   const PROP_W = { stall: 0.34, cart: 0.27, chair: 0.22, cone: 0.1, box: 0.2, sign: 0.14 };
+  // The stalls and carts at the kerb, for anything that needs to steer round them rather than find out the hard
+  // way - the พลังยาดม auto-line asks for these the way it already asks for the traffic.
+  WD.propsAhead = function (pz, range, out) {
+    for (let i = 0; i < actors.n; i++) {
+      const a = actors.items[i], w = PROP_W[a.kind];
+      if (!w || a.hit || a.state === 'gone') continue;
+      const dz = a.z - pz; if (dz < -250 || dz > range) continue;
+      out.push({ x: a.x, half: w / 2 + 0.09, dz });
+    }
+    return out;
+  };
   function propUpdate(a, dt, G, pz, px) {
     a.t += dt;
     const halfW = PROP_W[a.kind] / 2, dz = a.z - pz;
-    if (!a.hit && a.state !== 'gone' && dz > -segLen() * 0.8 && dz < segLen() * 1.1 && Math.abs(a.x - px) < halfW + 0.09 && G.speed > 100) hitProp(a, G, px);
+    if (!a.hit && a.state !== 'gone' && dz > -segLen() * 0.8 && dz < segLen() * 1.1 && Math.abs(a.x - px) < halfW + 0.09 && G.speed > 100) {
+      // under พลังยาดม the stall still goes flying - that is half the fun of it - but the rider pays nothing for it
+      const hp = G.health, sp = G.speed;
+      hitProp(a, G, px);
+      if (G.yadomT > 0) { G.health = hp; G.speed = sp; }
+    }
     if (a.kind === 'stall') {
       a.frame = a.state === 'idle' ? 'STALL_IDLE' : a.state === 'hit1' ? 'STALL_HIT1' : 'STALL_HIT2';
       if (a.state === 'hit1' && a.t > 0.12) { a.state = 'hit2'; }
