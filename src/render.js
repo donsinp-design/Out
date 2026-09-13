@@ -680,11 +680,11 @@
     // portrait: clean helmet while untouched, cracked once anything has hit him, shattered visor under half health
     const faces = OB.PORTRAITS;
     ctx.drawImage(faces ? faces[G.health >= 100 ? 0 : G.health >= 50 ? 1 : 2] : IMG.portrait, 22, 15);
-    TXT(ctx, 'HEALTH', 80, 34, { size: 7, sy: 1.8, fill: '#fff', outline: '#000', outlineW: 3 });
-    bar(127, 22, 12, 4, 1, 13, Math.ceil(G.health / 100 * 12), '#ff0e00', '#ff6a5a', '#3a0806');
-    TXT(ctx, 'ICE', 80, 52, { size: 7, sy: 1.8, fill: '#e9fbff', outline: '#000', outlineW: 3 });
-    bar(105, 41, 14, 5, 1, 11, Math.ceil(G.ice / 100 * 14), '#dff6ff', '#ffffff', '#0e2438');
-    if (G.ice < 25 && Math.floor(G.t * 4) % 2 === 0) TXT(ctx, 'MELTING!', 200, 52, { size: 7, sy: 1.4, fill: '#7fe0ff', outline: '#000', outlineW: 3 });
+    // health only: the load on the back is its own ice gauge - it shrinks row by row as the ice goes - so the bar
+    // was saying twice what the bike already shows. The melting warning stays, since running out ends the run.
+    TXT(ctx, 'HEALTH', 80, 45, { size: 7, sy: 1.8, fill: '#fff', outline: '#000', outlineW: 3 });
+    bar(127, 33, 12, 4, 1, 13, Math.ceil(G.health / 100 * 12), '#ff0e00', '#ff6a5a', '#3a0806');
+    if (G.ice < 25 && Math.floor(G.t * 4) % 2 === 0) TXT(ctx, 'MELTING!', 200, 45, { size: 7, sy: 1.4, fill: '#7fe0ff', outline: '#000', outlineW: 3 });
     // time
     TXT(ctx, 'TIME', 352, 34, { size: 12, sy: 1.7, fill: '#f90000', outline: '#000', outlineW: 6, outline2: '#fff', outline2W: 3 });
     const tcol = (G.time <= 10 && Math.floor(G.t * 4) % 2 === 0) ? '#ff3b3b' : '#ffd800';
