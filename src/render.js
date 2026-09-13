@@ -88,11 +88,12 @@
     const envL = pal[th.left] || pal.shop, envR = pal[th.right] || pal.shop;
     poly(0, y1, x1 - w1 - sw1, y1, x2 - w2 - sw2, y2, 0, y2, envL[alt]);
     if (th.right === 'water') {
-      // river surface sits below road level: embankment wall face + lowered water plane
-      const d1 = seg.p1.screen.scale * WATER_DROP * K, d2 = seg.p2.screen.scale * WATER_DROP * K;
+      // River surface. The flat fill still goes down (it is what shows under the animated strip at dusk and night,
+      // and it is the fallback if the strip never built), and the quad is kept so the strip can be clipped to
+      // exactly these pixels once the whole ground pass is done.
       const ox1 = x1 + w1 + swr1, ox2 = x2 + w2 + swr2;
       poly(ox1, y1, W, y1, W, y2, ox2, y2, envR[alt]);
-      if (alt === 0 && seg.index % 12 === 0) poly(ox1 + sw1 * 1.5, y1, W, y1, W, y2, ox2 + sw2 * 1.5, y2, pal.water[1]);
+      waterQuads.push(ox1, y1, ox2, y2);
     } else poly(x1 + w1 + sw1, y1, W, y1, W, y2, x2 + w2 + sw2, y2, envR[alt]);
     // sidewalks
     poly(x1 - w1 - sw1, y1, x1 - w1, y1, x2 - w2, y2, x2 - w2 - sw2, y2, pal.side[alt]);
@@ -138,17 +139,66 @@
     else ctx.drawImage(img, 0, 0, img.width, sh, destX, destY, destW, destH - clipH);
   }
 
+  // The river surface: the ground pass records the quad of every water segment it fills, and once the whole pass
+  // is done the animated strip is drawn once, clipped to exactly those quads. Doing it in one go rather than per
+  // segment costs a single clip and a single blit however much water is on screen, and because the quads come
+  // from segments that were already crest-clipped it can never paint over anything nearer.
+  const waterQuads = [];
+  function drawWater(G, pal) {
+    const strips = OB.WATER; if (!strips || !strips.length) return;
+    ctx.save();
+    ctx.beginPath();
+    for (let i = 0; i < waterQuads.length; i += 4) {
+      const ox1 = waterQuads[i], y1 = waterQuads[i + 1], ox2 = waterQuads[i + 2], y2 = waterQuads[i + 3];
+      ctx.moveTo(ox1, y1); ctx.lineTo(W, y1); ctx.lineTo(W, y2); ctx.lineTo(ox2, y2); ctx.closePath();
+    }
+    ctx.clip();
+    ctx.drawImage(strips[Math.floor(G.t * 9) % strips.length], 0, HZ);
+    // the strip is painted for daylight; the later hours wash it back toward the palette's own water colour
+    const wash = G.light === 'night' ? 0.62 : G.light === 'dusk' ? 0.42 : G.light === 'golden' ? 0.18 : 0;
+    if (wash > 0) { ctx.globalAlpha = wash; ctx.fillStyle = pal.water[0]; ctx.fillRect(0, HZ, W, H - HZ); ctx.globalAlpha = 1; }
+    ctx.restore();
+  }
+
+  // The embankment railing, drawn from the fence art rather than as two green bars. The fence runs along the road,
+  // so per segment its footprint on screen is a thin diagonal quad: the texture's x axis runs along the segment,
+  // from (rx1, y1) to (rx2, y2), and its y axis straight down over the rail's height. That is an affine map, which
+  // drawImage can do with setTransform - the one thing it cannot express is the rail being shorter at the far end
+  // than the near end, so a segment tall enough for that to show is drawn in a few slices instead.
+  const RAIL_H = 470;                       // world height of the whole fence sprite, plinth included
   function renderRail(seg, pal) {
+    const img = OB.IMG.fence; if (!img) return;
     const p1 = seg.p1.screen, p2 = seg.p2.screen;
-    const rx1 = p1.x + p1.w + p1.w * 0.22, rx2 = p2.x + p2.w + p2.w * 0.22;
-    const h1 = p1.scale * 420 * K, h2 = p2.scale * 420 * K;
-    if (h1 < 1) return;
-    const t1 = Math.max(1, h1 * 0.07), t2 = Math.max(1, h2 * 0.07);
-    const clip = seg.clip;
-    ctx.save(); ctx.beginPath(); ctx.rect(0, 0, W, clip); ctx.clip();
-    poly(rx1, p1.y - h1, rx2, p2.y - h2, rx2, p2.y - h2 + t2, rx1, p1.y - h1 + t1, pal.rail);
-    poly(rx1, p1.y - h1 * 0.55, rx2, p2.y - h2 * 0.55, rx2, p2.y - h2 * 0.55 + t2, rx1, p1.y - h1 * 0.55 + t1, pal.rail);
-    if (seg.index % 3 === 0) { ctx.fillStyle = pal.railPost; ctx.fillRect(rx1 - t1, p1.y - h1, t1 * 2, h1); }
+    const rx1 = p1.x + p1.w * 1.22, rx2 = p2.x + p2.w * 1.22;
+    const h1 = p1.scale * RAIL_H * K, h2 = p2.scale * RAIL_H * K;
+    if (h1 < 1.2) return;
+    // world length of one fence module, so the posts stay put in the world as the bike moves
+    const L = OB.track.segLen, modZ = RAIL_H * img.width / img.height;
+    const u0 = ((seg.index * L) % modZ) / modZ * img.width, uw = L / modZ * img.width;
+    const n = OB.clamp(Math.ceil((h1 - h2) / 3), 1, 6);   // slices only where the height taper would show
+    ctx.save(); ctx.beginPath(); ctx.rect(0, 0, W, seg.clip); ctx.clip();
+    for (let i = 0; i < n; i++) {
+      const a = i / n, b = (i + 1) / n;
+      const xa = rx1 + (rx2 - rx1) * a, ya = p1.y + (p2.y - p1.y) * a;
+      let xb = rx1 + (rx2 - rx1) * b, yb = p1.y + (p2.y - p1.y) * b;
+      // run each slice a fraction past its far end: at distance the slices are sub-pixel wide and would otherwise
+      // leave anti-aliased gaps, which reads as a dotted fence rather than a continuous one
+      const ex = xb - xa, ey = yb - ya, len = Math.hypot(ex, ey);
+      if (len > 0.001) { const k = (len + 0.9) / len; xb = xa + ex * k; yb = ya + ey * k; }
+      const h = h1 + (h2 - h1) * (a + b) / 2;
+      // u along (xa,ya)->(xb,yb), v straight down over h; the source window wraps within the module
+      let su = u0 + uw * a; const sw = uw * (b - a);
+      su %= img.width; if (su < 0) su += img.width;
+      ctx.save();
+      ctx.transform((xb - xa) / sw, (yb - ya) / sw, 0, h / img.height, xa, ya - h);
+      if (su + sw <= img.width) ctx.drawImage(img, su, 0, sw, img.height, 0, 0, sw, img.height);
+      else { // the window runs off the end of the module and picks up again at its start
+        const first = img.width - su;
+        ctx.drawImage(img, su, 0, first, img.height, 0, 0, first, img.height);
+        ctx.drawImage(img, 0, 0, sw - first, img.height, first, 0, sw - first, img.height);
+      }
+      ctx.restore();
+    }
     ctx.restore();
   }
 
@@ -194,6 +244,7 @@
     // ---- ground pass (front to back) ----
     let maxy = H, x = 0, dx = -(baseSeg.curve * basePct);
     const projected = [];
+    waterQuads.length = 0;
     for (let n = 0; n < G.drawDistance; n++) {
       const idx = baseSeg.index + n; if (idx >= segs.length) break;
       const seg = segs[idx];
@@ -209,6 +260,7 @@
       if (seg.decals && seg.decals.length) WD.drawDecals(ctx, seg, G);
       maxy = seg.p2.screen.y;
     }
+    if (waterQuads.length) drawWater(G, pal);
     // ---- sprite pass (back to front): every projected slice, clipped by the crest line, so nothing pops ----
     const poles = { L: [], R: [] };
     let lastPole = null;
@@ -223,11 +275,16 @@
       const scale = seg.p1.screen.scale, sx = seg.p1.screen.x, sy = seg.p1.screen.y;
       let newPole = null;
       for (const sp of seg.sprites) {
-        const s = sp.spr, img = s.img;
+        const s = sp.spr;
+        // an animated sprite (the river ferry) cycles its frames on the clock, not on the segment, so every boat
+        // on screen is on the same beat; all its frames share one canvas size so nothing jitters between them
+        const img = s.anim ? s.anim.frames[Math.floor(G.t * s.anim.fps) % s.anim.frames.length] : s.img;
         const destW = s.w * scale * K, destH = destW * img.height / img.width;
         let destX = sx + scale * sp.offset * RW * K;
         const anchor = sp.anchor || 'center';
-        if (anchor === 'center') destX -= destW / 2; else if (anchor === 'left') destX -= destW;
+        // ax pins the sprite on a feature of its own art (the lamp's post) rather than on the middle of the canvas
+        if (s.ax !== undefined) destX -= destW * (sp.flip ? 1 - s.ax : s.ax);
+        else if (anchor === 'center') destX -= destW / 2; else if (anchor === 'left') destX -= destW;
         let destY = sy - destH;
         if (sp.water) destY += scale * WATER_DROP * K;
         // pole tops are kept even off screen, so in a corner the wires leave the frame toward the real next pole

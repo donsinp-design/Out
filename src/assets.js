@@ -3,7 +3,8 @@
   'use strict';
   const FILES = ['bg','bike','portrait','face_ok','face_hurt','face_crit','taxi','taxi_orange','taxi_blue','taxi_green','sedan','sedan_black','sedan_red',
     'green','green_yellow','green_purple','bus','tuktuk','seven','signs','ckrd','spirit','thatien','yen','vendor',
-    'noodle','storepanel','sangchai','thongbai','redsign','chedi',
+    'noodle','storepanel','sangchai','thongbai','redsign','chedi','lamp','fence','boat0','boat1','boat2',
+    'water0','water1','water2','water3','water4','water5','water6','water7',
     'facade0','facade1','facade2','facade3','facade4','facade5','towers0','towers1','towers2','title','atlas'];
   const IMG = {};
   OB.IMG = IMG;
@@ -84,17 +85,6 @@
     // number plate
     px(g, x + 1, h * 0.55, 6, 8, '#e8e0c0');
     return { c, topY: 10, topX: x + pw / 2 };
-  }
-
-  function lampPost() {
-    const c = mk(44, 180), g = c.getContext('2d');
-    px(g, 6, 20, 5, 160, '#7c7f82'); px(g, 10, 20, 1, 160, '#4a4c4e'); px(g, 6, 20, 1, 160, '#a5a8ab');
-    px(g, 3, 172, 11, 8, '#5d6063');
-    // arm
-    px(g, 8, 14, 22, 3, '#7c7f82'); px(g, 28, 12, 10, 3, '#7c7f82'); px(g, 12, 17, 3, 6, '#7c7f82');
-    // head
-    px(g, 30, 8, 12, 6, '#d5d8dc'); px(g, 31, 14, 10, 2, '#fff7d6'); px(g, 33, 16, 6, 1, '#ffe89a');
-    return c;
   }
 
   function pillar() { // skytrain viaduct pillar
@@ -253,14 +243,6 @@
     px(g, 0, 14, 240, 10, '#c8411f'); px(g, 0, 10, 240, 5, '#e05a2a'); px(g, 0, 8, 240, 3, '#f1a25a');
     for (let x = 0; x < 240; x += 8) px(g, x, 14, 4, 10, '#a83218');
     for (let x = 6; x < 240; x += 48) { px(g, x, 0, 4, 10, '#e8c25a'); px(g, x + 1, -2, 2, 4, '#f7dc8a'); }
-    return c;
-  }
-
-  function boat(rng) {
-    const c = mk(80, 26), g = c.getContext('2d');
-    px(g, 4, 14, 70, 8, rng.pick(['#5a3a1e', '#7a4a22', '#3a5a8a'])); px(g, 0, 12, 12, 4, '#7a4a22'); px(g, 70, 10, 10, 6, '#7a4a22');
-    px(g, 20, 6, 30, 8, rng.pick(['#d9412f', '#2f7bd9', '#f0c030'])); px(g, 18, 4, 34, 3, '#f5f5f5');
-    px(g, 30, 0, 2, 6, '#333'); px(g, 32, 0, 8, 4, rng.pick(['#e33', '#fc3', '#39f']));
     return c;
   }
 
@@ -476,12 +458,62 @@
   // rider's cut face showing through. Three separate cut-outs now, so the damage is real art rather than scratches
   // painted over one photo, and they are cut at the size the HUD draws them (52px) so nothing resamples them.
   function portraits() { OB.PORTRAITS = [IMG.face_ok, IMG.face_hurt, IMG.face_crit]; }
+
+  // The river: eight frames of a wave tile, projected once each into a full-width screen strip so the renderer
+  // only has to blit one image per frame. A flat plane seen from a fixed camera height maps screen row to distance
+  // as d = k / (y - horizon), so the tile has to shrink toward the horizon; the strip is built as bands whose
+  // depth doubles as they climb, each filled with the tile scaled for its own distance, which is how the arcade
+  // racers faked a receding sea. The joins between bands land inside the noise of the art and do not read.
+  const meanCache = {};
+  function meanColour(img, alpha) {   // the average of a tile, as an rgba() at the given opacity
+    let m = meanCache[img.src || img];
+    if (!m) {
+      const c = mk(1, 1), g = c.getContext('2d');
+      g.drawImage(img, 0, 0, 1, 1);
+      const d = g.getImageData(0, 0, 1, 1).data;
+      m = meanCache[img.src || img] = [d[0], d[1], d[2]];
+    }
+    return 'rgba(' + m[0] + ',' + m[1] + ',' + m[2] + ',' + alpha + ')';
+  }
+  function waterStrips() {
+    const SH = OB.H - OB.HORIZON;
+    OB.WATER = [];
+    for (let f = 0; f < 8; f++) {
+      const src = IMG['water' + f], c = mk(OB.W, SH), g = c.getContext('2d');
+      let y = SH, band = 0;
+      while (y > 0) {
+        const yTop = y > 3 ? Math.floor(y / 1.42) : 0;      // geometric bands: each is ~1.4x further away
+        const mid = (y + yTop) / 2, k = Math.max(0.012, mid / SH);
+        // foreshortening: the wave tile squashes vertically much faster than it narrows
+        const tw = Math.max(1, Math.round(src.width * k * 1.15)), th = Math.max(1, Math.round(src.height * k * 0.5));
+        const tile = mk(tw, th), tg = tile.getContext('2d');
+        tg.imageSmoothingEnabled = tw > 24;                  // near bands stay crisp pixels, far ones average down
+        tg.drawImage(src, 0, 0, tw, th);
+        // shift each band so the tiles do not stack into a grid down the strip
+        const ox = (band * 37) % tw, oy = (band * 23) % th;
+        g.save();
+        g.translate(-ox, -oy);
+        g.fillStyle = g.createPattern(tile, 'repeat');
+        g.fillRect(ox, yTop + oy, OB.W, y - yTop);
+        g.restore();
+        y = yTop; band++;
+      }
+      // The far bands are a couple of pixels of tile each and read as a noisy stripe rather than as distance, so
+      // the top of the strip dissolves into the flat mean of the art - which is what water miles off actually
+      // looks like, and it hides the join with the far bank.
+      const far = Math.round(SH * 0.34), grad = g.createLinearGradient(0, 0, 0, far);
+      grad.addColorStop(0, meanColour(src, 1)); grad.addColorStop(1, meanColour(src, 0));
+      g.fillStyle = grad; g.fillRect(0, 0, OB.W, far);
+      OB.WATER.push(c);
+    }
+  }
   // ---------- registry ----------
   // w = world width (road half width = 1800 units ≈ 3.4 m per 1000)
   OB.SPR = {};
   OB.buildSprites = function () {
     const S = OB.SPR;
     portraits();
+    waterStrips();
     const rng = OB.rng(1986);
     const add = (name, img, w, extra) => { S[name] = Object.assign({ img, w, h: w * img.height / img.width, name }, extra || {}); return S[name]; };
     // a frame of the sprite atlas as its own canvas (for sprites that go through the static sprite path)
@@ -545,7 +577,10 @@
     const tx = texturize;
     const p = pole(300); add('pole', tx(p.c, { amp: 0.05 }), 520, { solid: true, thin: 0.35, poleTop: { x: p.topX / 40, y: p.topY / 300 } });
     const p2 = pole(300, { noTx: true }); add('pole2', tx(p2.c, { amp: 0.05 }), 520, { solid: true, thin: 0.35, poleTop: { x: p2.topX / 40, y: p2.topY / 300 } });
-    add('lamp', tx(lampPost(), { amp: 0.04 }), 600, { solid: true, thin: 0.3, lampHead: { x: 36 / 44, y: 13 / 180 } }); // where the lantern sits, for the night pool
+    // Drawn street lamp: the lantern hangs off an arm well to one side of the post, so the sprite is anchored on
+    // the post (ax) rather than on its own centre - otherwise every placement offset would put the post where the
+    // arm is. lampHead is where the lantern sits, for the night pool.
+    add('lamp', IMG.lamp, 1120, { solid: true, thin: 0.14, ax: 0.81, lampHead: { x: 22 / 116, y: 24 / 256 } });
     add('pillar', tx(pillar(), { amp: 0.06 }), 640, { solid: true });
     // shophouses: the reference's own facade (rectified) with drawn upper storeys and swappable shop modules
     const AWN = [null, null, null, '#c8322b', '#1f8a4c', '#d99a1c', '#8a1c8c', '#2b6fb0'];
@@ -583,7 +618,9 @@
     for (let i = 0; i < 4; i++) add('tree' + i, tx(tree(rng, false), { amp: 0.12, outline: 0.5 }), 1500, { solid: true, thin: 0.15 });
     for (let i = 0; i < 3; i++) add('palm' + i, tx(tree(rng, true), { amp: 0.1, outline: 0.5 }), 1300, { solid: true, thin: 0.12 });
     add('wall', tx(templeWall(), { amp: 0.06 }), 3600, { solid: true, building: true });
-    for (let i = 0; i < 3; i++) add('boat' + i, tx(boat(rng), { amp: 0.05 }), 1400, {});
+    // the river ferry is three frames of one boat (the bow wake changes), so it is one animated sprite rather
+    // than three different boats
+    add('boat', IMG.boat0, 2600, { anim: { frames: [IMG.boat0, IMG.boat1, IMG.boat2], fps: 7 } });
     add('chedi', tx(goldenChedi(), { amp: 0.07 }), 1800, { solid: true, building: true });
     add('wat', tx(wat(), { amp: 0.06 }), 3600, { solid: true, building: true });
     add('lantern', lanternSprite(), 80, {});
