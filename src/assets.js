@@ -474,8 +474,7 @@
 
   // Rider portrait by condition: the drawn helmet icons — clean, cracked-and-scuffed, and shattered visor with the
   // rider's cut face showing through. Three separate cut-outs now, so the damage is real art rather than scratches
-  // painted over one photo. Scaled to the HUD box once here instead of on every frame.
-  // They are cut at the size the HUD draws them (52px), so nothing here resamples them.
+  // painted over one photo, and they are cut at the size the HUD draws them (52px) so nothing resamples them.
   function portraits() { OB.PORTRAITS = [IMG.face_ok, IMG.face_hurt, IMG.face_crit]; }
   // ---------- registry ----------
   // w = world width (road half width = 1800 units ≈ 3.4 m per 1000)
