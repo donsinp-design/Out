@@ -327,7 +327,7 @@
         ctx.globalAlpha = fa;
         drawSprite(img, destX, destY, destW, destH, seg.clip, sp.flip);
         ctx.globalAlpha = 1;
-        if (night) noteSpriteLight(s, img, destX, destY, destW, destH, sy, seg.clip, sp.flip, fa);
+        if (night) { if (s.building && fa > 0.9) noteBlock(img, destX, destY, destW, destH, seg.clip); noteSpriteLight(s, img, destX, destY, destW, destH, sy, seg.clip, sp.flip, fa); }
         if (sp.pillar) { /* pillars carry the deck */ }
       }
       // the wire span that ends at this segment's pole is drawn now, so nearer shophouses paint over it
@@ -375,6 +375,30 @@
   let LM = null, lg = null;       // the lightmap canvas, made once
   const AMBIENT = '#4a5488';      // what the scene is multiplied by where nothing is lit
   const LIT_SIGN = /sign|redsign|seven|thatien|ckrd/;   // the same set that flickers: neon and lightboxes stay lit after dark
+  // A building standing in front of a light. The lightmap is one full-screen layer, so a lamp pool, a haze shaft
+  // or a tuk-tuk's underglow was painted wherever it landed on screen - including across the shutter of a
+  // shophouse between it and the camera, which came out as lit fans with hard tops pasted on the wall. The
+  // occluder goes into the same list as the lights, in the order it was drawn, and wipes that patch of the map
+  // back to ambient: everything behind it is cancelled, everything nearer is painted afterwards and survives.
+  // The patch is the solid part of the card, measured once from the art so the aerials and sky above it are left
+  // alone; the sprite pass has already established that this is what covers those pixels.
+  const OPAQ = new WeakMap();
+  function opaqueBox(img) {
+    let o = OPAQ.get(img); if (o) return o;
+    const sw = Math.min(48, img.width), sh = Math.min(72, img.height);
+    const c = OB.makeCanvas(sw, sh), g = c.getContext('2d');
+    g.drawImage(img, 0, 0, sw, sh);
+    const d = g.getImageData(0, 0, sw, sh).data;
+    let x0 = sw, y0 = sh, x1 = -1, y1 = -1;
+    for (let y = 0; y < sh; y++) for (let x = 0; x < sw; x++) if (d[((y * sw + x) << 2) + 3] > 224) { if (x < x0) x0 = x; if (x > x1) x1 = x; if (y < y0) y0 = y; if (y > y1) y1 = y; }
+    o = x1 < 0 ? null : { x: (x0 + 1) / sw, y: (y0 + 1) / sh, w: (x1 - x0 - 1) / sw, h: (y1 - y0 - 1) / sh };
+    OPAQ.set(img, o); return o;
+  }
+  function noteBlock(img, destX, destY, destW, destH, clip) {
+    const o = opaqueBox(img); if (!o || o.w <= 0 || o.h <= 0) return;
+    const y = destY + destH * o.y, h = Math.min(destH * o.h, clip - y);
+    if (h > 1) lights.push({ kind: 'block', x: destX + destW * o.x, y, w: destW * o.w, h });
+  }
   function noteSpriteLight(s, img, destX, destY, destW, destH, groundY, clip, flip, fa) {
     if (s.lampHead) {
       if (destH < 5 || groundY > clip + 2) return;
@@ -547,6 +571,10 @@
       if (l.kind === 'pool') ellipseLight(lg, l);
       else if (l.kind === 'cone') coneLight(lg, l);
       else if (l.kind === 'sign') signLight(lg, l);
+      else if (l.kind === 'block') { // a building in front: everything lit behind it goes back to ambient
+        lg.globalCompositeOperation = 'source-over'; lg.fillStyle = AMBIENT; lg.fillRect(l.x, l.y, l.w, l.h);
+        lg.globalCompositeOperation = 'lighter';
+      }
     }
     const occlude = !G.crash;
     if (occlude) grabBike(G);
@@ -555,7 +583,17 @@
     if (occlude) restoreBike(lg, G);
     ctx.globalCompositeOperation = 'multiply'; ctx.drawImage(LM, 0, 0);
     ctx.globalCompositeOperation = 'lighter';
-    for (const l of lights) if (l.kind === 'glow') ellipseLight(ctx, { x: l.x, y: l.y, rx: l.rx, ry: l.rx, r: l.r, g: l.g, b: l.b, a: l.a });
+    // the emissive bits sit on top of the finished frame, so a lantern or a tail light behind a building has to be
+    // dropped rather than cancelled: it is out if any block drawn after it covers where it sits
+    for (let i = 0; i < lights.length; i++) {
+      const l = lights[i]; if (l.kind !== 'glow') continue;
+      let hidden = false;
+      for (let j = i + 1; j < lights.length; j++) {
+        const b = lights[j];
+        if (b.kind === 'block' && l.x > b.x && l.x < b.x + b.w && l.y > b.y && l.y < b.y + b.h) { hidden = true; break; }
+      }
+      if (!hidden) ellipseLight(ctx, { x: l.x, y: l.y, rx: l.rx, ry: l.rx, r: l.r, g: l.g, b: l.b, a: l.a });
+    }
     ctx.globalCompositeOperation = 'source-over';
   }
 

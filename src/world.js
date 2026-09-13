@@ -397,12 +397,12 @@
       if (d.kind === 'puddle') { G.splashT = 0.32; G.splashSide = G.steer > 0.2 ? 1 : G.steer < -0.2 ? -1 : (Math.random() < 0.5 ? -1 : 1); OB.audio.sfx('splash'); G.speed *= 0.995; }
       else if (d.kind === 'manhole') { OB.audio.sfx('clunk'); G.bounce = Math.max(G.bounce, 1.5); G.stackKick(0.35); }
       else if (d.kind === 'pothole') { // scrubs speed and shakes ice loose; worse the faster you hit it
-        const big = d.f === 'POTHOLE';
-        G.speed *= big ? 0.82 : 0.9; G.ice = Math.max(0, G.ice - (big ? 3 : 1.5) * (0.5 + pct));
+        const big = d.f === 'POTHOLE', free = G.yadomT > 0;   // พลังยาดม rides straight over one
+        if (!free) { G.speed *= big ? 0.82 : 0.9; G.ice = Math.max(0, G.ice - (big ? 3 : 1.5) * (0.5 + pct)); }
         G.bounce = Math.max(G.bounce, 3); G.hopV = Math.max(G.hopV || 0, 60 + 140 * pct); G.stackKick(0.9 + pct);
         G.shake = Math.max(G.shake, 0.35 + 0.3 * pct); G.bumpT = 0.35; G.cam.squash = 1;
         OB.audio.sfx('crunch');
-        if (pct > 0.45) WD.spillIce(pz, G.playerX, 0, big ? 3 : 1, G.speed, 0);
+        if (pct > 0.45 && !free) WD.spillIce(pz, G.playerX, 0, big ? 3 : 1, G.speed, 0);
         if (G.breakCombo) G.breakCombo();     // a pothole counts as damage: it ends the clean run
       }
       else if (d.kind === 'leaves') { for (let i = 0; i < 4; i++) throwDebris('LEAVES', pz - 60, G.playerX + (Math.random() - 0.5) * 0.2, 60, (Math.random() - 0.5) * 0.5, 500 + Math.random() * 700, -G.speed * 0.2 + Math.random() * 600, 4, { kind: 'leaf', bounce: 0.1, life: 1.4, vr: (Math.random() - 0.5) * 20 }); }

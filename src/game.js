@@ -68,11 +68,15 @@
     let best = G.playerX, bestScore = -1e9;
     for (let i = -12; i <= 12; i++) {
       const x = (i / 12) * LIM;
-      let sc = -Math.abs(x - G.playerX) * 0.25 - Math.abs(x) * 0.9;
+      let sc = -Math.abs(x - G.playerX) * 0.25 - Math.abs(x) * 1.1, room = 0;
       for (const a of ahead) {
         const gap = Math.abs(x - a.x) - a.half;
-        if (gap < 0) sc -= (3 + 7 * a.near) * (1 - gap); else sc += Math.min(gap, 0.25) * a.near;
+        if (gap < 0) sc -= (3 + 7 * a.near) * (1 - gap); else room += Math.min(gap, 0.25) * a.near;
       }
+      // the elbow room a line leaves is worth having, but it is capped: added up over a busy street it used to
+      // outweigh the pull to the middle on its own and park the bike in whichever outside lane happened to be
+      // emptiest. Sharing a lane still costs at least 3, so a real dodge always wins over both.
+      sc += Math.min(room, 0.4);
       if (sc > bestScore) { bestScore = sc; best = x; }
     }
     return best;
@@ -345,6 +349,7 @@
     return 'NO DAMAGE';
   }
   G.breakCombo = function (hard) {
+    if (G.yadomT > 0) return;                         // and the combo survives พลังยาดม whatever it drives through
     if (G.mult > 1.35) { G.multBreak = 0.7; pop('COMBO LOST', '#ff6a5a'); }
     G.mult = 1; G.multStep = 1; G.multArmed = false;  // earn it back by getting flat out again
   };
@@ -540,6 +545,7 @@
 
   // ---------- collisions ----------
   function crash(kind, car) {
+    if (G.yadomT > 0) return;   // พลังยาดม is invincible: nothing lands inside its five seconds
     if (kind === 'wall' || kind === 'median') { if (G.wallCd > 0) return; G.wallCd = 0.9; }
     else if (G.invuln > 0) return;
     A.sfx(kind === 'wall' || kind === 'median' ? 'bump' : 'crash');
