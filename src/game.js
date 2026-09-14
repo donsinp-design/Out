@@ -11,7 +11,7 @@
     forkHint: null, wallCd: 0, countdown: 0, overReason: null, result: null, seed: 20240808, paused: false, route: [], cur: null, nextInfo: null, nextKey: null,
     muted: false, drawShift: -200, playerDX: 0, course: 0, touchMode: false,
     wipe: 0, wipeDir: 1, parts: [], skidCd: 0, ranking: [], pendingRecord: null, nameEntry: null, smoke: [], smokeAcc: 0,
-    flip: null, rider: null, drift: 0, driftDir: 1, driftK: 0, marks: [], goT: 0, pops: [], mult: 1, multStep: 1, multWhy: '', multLock: 0, draft: 0,
+    flip: null, rider: null, drift: 0, driftDir: 1, driftHold: 0, driftK: 0, marks: [], goT: 0, pops: [], mult: 1, multStep: 1, multWhy: '', multLock: 0, draft: 0,
     // sprite-driven rider / world state
     crash: null, bumpT: 0, braking: false, crouch: false, riderT: 0, vxLat: 0, flutter: 0,
     hopY: 0, hopV: 0, stackY: 0, stackV: 0, stackC: 0, splashT: 0, splashSide: 1,
@@ -105,7 +105,7 @@
 
   // ---------- input ----------
   const keys = { left: false, right: false, gas: false, brake: false };
-  let startPressed = false, tuneDir = 0, driftReq = false, lastKey = '', lastKeyT = 0;
+  let startPressed = false, tuneDir = 0, driftReq = false, driftHint = 0, lastKey = '', lastKeyT = 0;
   const KEYMAP = { ArrowLeft: 'left', a: 'left', A: 'left', ArrowRight: 'right', d: 'right', D: 'right', ArrowUp: 'gas', w: 'gas', W: 'gas', x: 'gas', X: 'gas', ArrowDown: 'brake', s: 'brake', S: 'brake', z: 'brake', Z: 'brake' };
   window.addEventListener('keydown', e => {
     if (e.repeat) { if (KEYMAP[e.key]) e.preventDefault(); return; }
@@ -228,13 +228,13 @@
   // Touch: no on-screen buttons. The bike accelerates by itself; steering follows the first finger's horizontal
   // position (left of centre steers left, further out steers harder); a second finger held while steering hard drifts;
   // three fingers brake. Menus are tapped. A small pause button sits top-right during play.
-  const touch = { steer: 0, active: false, fingers: 0, twoT: 0, drift: 0, brake: 0 };
+  const touch = { steer: 0, active: false, fingers: 0, twoT: 0, brake: 0 };
   const pointers = new Map();
   const brakeHeld = new Set();   // fingers sitting on a brake button; they steer nothing
   // Drop every held input. A finger whose lift was never delivered (it happens on iOS) would otherwise sit in the
   // map for good: steering follows the first finger recorded, so the bike would steer itself and ignore the real
   // finger, and that carries into the next run. Same for a key whose keyup was lost while the page was away.
-  function resetInput() { pointers.clear(); brakeHeld.clear(); touch.active = false; touch.steer = 0; touch.fingers = 0; touch.drift = 0; touch.brake = 0; for (const k in keys) keys[k] = false; driftReq = false; }
+  function resetInput() { pointers.clear(); brakeHeld.clear(); touch.active = false; touch.steer = 0; touch.fingers = 0; touch.brake = 0; for (const k in keys) keys[k] = false; driftReq = false; }
   window.addEventListener('blur', resetInput); window.addEventListener('pagehide', resetInput);
   document.addEventListener('visibilitychange', () => { if (document.hidden) resetInput(); });
   // portrait phone: the stage is rotated 90 degrees by CSS to fill the screen; touches are mapped back through it
@@ -248,18 +248,9 @@
   function bindTouch() {
     const cv = document.getElementById('screen');
     G.touchMode = !!(window.matchMedia && window.matchMedia('(pointer: coarse)').matches);
-    const in2 = (b, p) => !!b && p.x >= b.x && p.x <= b.x + b.w && p.y >= b.y && p.y <= b.y + b.h;
     const upd = () => {
       touch.fingers = pointers.size;
       touch.brake = brakeHeld.size ? 1 : 0;
-      // Drift used to need a second finger held down, which is not something a thumb on a phone can do while the
-      // other one steers. There is a pad at each side instead: steer hard and the thumb is already there, slide it
-      // into the pad and the bike drifts that way. The two-finger hold still works for anyone used to it.
-      touch.drift = 0;
-      for (const p of pointers.values()) {
-        if (in2(R.hit.driftL, p)) touch.drift = -1;
-        else if (in2(R.hit.driftR, p)) touch.drift = 1;
-      }
       if (!pointers.size) { touch.active = false; touch.steer = 0; return; }
       const first = pointers.values().next().value; // the first finger down steers; extra fingers only count
       const rel = first.x / W - 0.5;
@@ -280,7 +271,7 @@
         // instead of firing pointerleave (read as the finger lifting) and snapping the steering to zero
         if (e.pointerType !== 'mouse') {
           if (inBox(R.hit.brakeL) || inBox(R.hit.brakeR)) brakeHeld.add(e.pointerId);
-          else pointers.set(e.pointerId, { x: ix, y: iy });
+          else pointers.set(e.pointerId, { x: ix, y: iy, x0: ix, y0: iy, t: performance.now() });
           upd(); try { cv.setPointerCapture(e.pointerId); } catch (_) {}
         }
       }
@@ -298,9 +289,24 @@
       else { startPressed = true; if (G.mode === 'title' && G.touchMode && !OB.isFullscreen() && !fsFailed) toggleFullscreen(true); }
       e.preventDefault();
     });
-    cv.addEventListener('pointermove', e => { if (pointers.has(e.pointerId)) { pointers.set(e.pointerId, toCanvas(e)); upd(); } });
+    cv.addEventListener('pointermove', e => { const o = pointers.get(e.pointerId); if (o) { const c = toCanvas(e); o.x = c.x; o.y = c.y; upd(); } });
+    // Drift is a tap. It used to want a second finger held down, then a pad at each side to slide a thumb into;
+    // both were another thing to aim at while the first thumb was busy steering. A quick touch that does not
+    // travel is the whole gesture now - with the sensor steering, the finger has nothing else to do - and it
+    // still only takes hold when the bike is turning hard and moving, as the keyboard drift always has.
+    const TAP_MS = 240, TAP_MOVE = 26;
     const end = e => {
-      if (pointers.delete(e.pointerId) || brakeHeld.delete(e.pointerId)) upd();
+      const o = pointers.get(e.pointerId);
+      if (o) {
+        if (performance.now() - o.t < TAP_MS && Math.abs(o.x - o.x0) < TAP_MOVE && Math.abs(o.y - o.y0) < TAP_MOVE) {
+          // the tap has already ended by the time this fires, so the steering it implied has to be remembered:
+          // the tilt if the sensor is doing the steering, otherwise which side of the screen the tap landed on
+          driftReq = true;
+          const t = tiltSteer();
+          driftHint = t !== null ? t : OB.clamp((o.x0 / W - 0.5) / 0.3, -1, 1);
+        }
+        pointers.delete(e.pointerId); upd();
+      } else if (brakeHeld.delete(e.pointerId)) upd();
       if (swipeX !== null && (G.mode === 'radio' || G.mode === 'course')) { const ix = toCanvas(e).x; if (Math.abs(ix - swipeX) > 70) tuneDir = ix > swipeX ? 1 : -1; }
       swipeX = null;
     };
@@ -335,7 +341,7 @@
     G.nearMiss = 0; G.yadom = 0; G.yadomT = 0;
     G.cars = []; G.msg = null; G.shake = 0; G.invuln = 0; G.forkHint = null; G.result = null; G.overReason = null; G.paused = false; G.mult = 1; G.multStep = 1; G.multArmed = false; G.multLock = 0; G.draft = 0;
     G.wipe = 0; G.parts = []; G.skidCd = 0; G.smoke = []; G.smokeAcc = 0; G.pops = [];
-    G.flip = null; G.rider = null; G.drift = 0; G.driftK = 0; G.marks = []; markLast = -1; G.goT = 0;
+    G.flip = null; G.rider = null; G.drift = 0; G.driftHold = 0; G.driftK = 0; G.marks = []; markLast = -1; G.goT = 0;
     for (let i = 0; i < 8; i++) spawnCar(60 + i * 40);
   }
   // ---------- tyre smoke ----------
@@ -783,7 +789,7 @@
     cam.zoom += ((1 - 0.035 * OB.clamp((pctNow - 0.8) / 0.2, 0, 1)) - cam.zoom) * Math.min(1, dt * 3);
     cam.squash = Math.max(0, cam.squash - dt * 9);
     if (G.shake > 0 && G.shakeFast) { G.shake = Math.max(0, G.shake - dt * 10); if (G.shake <= 0) G.shakeFast = false; }
-    const wantDrift = driftReq; driftReq = false;
+    const wantDrift = driftReq, driftAim = driftHint; driftReq = false; driftHint = 0;
     const mode = G.mode;
     if (mode === 'loading') return;
     if (mode === 'over' || (mode === 'play' && G.paused)) { G.speed = Math.max(0, G.speed - G.maxSpeed * dt * 0.6); if (mode === 'over') advance(dt, false); A.setEngine(0, false, false, false); return; }
@@ -823,7 +829,7 @@
     const usingTouch = G.touchMode && touch.active;
     const flipping = !!G.crash;
     // touch: one finger steers, either brake button held brakes, a side pad (or a second finger) drifts
-    G.uiBrake = touch.brake; G.uiDrift = touch.drift;   // what the pads on screen should be showing
+    G.uiBrake = touch.brake;   // what the brake buttons on screen should be showing
     const tBrake = G.touchMode && (touch.brake > 0 || touch.fingers >= 3);
     const gas = mode === 'play' && !flipping ? (keys.gas || (G.touchMode && !tBrake)) : false;
     const brake = mode === 'play' && !flipping ? (keys.brake || tBrake) : true;
@@ -842,10 +848,20 @@
       if (Math.abs(G.playerX) > 0.82 * seg.rw) steerIn = -Math.sign(G.playerX);   // never let it reach the wall
     }
     let askDrift = wantDrift;
-    if (G.touchMode && (touch.drift !== 0 || touch.fingers === 2) && mode === 'play') { if (G.drift > 0 && Math.sign(steerIn) === G.driftDir) G.drift = Math.max(G.drift, 0.3); else askDrift = true; }
-    // drift: second finger / Shift while steering hard at speed. Sharper turn, less push from the curve, some speed scrubbed.
-    if (askDrift && mode === 'play' && !flipping && G.drift <= 0 && pct > 0.3 && Math.abs(steerIn) > 0.5) { G.drift = 1.1; G.driftDir = Math.sign(steerIn); G.score += Math.round(300 * G.mult); A.sfx('drift'); G.skidCd = 0.4; }
-    if (G.drift > 0) { G.drift -= dt; if (Math.abs(steerIn) < 0.3 || pct < 0.15 || Math.sign(steerIn) !== G.driftDir) G.drift = 0; }
+    if (G.touchMode && touch.fingers === 2 && mode === 'play') { if (G.drift > 0 && Math.sign(steerIn) === G.driftDir) G.drift = Math.max(G.drift, 0.3); else askDrift = true; }
+    // drift: a tap, two fingers, or Shift, while going hard into a turn at speed. Sharper turn, less push from
+    // the curve, some speed scrubbed. A tap is judged on the line it asked for rather than the one the bike is on
+    // at that instant, and holds for a moment afterwards - otherwise the finger lifting would cancel it at once.
+    const driftIn = Math.abs(steerIn) > 0.5 ? steerIn : (wantDrift ? driftAim : 0);
+    if (askDrift && mode === 'play' && !flipping && G.drift <= 0 && pct > 0.3 && Math.abs(driftIn) > 0.5) {
+      G.drift = 1.1; G.driftDir = Math.sign(driftIn); G.driftHold = 0.45;
+      G.score += Math.round(300 * G.mult); A.sfx('drift'); G.skidCd = 0.4;
+    }
+    if (G.drift > 0) {
+      G.drift -= dt;
+      if (G.driftHold > 0) G.driftHold -= dt;
+      else if (Math.abs(steerIn) < 0.3 || pct < 0.15 || Math.sign(steerIn) !== G.driftDir) G.drift = 0;
+    }
     const drifting = G.drift > 0;
     G.driftK += ((drifting ? 1 : 0) - G.driftK) * Math.min(1, dt * (drifting ? 12 : 5));
     // handling: quick to turn in, quicker to straighten up; less grip on the pavement; the curve pushes you outward
@@ -959,7 +975,7 @@
     T.reset(); WD.clear(); G.stageNo = no || 2; G.stageKey = key; G.route = ['charoenkrung', key]; G.nextKey = null; G.nextInfo = null;
     G.cur = buildStage(key, G.stageNo); G.light = OB.lightFor(T.STAGES[key].theme);
     G.position = 0; G.playerX = -0.3; G.speed = G.maxSpeed * 0.5; G.cars = []; G.time = 90; G.mode = 'play'; G.drawShift = 0; G.smoke = []; G.parts = [];
-    G.flip = null; G.rider = null; G.drift = 0; G.driftK = 0; G.marks = []; markLast = -1; G.goT = 0; G.crash = null; G.pops = []; G.mult = 1; G.multStep = 1; G.multArmed = false; G.multLock = 0; G.draft = 0;
+    G.flip = null; G.rider = null; G.drift = 0; G.driftHold = 0; G.driftK = 0; G.marks = []; markLast = -1; G.goT = 0; G.crash = null; G.pops = []; G.mult = 1; G.multStep = 1; G.multArmed = false; G.multLock = 0; G.draft = 0;
     for (let i = 0; i < 8; i++) spawnCar(40 + i * 45);
   };
   // Belt and braces beyond the CSS (-webkit-touch-callout etc. on #screen): some WebKit versions still start the

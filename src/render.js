@@ -905,10 +905,9 @@
       TXT(ctx, G.touchMode ? 'TAP!' : 'PRESS E', ix + iw / 2, iy - 12, { size: 7, sy: 1.4, fill: pu > 0.5 ? '#fff' : '#3fd07a', outline: '#000', outlineW: 3, align: 'center' });
       R.hit.yadom = { x: ix - 18, y: iy - 22, w: iw + 36, h: ih + 40 };
     }
-    // Thumb controls. Braking wanted a third finger on the glass and drifting a second one held down, neither of
-    // which a pair of thumbs can do while one of them is steering. A brake sits at each top corner, so whichever
-    // hand is free can reach one, and a drift pad runs down each side: steering hard already puts the thumb at the
-    // edge, and sliding it into the pad drifts that way. Both old holds still work.
+    // Thumb controls. Braking wanted a third finger on the glass, which a pair of thumbs cannot do while one of
+    // them is steering, so a brake sits at each top corner where whichever hand is free can reach one. Drifting is
+    // a tap - no button for it, because a button for it was another thing to aim at.
     if (G.touchMode && (G.mode === 'play' || G.mode === 'countdown') && !G.paused) {
       const pad = (b, label, on, col) => {
         ctx.fillStyle = on ? 'rgba(255,255,255,0.16)' : 'rgba(0,0,0,0.3)';
@@ -920,12 +919,9 @@
       };
       R.hit.brakeL = { x: 16, y: 92, w: 76, h: 44 };
       R.hit.brakeR = { x: W - 92, y: 92, w: 76, h: 44 };
-      R.hit.driftL = { x: 0, y: 252, w: 94, h: 148 };
-      R.hit.driftR = { x: W - 94, y: 252, w: 94, h: 148 };
-      const bk = !!G.uiBrake, dr = G.uiDrift | 0;
+      const bk = !!G.uiBrake;
       pad(R.hit.brakeL, 'BRAKE', bk, '#ff6a5a'); pad(R.hit.brakeR, 'BRAKE', bk, '#ff6a5a');
-      pad(R.hit.driftL, 'DRIFT', dr < 0, '#7fe0ff'); pad(R.hit.driftR, 'DRIFT', dr > 0, '#7fe0ff');
-    } else { R.hit.brakeL = R.hit.brakeR = R.hit.driftL = R.hit.driftR = null; }
+    } else { R.hit.brakeL = R.hit.brakeR = null; }
     // pause button (top-right corner)
     if (G.mode === 'play') {
       const bx = W - 40, by = 8, bw = 32, bh = 28;
@@ -974,7 +970,7 @@
 
   // ---------- overlays ----------
   // tap targets published for the input layer (rows: radio stations, nodes: course map, cells: name entry, start: START button)
-  R.hit = { rows: [], nodes: [], cells: [], start: null, pause: null, fs: null, yadom: null, brakeL: null, brakeR: null, driftL: null, driftR: null };
+  R.hit = { rows: [], nodes: [], cells: [], start: null, pause: null, fs: null, yadom: null, brakeL: null, brakeR: null };
   // pause menu: resume / restart / music / full screen / quit
   R.pause = function (G) {
     dim(0.55); R.hit.rows = [];
@@ -1145,8 +1141,10 @@
     TXT(ctx, String(n), 0, 0, { size: 56, sy: 1.2, fill: '#ffffff', outline: '#000', outlineW: 10, align: 'center' });
     ctx.restore();
     // the controls live here now, not on the title screen
-    const l1 = G.touchMode ? 'FINGER LEFT / RIGHT STEERS   -   AUTO GAS   -   HOLD THREE FINGERS TO BRAKE' : 'ARROWS STEER   -   UP GAS   -   DOWN BRAKE';
-    const l2 = G.touchMode ? 'HOLD A SECOND FINGER WHILE TURNING HARD TO DRIFT' : 'SHIFT (OR DOUBLE TAP THE ARROW) WHILE TURNING HARD TO DRIFT';
+    const l1 = G.touchMode
+      ? (G.motion ? 'TILT TO STEER   -   AUTO GAS   -   BRAKE IN EITHER TOP CORNER' : 'FINGER LEFT / RIGHT STEERS   -   AUTO GAS   -   BRAKE IN EITHER TOP CORNER')
+      : 'ARROWS STEER   -   UP GAS   -   DOWN BRAKE';
+    const l2 = G.touchMode ? 'TAP WHILE TURNING HARD TO DRIFT' : 'SHIFT (OR DOUBLE TAP THE ARROW) WHILE TURNING HARD TO DRIFT';
     TXT(ctx, l1, W / 2, 292, { size: 7, sy: 1.4, fill: '#fff', outline: '#000', outlineW: 3, align: 'center' });
     TXT(ctx, l2, W / 2, 310, { size: 7, sy: 1.4, fill: '#ffd800', outline: '#000', outlineW: 3, align: 'center' });
   };
