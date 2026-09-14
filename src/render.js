@@ -835,18 +835,16 @@
     // score
     TXT(ctx, 'SCORE', 622, 34, { size: 12, sy: 1.7, fill: '#ff37a8', outline: '#000', outlineW: 6, outline2: '#fff', outline2W: 3 });
     TXT(ctx, OB.pad(G.score, 7), 704, 34, { size: 12, sy: 1.7, fill: '#fff', outline: '#000', outlineW: 5 });
-    // Live multiplier, under the score, with what is feeding it. It only appears once the combo is running: it is
-    // earned by holding top speed, and a 1.00x sitting there from the green light with an instruction under it
-    // read as a combo that had already started and was going nowhere. Nothing until it is armed, then the number
-    // and what is feeding it; the break flash stays so a lost combo is still announced where it used to live.
-    if ((G.mode === 'play' || G.mode === 'countdown') && (G.multArmed || (G.multBreak || 0) > 0)) {
-      const m = G.mult || 1, hot = m >= 2, brk = (G.multBreak || 0) > 0;
-      const col = brk ? '#ff6a5a' : m >= 4 ? '#ff37a8' : hot ? '#ffd800' : '#cfd3da';
-      const sc = 1 + Math.min(0.35, Math.max(0, m - 1) * 0.05) + (brk ? 0.25 : 0);
+    // Live multiplier, under the score, with what is feeding it. It is the only notice the combo gets: it appears
+    // when the bike touches its top speed and earns one, and it goes when the combo goes. Nothing is announced.
+    if ((G.mode === 'play' || G.mode === 'countdown') && G.multArmed) {
+      const m = G.mult || 1, hot = m >= 2;
+      const col = m >= 4 ? '#ff37a8' : hot ? '#ffd800' : '#cfd3da';
+      const sc = 1 + Math.min(0.35, Math.max(0, m - 1) * 0.05);
       ctx.save(); ctx.translate(762, 56); ctx.scale(sc, sc);
       TXT(ctx, m.toFixed(2) + 'x', 0, 0, { size: 11, sy: 1.5, fill: col, outline: '#000', outlineW: 5, align: 'center' });
       ctx.restore();
-      if (G.multWhy && !brk && m > 1.2) TXT(ctx, G.multWhy, 762, 74, { size: 6, sy: 1.4, fill: col, outline: '#000', outlineW: 3, align: 'center' });
+      if (G.multWhy && m > 1.2) TXT(ctx, G.multWhy, 762, 74, { size: 6, sy: 1.4, fill: col, outline: '#000', outlineW: 3, align: 'center' });
     }
     // the ยาดม jar, bottom right, waiting to be tapped. It bobs on its own nine frames and sits over a soft
     // pulse so it reads as something to press rather than scenery; the hit box is generous for a thumb.

@@ -11,7 +11,7 @@
     forkHint: null, wallCd: 0, countdown: 0, overReason: null, result: null, seed: 20240808, paused: false, route: [], cur: null, nextInfo: null, nextKey: null,
     muted: false, drawShift: -200, playerDX: 0, course: 0, touchMode: false,
     wipe: 0, wipeDir: 1, parts: [], skidCd: 0, ranking: [], pendingRecord: null, nameEntry: null, smoke: [], smokeAcc: 0,
-    flip: null, rider: null, drift: 0, driftDir: 1, driftK: 0, marks: [], goT: 0, pops: [], mult: 1, multStep: 1, multWhy: '', multBreak: 0, draft: 0,
+    flip: null, rider: null, drift: 0, driftDir: 1, driftK: 0, marks: [], goT: 0, pops: [], mult: 1, multStep: 1, multWhy: '', draft: 0,
     // sprite-driven rider / world state
     crash: null, bumpT: 0, braking: false, crouch: false, riderT: 0, vxLat: 0, flutter: 0,
     hopY: 0, hopV: 0, stackY: 0, stackV: 0, stackC: 0, splashT: 0, splashSide: 1,
@@ -333,7 +333,7 @@
     G.position = 0; G.playerX = 0; G.speed = 0; G.steer = 0; G.lean = 0; G.bgOffset = 0;
     G.health = 100; G.ice = 100; G.score = 0; G.time = T.STAGES[G.stageKey].time + (G.stageNo > 1 ? 10 : 0);
     G.nearMiss = 0; G.yadom = 0; G.yadomT = 0;
-    G.cars = []; G.msg = null; G.shake = 0; G.invuln = 0; G.forkHint = null; G.result = null; G.overReason = null; G.paused = false; G.mult = 1; G.multStep = 1; G.multArmed = false; G.multBreak = 0; G.draft = 0;
+    G.cars = []; G.msg = null; G.shake = 0; G.invuln = 0; G.forkHint = null; G.result = null; G.overReason = null; G.paused = false; G.mult = 1; G.multStep = 1; G.multArmed = false; G.draft = 0;
     G.wipe = 0; G.parts = []; G.skidCd = 0; G.smoke = []; G.smokeAcc = 0; G.pops = [];
     G.flip = null; G.rider = null; G.drift = 0; G.driftK = 0; G.marks = []; markLast = -1; G.goT = 0;
     for (let i = 0; i < 8; i++) spawnCar(60 + i * 40);
@@ -405,25 +405,28 @@
   // tucked in a slipstream, and simply not taking damage — and drops straight back to 1.00 on any hit, so the
   // reward is continuous rather than a lump sum on a timer.
   const MULT_MAX = 9.99;
-  const MULT_ARM_PCT = 0.96;                         // the combo does not start until the bike has been flat out
+  // The combo starts when the bike has actually been at its top speed, not merely near it: the needle has to hit
+  // the stop. The rate bonus for holding it up there is a band rather than a point, or it would blink on and off
+  // against the speed clamp.
+  const MULT_ARM_PCT = 1, MULT_TOP_PCT = 0.96;
   function multGain(G, pct) {
     if (!G.multArmed) return 0;
     let g = 0.45;                                    // clean riding, the base rate
-    if (pct > MULT_ARM_PCT) g += 1.05;               // held at top speed
+    if (pct > MULT_TOP_PCT) g += 1.05;               // held at top speed
     if (G.drift > 0) g += 1.15;
     if (G.draft > 0.25) g += 1.1 * G.draft;
     return g;
   }
   function multLabel(G, pct) {
-    if (!G.multArmed) return 'HIT TOP SPEED';
     if (G.draft > 0.25) return 'DRAFT';
     if (G.drift > 0) return 'DRIFT';
-    if (pct > MULT_ARM_PCT) return 'MAX SPEED';
+    if (pct > MULT_TOP_PCT) return 'MAX SPEED';
     return 'NO DAMAGE';
   }
+  // The combo coming and going is not announced any more. The multiplier appearing under the score is the whole
+  // notice that it has started, and it going is the whole notice that it has gone.
   G.breakCombo = function (hard) {
     if (G.yadomT > 0) return;                         // and the combo survives พลังยาดม whatever it drives through
-    if (G.mult > 1.35) { G.multBreak = 0.7; pop('COMBO LOST', '#ff6a5a'); }
     G.mult = 1; G.multStep = 1; G.multArmed = false;  // earn it back by getting flat out again
   };
   // ---------- slipstream ----------
@@ -887,10 +890,9 @@
       proximityHorns(dt, G);
       // the multiplier climbs with the riding and every point earned is scaled by it
       G.draft = G.draft + (draftAmount(G) - G.draft) * Math.min(1, dt * 6);
-      if (!G.multArmed && pct > MULT_ARM_PCT) { G.multArmed = true; pop('COMBO ON', '#7fe0ff'); }
+      if (!G.multArmed && pct >= MULT_ARM_PCT) G.multArmed = true;   // the needle has to touch the stop
       G.mult = Math.min(MULT_MAX, G.mult + multGain(G, pct) * dt * 0.11);
       G.multWhy = multLabel(G, pct);
-      if (G.multBreak > 0) G.multBreak -= dt;
       G.score += pct * dt * 2000 * G.mult;
       // each whole step of the multiplier is worth a breather, in place of the old flat bonus on a timer
       if (G.mult >= G.multStep + 1) {
