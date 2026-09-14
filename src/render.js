@@ -1119,9 +1119,9 @@
     ctx.restore();
     // the controls live here now, not on the title screen
     const l1 = G.touchMode
-      ? 'HOLD THE LEFT OR RIGHT HALF TO TURN   -   AUTO GAS   -   BRAKE IN EITHER TOP CORNER'
+      ? 'PRESS THE LEFT OR RIGHT HALF TO DRIFT THAT WAY   -   AUTO GAS'
       : 'ARROWS STEER   -   UP GAS   -   DOWN BRAKE';
-    const l2 = G.touchMode ? 'QUICK TAP EITHER SIDE TO DRIFT THAT WAY' : 'SHIFT (OR DOUBLE TAP THE ARROW) WHILE TURNING HARD TO DRIFT';
+    const l2 = G.touchMode ? 'BRAKE IN EITHER TOP CORNER' : 'SHIFT (OR DOUBLE TAP THE ARROW) WHILE TURNING HARD TO DRIFT';
     TXT(ctx, l1, W / 2, 292, { size: 7, sy: 1.4, fill: '#fff', outline: '#000', outlineW: 3, align: 'center' });
     TXT(ctx, l2, W / 2, 310, { size: 7, sy: 1.4, fill: '#ffd800', outline: '#000', outlineW: 3, align: 'center' });
   };
