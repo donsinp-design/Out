@@ -460,11 +460,19 @@
   // the road ahead is lit rather than just the few metres under the front wheel.
   const BEAM = [[520, 0.22], [1370, 0.38], [3400, 0.55], [8200, 0.72], [16000, 0.88], [30000, 1.02]];
   function bikeGroundY(G) { const zoom = (G.cam && G.cam.zoom) || 1; return Math.round(HZ + (457 - HZ) * zoom + (G.bounce || 0)) - Math.round(G.hopY || 0); }
+  // A shaft of light with no edge to it. One filled outline can only carry one gradient, and both shafts here need
+  // theirs along their length, which leaves the sides as two lines ruled across the scene. So the shaft is laid
+  // down as SOFT nested copies of itself, each a fraction of the full width at a fraction of the strength: they
+  // add up to full in the middle and taper to nothing at the edge, and because every copy is the shaft's own
+  // outline the falloff follows its shape instead of stepping across it.
+  // fewer copies for the lantern haze than for the bike's throw: there are a dozen lamps in frame and one bike,
+  // and a shaft that is already faint hides the stepping that a hard-lit one would show
+  const SOFT = 6, SOFT_CONE = 3;
   function playerBeam(g, G, segs, segLen, RW, lim) {
     const pz = G.position + G.playerZ, lat = G.playerX * RW;
     const bx = W / 2 + (G.drawShift || 0) + (G.playerDX || 0), gy = bikeGroundY(G);
     const hlY = gy - (gy - HZ) * (HL_H / G.cameraH);   // the lamp itself, part way up the bike
-    const L = [[bx - 5, hlY]], Rr = [[bx + 5, hlY]];
+    const pts = [{ x: bx, y: hlY, hw: 5 }];
     let farY = hlY;
     for (const [dz, half] of BEAM) {
       const i = Math.floor((pz + dz) / segLen); if (i >= lim || i >= segs.length) break;
@@ -472,18 +480,26 @@
       const p = ((pz + dz) % segLen) / segLen, cs = OB.lerp(s.p1.screen.scale, s.p2.screen.scale, p);
       const x = OB.lerp(s.p1.screen.x, s.p2.screen.x, p) + cs * lat * K, y = OB.lerp(s.p1.screen.y, s.p2.screen.y, p), hw = cs * half * RW * K;
       if (y > s.clip) break;
-      L.push([x - hw, Math.min(y, farY)]); Rr.push([x + hw, Math.min(y, farY)]); farY = Math.min(y, farY);
+      farY = Math.min(y, farY);
+      pts.push({ x, y: farY, hw });
     }
-    if (L.length < 3) return;
-    // the throw, measured from the lamp: dim at the lamp, brightest a few metres out, gone by the end of the beam
+    if (pts.length < 3) return;
+    // the throw, measured from the lamp: dim at the lamp, brightest a few metres out, gone by the end of the beam,
+    // and now soft across its width as well (see SOFT)
+    if (hlY - farY <= 2) return;
     const gr = g.createLinearGradient(0, hlY, 0, farY);
     gr.addColorStop(0, 'rgba(255,238,205,0.34)'); gr.addColorStop(0.22, 'rgba(255,238,205,0.9)');
     gr.addColorStop(0.5, 'rgba(255,238,205,0.62)'); gr.addColorStop(0.8, 'rgba(255,238,205,0.24)');
     gr.addColorStop(1, 'rgba(255,238,205,0)');
-    g.fillStyle = gr; g.beginPath(); g.moveTo(L[0][0], L[0][1]);
-    for (let i = 1; i < L.length; i++) g.lineTo(L[i][0], L[i][1]);
-    for (let i = Rr.length - 1; i >= 0; i--) g.lineTo(Rr[i][0], Rr[i][1]);
-    g.closePath(); g.fill();
+    g.fillStyle = gr; g.globalAlpha = 1 / SOFT;
+    for (let k = 1; k <= SOFT; k++) {
+      const s = (k / SOFT) * 1.16;   // the outermost copy runs a little wide, so the old edge falls inside the fade
+      g.beginPath(); g.moveTo(pts[0].x - 5 * s, pts[0].y);
+      for (let i = 1; i < pts.length; i++) g.lineTo(pts[i].x - pts[i].hw * s, pts[i].y);
+      for (let i = pts.length - 1; i >= 1; i--) g.lineTo(pts[i].x + pts[i].hw * s, pts[i].y);
+      g.lineTo(pts[0].x + 5 * s, pts[0].y); g.closePath(); g.fill();
+    }
+    g.globalAlpha = 1;
     // sideways spill, centred on the road the lamp is pointed at rather than on the bike
     ellipseLight(g, { x: bx, y: (hlY + gy) / 2, rx: 240, ry: 54, r: 255, g: 226, b: 190, a: 0.34 });
   }
@@ -556,11 +572,19 @@
     gr.addColorStop(1, 'rgba(' + l.r + ',' + l.g + ',' + l.b + ',0)');
     g.save(); g.translate(l.x, l.y); g.scale(l.rx, l.ry); g.fillStyle = gr; g.fillRect(-1, -1, 2, 2); g.restore();
   }
-  function coneLight(g, l) { // the haze under a lantern, apex at the lamp, spreading to the pool
+  // The haze under a lantern, apex at the lamp, spreading to the pool. It was one filled quad, which gave every
+  // lamp on the street a triangle with two ruled edges - the shape you noticed before you noticed the lamp.
+  function coneLight(g, l) {
     const a = l.a === undefined ? 1 : l.a;
+    if (l.gy - l.y <= 2) return;
     const gr = g.createLinearGradient(0, l.y, 0, l.gy);
-    gr.addColorStop(0, 'rgba(255,200,120,' + (0.3 * a).toFixed(3) + ')'); gr.addColorStop(1, 'rgba(255,190,110,' + (0.04 * a).toFixed(3) + ')');
-    g.fillStyle = gr; g.beginPath(); g.moveTo(l.x - l.rx * 0.08, l.y); g.lineTo(l.x + l.rx * 0.08, l.y); g.lineTo(l.x + l.rx, l.gy); g.lineTo(l.x - l.rx, l.gy); g.closePath(); g.fill();
+    gr.addColorStop(0, 'rgba(255,200,120,0.3)'); gr.addColorStop(1, 'rgba(255,190,110,0.04)');
+    g.fillStyle = gr; g.globalAlpha = a / SOFT_CONE;
+    for (let k = 1; k <= SOFT_CONE; k++) {
+      const s = (k / SOFT_CONE) * 1.16, w = l.rx * s, w0 = l.rx * 0.08 * s + 0.5;
+      g.beginPath(); g.moveTo(l.x - w0, l.y); g.lineTo(l.x + w0, l.y); g.lineTo(l.x + w, l.gy); g.lineTo(l.x - w, l.gy); g.closePath(); g.fill();
+    }
+    g.globalAlpha = 1;
   }
   function nightPass(G, segs, segLen, RW, lim) {
     if (!LM) { LM = OB.makeCanvas(W, H); lg = LM.getContext('2d'); }
@@ -692,11 +716,12 @@
       const sTop = rp[2 - i], sBot = rp[3 - i], sh = sBot - sTop, dh = Math.max(1, sh * scale * melt[i] * squash);
       lift = (G.stackY || 0) * (0.5 + 0.35 * i);
       const dxRow = -lean * 2.2 * (i + 1) / 3;
-      for (let h = 0; h < 2; h++) {
-        const jit = pct > 0.25 ? Math.round(Math.sin(t * (37 + i * 5) + h * 3 + i) * pct * 1.3) : 0;
-        const sw = Math.floor(f.w / 2), sx = f.x + h * sw;
-        ctx.drawImage(f.img, sx, f.y + sTop, sw + (h ? f.w - 2 * sw : 0), sh, x0 + Math.round(h * W0 / 2 + dxRow + jit * 0.6), Math.round(baseY - dh + lift), Math.round(W0 / 2) + 1, Math.round(dh));
-      }
+      // Each row went down as two halves with a shiver of their own, so that the load looked like separate bags.
+      // At this size all it ever produced was a seam straight down the middle: the halves rounded to a pixel each
+      // and came to two more than the rest of the bike, so the rider read as cut in half. One piece, one shiver,
+      // the same width as the bike under it.
+      const jit = pct > 0.25 ? Math.round(Math.sin(t * (37 + i * 5) + i) * pct * 1.3) : 0;
+      ctx.drawImage(f.img, f.x, f.y + sTop, f.w, sh, x0 + Math.round(dxRow + jit * 0.6), Math.round(baseY - dh + lift), Math.round(W0), Math.round(dh));
       baseY -= dh;
     }
     // the rider's back and helmet: stretched down a little to meet the stack when the ice has shrunk
@@ -810,16 +835,18 @@
     // score
     TXT(ctx, 'SCORE', 622, 34, { size: 12, sy: 1.7, fill: '#ff37a8', outline: '#000', outlineW: 6, outline2: '#fff', outline2W: 3 });
     TXT(ctx, OB.pad(G.score, 7), 704, 34, { size: 12, sy: 1.7, fill: '#fff', outline: '#000', outlineW: 5 });
-    // live multiplier, under the score, with what is feeding it
-    if (G.mode === 'play' || G.mode === 'countdown') {
-      const m = G.mult || 1, hot = m >= 2, brk = (G.multBreak || 0) > 0, armed = !!G.multArmed;
-      const col = brk ? '#ff6a5a' : m >= 4 ? '#ff37a8' : hot ? '#ffd800' : armed ? '#cfd3da' : '#6c727d';
+    // Live multiplier, under the score, with what is feeding it. It only appears once the combo is running: it is
+    // earned by holding top speed, and a 1.00x sitting there from the green light with an instruction under it
+    // read as a combo that had already started and was going nowhere. Nothing until it is armed, then the number
+    // and what is feeding it; the break flash stays so a lost combo is still announced where it used to live.
+    if ((G.mode === 'play' || G.mode === 'countdown') && (G.multArmed || (G.multBreak || 0) > 0)) {
+      const m = G.mult || 1, hot = m >= 2, brk = (G.multBreak || 0) > 0;
+      const col = brk ? '#ff6a5a' : m >= 4 ? '#ff37a8' : hot ? '#ffd800' : '#cfd3da';
       const sc = 1 + Math.min(0.35, Math.max(0, m - 1) * 0.05) + (brk ? 0.25 : 0);
       ctx.save(); ctx.translate(762, 56); ctx.scale(sc, sc);
       TXT(ctx, m.toFixed(2) + 'x', 0, 0, { size: 11, sy: 1.5, fill: col, outline: '#000', outlineW: 5, align: 'center' });
       ctx.restore();
-      // while the combo is dormant the label is the instruction for waking it, not a bonus name
-      if (G.multWhy && !brk && (!armed || m > 1.2)) TXT(ctx, G.multWhy, 762, 74, { size: 6, sy: 1.4, fill: armed ? col : '#7fe0ff', outline: '#000', outlineW: 3, align: 'center' });
+      if (G.multWhy && !brk && m > 1.2) TXT(ctx, G.multWhy, 762, 74, { size: 6, sy: 1.4, fill: col, outline: '#000', outlineW: 3, align: 'center' });
     }
     // the ยาดม jar, bottom right, waiting to be tapped. It bobs on its own nine frames and sits over a soft
     // pulse so it reads as something to press rather than scenery; the hit box is generous for a thumb.
