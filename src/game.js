@@ -11,7 +11,7 @@
     forkHint: null, wallCd: 0, countdown: 0, overReason: null, result: null, seed: 20240808, paused: false, route: [], cur: null, nextInfo: null, nextKey: null,
     muted: false, drawShift: -200, playerDX: 0, course: 0, touchMode: false,
     wipe: 0, wipeDir: 1, parts: [], skidCd: 0, ranking: [], pendingRecord: null, nameEntry: null, smoke: [], smokeAcc: 0,
-    flip: null, rider: null, drift: 0, driftDir: 1, driftK: 0, marks: [], goT: 0, pops: [], mult: 1, multStep: 1, multWhy: '', draft: 0,
+    flip: null, rider: null, drift: 0, driftDir: 1, driftK: 0, marks: [], goT: 0, pops: [], mult: 1, multStep: 1, multWhy: '', multLock: 0, draft: 0,
     // sprite-driven rider / world state
     crash: null, bumpT: 0, braking: false, crouch: false, riderT: 0, vxLat: 0, flutter: 0,
     hopY: 0, hopV: 0, stackY: 0, stackV: 0, stackC: 0, splashT: 0, splashSide: 1,
@@ -333,7 +333,7 @@
     G.position = 0; G.playerX = 0; G.speed = 0; G.steer = 0; G.lean = 0; G.bgOffset = 0;
     G.health = 100; G.ice = 100; G.score = 0; G.time = T.STAGES[G.stageKey].time + (G.stageNo > 1 ? 10 : 0);
     G.nearMiss = 0; G.yadom = 0; G.yadomT = 0;
-    G.cars = []; G.msg = null; G.shake = 0; G.invuln = 0; G.forkHint = null; G.result = null; G.overReason = null; G.paused = false; G.mult = 1; G.multStep = 1; G.multArmed = false; G.draft = 0;
+    G.cars = []; G.msg = null; G.shake = 0; G.invuln = 0; G.forkHint = null; G.result = null; G.overReason = null; G.paused = false; G.mult = 1; G.multStep = 1; G.multArmed = false; G.multLock = 0; G.draft = 0;
     G.wipe = 0; G.parts = []; G.skidCd = 0; G.smoke = []; G.smokeAcc = 0; G.pops = [];
     G.flip = null; G.rider = null; G.drift = 0; G.driftK = 0; G.marks = []; markLast = -1; G.goT = 0;
     for (let i = 0; i < 8; i++) spawnCar(60 + i * 40);
@@ -409,10 +409,14 @@
   // the stop. The rate bonus for holding it up there is a band rather than a point, or it would blink on and off
   // against the speed clamp.
   const MULT_ARM_PCT = 1, MULT_TOP_PCT = 0.96;
+  const MULT_LOCK = 5;                               // seconds off the combo after a hit, before it can be earned again
   function multGain(G, pct) {
     if (!G.multArmed) return 0;
     let g = 0.45;                                    // clean riding, the base rate
     if (pct > MULT_TOP_PCT) g += 1.05;               // held at top speed
+    // and braking is riding too. Standing on the brake for a corner dropped the bike out of the top-speed band and
+    // the combo simply stopped climbing, which punished the one thing that keeps a fast line clean.
+    if (G.braking && pct > 0.3) g += 1.0;
     if (G.drift > 0) g += 1.15;
     if (G.draft > 0.25) g += 1.1 * G.draft;
     return g;
@@ -420,6 +424,7 @@
   function multLabel(G, pct) {
     if (G.draft > 0.25) return 'DRAFT';
     if (G.drift > 0) return 'DRIFT';
+    if (G.braking && pct > 0.3) return 'BRAKING';
     if (pct > MULT_TOP_PCT) return 'MAX SPEED';
     return 'NO DAMAGE';
   }
@@ -428,6 +433,7 @@
   G.breakCombo = function (hard) {
     if (G.yadomT > 0) return;                         // and the combo survives พลังยาดม whatever it drives through
     G.mult = 1; G.multStep = 1; G.multArmed = false;  // earn it back by getting flat out again
+    G.multLock = MULT_LOCK;                           // and not straight away: a hit costs you the next few seconds
   };
   // ---------- slipstream ----------
   // Sitting square behind a vehicle and close to it pulls you along: free speed for a risky line.
@@ -890,7 +896,8 @@
       proximityHorns(dt, G);
       // the multiplier climbs with the riding and every point earned is scaled by it
       G.draft = G.draft + (draftAmount(G) - G.draft) * Math.min(1, dt * 6);
-      if (!G.multArmed && pct >= MULT_ARM_PCT) G.multArmed = true;   // the needle has to touch the stop
+      if (G.multLock > 0) G.multLock -= dt;
+      if (!G.multArmed && G.multLock <= 0 && pct >= MULT_ARM_PCT) G.multArmed = true;   // the needle has to touch the stop
       G.mult = Math.min(MULT_MAX, G.mult + multGain(G, pct) * dt * 0.11);
       G.multWhy = multLabel(G, pct);
       G.score += pct * dt * 2000 * G.mult;
@@ -952,7 +959,7 @@
     T.reset(); WD.clear(); G.stageNo = no || 2; G.stageKey = key; G.route = ['charoenkrung', key]; G.nextKey = null; G.nextInfo = null;
     G.cur = buildStage(key, G.stageNo); G.light = OB.lightFor(T.STAGES[key].theme);
     G.position = 0; G.playerX = -0.3; G.speed = G.maxSpeed * 0.5; G.cars = []; G.time = 90; G.mode = 'play'; G.drawShift = 0; G.smoke = []; G.parts = [];
-    G.flip = null; G.rider = null; G.drift = 0; G.driftK = 0; G.marks = []; markLast = -1; G.goT = 0; G.crash = null; G.pops = []; G.mult = 1; G.multStep = 1; G.multArmed = false; G.draft = 0;
+    G.flip = null; G.rider = null; G.drift = 0; G.driftK = 0; G.marks = []; markLast = -1; G.goT = 0; G.crash = null; G.pops = []; G.mult = 1; G.multStep = 1; G.multArmed = false; G.multLock = 0; G.draft = 0;
     for (let i = 0; i < 8; i++) spawnCar(40 + i * 45);
   };
   // Belt and braces beyond the CSS (-webkit-touch-callout etc. on #screen): some WebKit versions still start the

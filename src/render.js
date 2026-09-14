@@ -606,9 +606,23 @@
     playerBeam(lg, G, segs, segLen, RW, lim);
     if (occlude) restoreBike(lg, G);
     ctx.globalCompositeOperation = 'multiply'; ctx.drawImage(LM, 0, 0);
+    // The emissive bits go on top of the finished frame, which is after the rider has been drawn - so a tuk-tuk's
+    // underglow, passing at the kerb, was painted over him. He is the nearest thing on screen and nothing should
+    // glow in front of him, so his patch of the finished frame is lifted here and laid back down afterwards.
+    // Lifting it means reading the canvas back, which is not free, so it is only done on the frames where a glow
+    // actually sits on him - which is a handful of frames in a run, not all of them.
+    let lift = false;
+    if (occlude) {
+      const bb = bikeBox(G);
+      for (const l of lights) {
+        if (l.kind !== 'glow') continue;
+        if (l.x > bb.x - l.rx && l.x < bb.x + bb.w + l.rx && l.y > bb.y - l.rx && l.y < bb.y + bb.h + l.rx) { lift = true; break; }
+      }
+    }
+    if (lift) grabFront(G);
     ctx.globalCompositeOperation = 'lighter';
-    // the emissive bits sit on top of the finished frame, so a lantern or a tail light behind a building has to be
-    // dropped rather than cancelled: it is out if any block drawn after it covers where it sits
+    // a lantern or a tail light behind a building has to be dropped rather than cancelled: it is out if any block
+    // drawn after it covers where it sits
     for (let i = 0; i < lights.length; i++) {
       const l = lights[i]; if (l.kind !== 'glow') continue;
       let hidden = false;
@@ -619,6 +633,30 @@
       if (!hidden) ellipseLight(ctx, { x: l.x, y: l.y, rx: l.rx, ry: l.rx, r: l.r, g: l.g, b: l.b, a: l.a });
     }
     ctx.globalCompositeOperation = 'source-over';
+    if (lift) restoreFront(ctx, G);
+  }
+  // The rider's patch of the finished frame, lifted before the emissive pass and laid back over it. The frame is
+  // being drawn through the camera's own shake and pitch, so the patch is taken and put back in the canvas's real
+  // pixels rather than through that transform - otherwise a shake would put it back a few pixels off.
+  let FM = null, fmg = null, frontBox = null;
+  function grabFront(G) {
+    const b = bikeBox(G), m = ctx.getTransform();
+    frontBox = { x: Math.round(b.x * m.a + m.e), y: Math.round(b.y * m.d + m.f), w: Math.round(b.w * m.a), h: Math.round(b.h * m.d) };
+    if (!FM) { FM = OB.makeCanvas(BIKE_RX * 2 + 4, BIKE_RY * 2 + 4); fmg = FM.getContext('2d'); }
+    fmg.globalCompositeOperation = 'copy';
+    fmg.drawImage(ctx.canvas, frontBox.x, frontBox.y, frontBox.w, frontBox.h, 0, 0, frontBox.w, frontBox.h);
+    // feathered to nothing at the rim, so light still spills round him rather than stopping at a hard oval
+    const gr = fmg.createRadialGradient(0, 0, 0, 0, 0, 1);
+    gr.addColorStop(0, '#fff'); gr.addColorStop(0.64, '#fff'); gr.addColorStop(1, '#fff0');
+    fmg.globalCompositeOperation = 'destination-in';
+    fmg.save(); fmg.translate(frontBox.w / 2, frontBox.h / 2); fmg.scale(frontBox.w / 2, frontBox.h / 2); fmg.fillStyle = gr; fmg.fillRect(-1, -1, 2, 2); fmg.restore();
+    fmg.globalCompositeOperation = 'source-over';
+  }
+  function restoreFront(g, G) {
+    if (!FM || !frontBox) return;
+    g.save(); g.setTransform(1, 0, 0, 1, 0, 0);
+    g.drawImage(FM, 0, 0, frontBox.w, frontBox.h, frontBox.x, frontBox.y, frontBox.w, frontBox.h);
+    g.restore();
   }
 
   // one bundle of five sagging lines between two pole tops (a farther, b nearer)
@@ -739,7 +777,12 @@
     blit(dir < 0 ? 'CL_BIKE' : 'CR_BIKE2', bx, by, false, 1);
     if (c.phase === 'air') { const h = -c.rider.y; ctx.fillStyle = 'rgba(0,0,0,' + (0.3 * Math.max(0.3, 1 - h / 260)).toFixed(2) + ')'; ctx.beginPath(); ctx.ellipse(rx, by - 4, 34, 6, 0, 0, Math.PI * 2); ctx.fill(); blit(dir < 0 ? 'CL_AIR' : 'CR_AIR', rx, ry - 16, false, 1); }
     else if (c.phase === 'ground') blit('CR_GROUND', rx, by, dir < 0, 1);
-    else if (c.phase === 'recover') { const i = Math.min(3, Math.floor(c.recT / 0.125)); blit('G' + (i + 1), rx, by, false, 1); }
+    else if (c.phase === 'recover') {
+      // the getting-up frames had the road they were cut from still behind them; now that it is gone they cast
+      // one of their own, like every other thing standing on the tarmac
+      ctx.fillStyle = 'rgba(0,0,0,0.3)'; ctx.beginPath(); ctx.ellipse(rx, by - 3, 26, 6, 0, 0, Math.PI * 2); ctx.fill();
+      const i = Math.min(3, Math.floor(c.recT / 0.125)); blit('G' + (i + 1), rx, by, false, 1);
+    }
   }
   function drawPlayer(G) {
     const WD = OB.world, cam = G.cam || { zoom: 1 }, zoom = cam.zoom || 1, bounce = G.bounce || 0;

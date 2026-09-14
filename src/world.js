@@ -503,13 +503,21 @@
       // a pothole you cannot see until you are in it is just an unfair hit, so hold it at a readable size
       // right out to the horizon instead of letting perspective shrink it into a single dark pixel
       let dw = f.w * d.upx * cs * K, dh = Math.max(1, f.h * d.upx * cs * K * 0.55);
-      if (hole && dw < 7) { dh = Math.max(dh, dh * 7 / Math.max(dw, 0.01)); dw = 7; }
+      if (hole && dw < 11) { dh = Math.max(dh, dh * 11 / Math.max(dw, 0.01)); dw = 11; }
       if (dw < 2) continue;
       ctx.drawImage(f.img, f.x, f.y, f.w, f.h, Math.round(sx - dw / 2), Math.round(sy - dh / 2), Math.round(dw), Math.round(dh));
-      if (hole) { // the near lip catches the streetlight and pulses as you close on it: the warning you steer off
-        const k = 0.35 + 0.25 * Math.sin(G.t * 6 + (d.seed || 0) * 10);
-        ctx.fillStyle = 'rgba(255,186,90,' + k.toFixed(2) + ')';
-        const lw = Math.max(2, Math.round(dw * 0.62)), lh = Math.max(1, Math.round(dh * 0.16));
+      if (hole) {
+        // A ring right round the hole, pulsing, not just a highlight on the near lip. Tarmac is the same colour as
+        // a hole in it, and at any distance the lip alone is two pixels that read as road grain - by the time it
+        // reads as a hole you are already in it. The ring is what you pick out early and steer off.
+        const k = 0.45 + 0.32 * Math.sin(G.t * 6 + (d.seed || 0) * 10);
+        ctx.save();
+        ctx.strokeStyle = 'rgba(255,190,70,' + k.toFixed(2) + ')';
+        ctx.lineWidth = Math.max(1.6, dw * 0.1);
+        ctx.beginPath(); ctx.ellipse(sx, sy, Math.max(1, dw * 0.5), Math.max(0.8, dh * 0.52), 0, 0, Math.PI * 2); ctx.stroke();
+        ctx.restore();
+        ctx.fillStyle = 'rgba(255,214,120,' + Math.min(1, k + 0.2).toFixed(2) + ')';   // the near lip on top of it
+        const lw = Math.max(2, Math.round(dw * 0.6)), lh = Math.max(1, Math.round(dh * 0.2));
         ctx.fillRect(Math.round(sx - lw / 2), Math.round(sy + dh / 2 - lh), lw, lh);
       }
       if (d.kind === 'puddle' && dw > 8) { // a flickering sky highlight stands in for the reflection
