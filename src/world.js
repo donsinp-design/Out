@@ -109,7 +109,11 @@
           else if (r < 0.65) spawn('dog', 'stray', z, pave(0.02), { state: 'idle', flip: s > 0, dogSeed: rng() });
           else spawn('dog', 'cross', z, pave(0.0), { state: 'wait', flip: s > 0, crossTo: -s, crossAt: 6000 + rng.range(0, 6000) });
         }
-        if (env === 'shop' && (rel + (sd === 'L' ? 29 : 71)) % 130 === 0) spawn('cat', 'cat', z, pave(rng.range(0.04, 0.1)), { state: 'idle', flip: rng.chance(0.5) });
+        // cats: outside the shops, along the temple wall, in the park - everywhere the dogs are except the water.
+        // They used to be a shophouse-only animal at half the dogs' rate, so from the third stage on there was
+        // not a cat in the game and the only animal anybody ever heard was a dog.
+        if (env !== 'water' && (rel + (sd === 'L' ? 29 : 71)) % (env === 'shop' ? 71 : 97) === 0 && rng.chance(0.8))
+          spawn('cat', 'cat', z, pave(rng.range(0.04, 0.1)), { state: 'idle', flip: rng.chance(0.5) });
         // destructible props
         if (env === 'shop' || env === 'city' || env === 'park') {
           if ((rel + (sd === 'L' ? 5 : 41)) % 73 === 0 && env !== 'park') spawn('stall', 'stall', z, pave(0.06), { state: 'idle', flip: s > 0 });
@@ -225,13 +229,14 @@
   // crossing itself, because sampling the gap once per frame misses the pass entirely at speed. One call per
   // animal per life, and the level follows how close it was.
   const CALL_NEAR = 0.5;                                   // about a bike and a half either side
-  function passingCall(a, dz, px, sfx) {
+  function passingCall(a, dz, px, sfx, reach) {
+    const near = reach || CALL_NEAR;
     const lat = Math.abs(a.x - px);
     if (!a.called && a.pdz !== undefined && (a.pdz > 0) !== (dz > 0)) {
       const span = a.pdz - dz;
       if (span > 0 && span < segLen() * 10) {              // a sane one-frame step, not a gap left by the crash freeze
         const gap = a.plat + (lat - a.plat) * OB.clamp(a.pdz / span, 0, 1);
-        if (gap < CALL_NEAR) { a.called = true; OB.audio.sfx(sfx, OB.clamp(1 - (gap / CALL_NEAR) * 0.6, 0.4, 1)); }
+        if (gap < near) { a.called = true; OB.audio.sfx(sfx, OB.clamp(1 - (gap / near) * 0.6, 0.4, 1)); }
       }
     }
     a.pdz = dz; a.plat = lat;
@@ -284,16 +289,23 @@
     }
     if (Math.abs(a.x) > rw + 0.12) a.x = Math.sign(a.x) * (rw + 0.12);
   }
+  // A cat sits further back on the pavement than a dog does and bolts before the bike is level with it, so the
+  // gap measured at the pass is always wider than a dog's: it needs a longer reach than the bark to be heard at
+  // all. And it is the bolt itself that is worth hearing, so a startled cat calls out as it goes - one voice per
+  // cat either way, whichever comes first.
+  const CAT_NEAR = 0.75, CAT_SCARE = 0.55;
+  function catBolt(a) { a.state = 'run'; a.t = 0; if (!a.called) { a.called = true; OB.audio.sfx('meow', 0.95); } }
   function catUpdate(a, dt, G, pz, px) {
     const dz = a.z - pz, rw = T.findSegment(a.z).rw; a.t += dt;
-    passingCall(a, dz, px, 'meow');
+    passingCall(a, dz, px, 'meow', CAT_NEAR);
+    const scared = dz > -segLen() && dz < 800 && Math.abs(a.x - px) < CAT_SCARE;
     switch (a.state) {
       case 'idle': a.frame = bodyOf(a, CAT_BODIES); a.hop = 0; if (a.t > 4 + (a.seed % 5)) { a.state = 'walk'; a.t = 0; a.dir = Math.random() < 0.5 ? 1 : -1; }
-        if (dz > -segLen() && dz < 800 && (Math.abs(a.x - px) < 0.45)) { a.state = 'run'; a.t = 0; } break;
+        if (scared) catBolt(a); break;
       // one body per state plus a step bob: alternating between two differently shaped frames read as the cat
       // swapping for a different animal mid-stride, the same way the pedestrians used to
       case 'walk': a.frame = bodyOf(a, CAT_BODIES); a.hop = Math.abs(Math.sin(a.t * 9)) * 0.5; a.z += a.dir * 110 * dt; a.flip = a.dir < 0 ? a.side < 0 : a.side > 0;
-        if (a.t > 2) { a.state = 'idle'; a.t = 0; } if (dz > -segLen() && dz < 800 && Math.abs(a.x - px) < 0.45) { a.state = 'run'; a.t = 0; } break;
+        if (a.t > 2) { a.state = 'idle'; a.t = 0; } if (scared) catBolt(a); break;
       case 'run': a.frame = bodyOf(a, CAT_BODIES); a.hop = Math.abs(Math.sin(a.t * 17)) * 0.8; a.x += a.side * 0.4 * dt; a.flip = a.side < 0; if (a.t > 0.5) { a.state = 'hide'; a.t = 0; } break;
       case 'hide': a.frame = bodyOf(a, CAT_BODIES); if (a.t > 3) { a.state = 'idle'; a.t = 0; } break;
     }

@@ -194,9 +194,11 @@
       touch.fingers = pointers.size;
       touch.brake = brakeHeld.size ? 1 : 0;
       if (!pointers.size) { touch.active = false; touch.steer = 0; return; }
+      // Which half of the screen the finger is on, and that is the whole of it: a touch anywhere left is full
+      // left lock, anywhere right is full right. It used to read how far out towards the edge the finger was,
+      // which meant a thumb resting near the middle barely turned at all and nobody could tell why.
       const first = pointers.values().next().value; // the first finger down steers; extra fingers only count
-      const rel = first.x / W - 0.5;
-      touch.steer = OB.clamp(rel / 0.3, -1, 1); touch.active = true;
+      touch.steer = first.x < W / 2 ? -1 : 1; touch.active = true;
     };
     let swipeX = null;
     cv.addEventListener('pointerdown', e => {
@@ -241,9 +243,9 @@
       if (o) {
         if (performance.now() - o.t < TAP_MS && Math.abs(o.x - o.x0) < TAP_MOVE && Math.abs(o.y - o.y0) < TAP_MOVE) {
           // the tap has already ended by the time this fires, so the steering it implied has to be remembered:
-          // which side of the screen the tap landed on
+          // the side of the screen it landed on, which is the side it drifts to
           driftReq = true;
-          driftHint = OB.clamp((o.x0 / W - 0.5) / 0.3, -1, 1);
+          driftHint = o.x0 < W / 2 ? -1 : 1;
         }
         pointers.delete(e.pointerId); upd();
       } else if (brakeHeld.delete(e.pointerId)) upd();
