@@ -99,6 +99,7 @@
   // TEST MODE, off the pause menu: every stage runs at night and the ยาดม jar is always sitting there, so the
   // night lighting and the power-up can be looked at on any stage without riding for them. It sticks between runs.
   G.test = !!store.get('ob_test', 0);
+  G.motion = store.get('ob_motion', 0) ? 1 : 0;   // steer by tilting the phone
   OB.lightFor = (themeKey) => G.test ? 'night' : T.THEMES[themeKey].light;
   OB.NAME_CHARS = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789'.split('').concat(['<', 'END']);
 
@@ -142,7 +143,53 @@
   }
   function fsUnavailable() { fsFailed = true; say('FULL SCREEN NOT AVAILABLE HERE', 'iPhone: เพิ่มไปยังหน้าจอโฮม / ใช้แนวนอน', 2.6, '#ffd800', 10); }
   OB.isFullscreen = () => STANDALONE || !!(document.fullscreenElement || document.webkitFullscreenElement);
-  const MENU = STANDALONE ? ['RESUME', 'RESTART', 'MUSIC', 'TEST MODE', 'QUIT TO TITLE'] : ['RESUME', 'RESTART', 'MUSIC', 'FULL SCREEN', 'TEST MODE', 'QUIT TO TITLE'];
+  // ---------- steering by tilt ----------
+  // The phone's own sense of which way up it is, turned into a steering input. Two things have to be got right.
+  // Which way the picture is facing on the device: the page can be portrait while the phone is held sideways (the
+  // stage is turned 90 degrees by CSS to fill it), and the operating system may have turned it as well, so the
+  // total turn decides whether left and right live on the device's beta axis or its gamma one, and with which
+  // sign. The rule throughout is that the right-hand edge of the picture dipping steers right. And where level
+  // is: nobody holds a phone flat, so the angle it is at when the setting goes on becomes the neutral one, and
+  // it is taken again whenever the phone is turned.
+  const tilt = { raw: 0, zero: null, have: false, bound: false };
+  const TILT_FULL = 24, TILT_DEAD = 2.5;   // degrees off neutral for full lock, and the slack around neutral
+  function tiltAxis(e) {
+    const so = window.screen && window.screen.orientation;
+    const a = so && typeof so.angle === 'number' ? so.angle : (window.orientation || 0);
+    const phi = (((a + (document.body.classList.contains('rot') ? 90 : 0)) % 360) + 360) % 360;
+    const b = e.beta || 0, g = e.gamma || 0;
+    if (phi < 45 || phi >= 315) return g;     // picture upright on the device
+    if (phi < 135) return b;                  // turned a quarter clockwise - the usual one here
+    if (phi < 225) return -g;
+    return -b;
+  }
+  function onTilt(e) {
+    if (e.beta === null && e.gamma === null) return;
+    tilt.raw = tiltAxis(e); tilt.have = true;
+    if (tilt.zero === null) tilt.zero = tilt.raw;
+  }
+  function tiltSteer() {
+    if (!G.motion || !tilt.have || tilt.zero === null) return null;
+    const d = tilt.raw - tilt.zero, s = Math.abs(d) < TILT_DEAD ? 0 : (d - Math.sign(d) * TILT_DEAD);
+    return OB.clamp(s / (TILT_FULL - TILT_DEAD), -1, 1);
+  }
+  function bindTilt() { if (tilt.bound) return; tilt.bound = true; tilt.zero = null; window.addEventListener('deviceorientation', onTilt); }
+  function unbindTilt() { if (!tilt.bound) return; tilt.bound = false; window.removeEventListener('deviceorientation', onTilt); tilt.have = false; tilt.zero = null; }
+  function recentre() { tilt.zero = null; }
+  window.addEventListener('orientationchange', () => setTimeout(recentre, 300));
+  // iOS will not deliver a reading until it has been asked for, on a real tap. Turning the setting on is a tap,
+  // and so is the first touch of a session that starts with it already on.
+  function askMotion(fromMenu) {
+    const D = window.DeviceOrientationEvent;
+    if (!D) { if (fromMenu) { G.motion = 0; store.set('ob_motion', 0); say('NO MOTION SENSOR HERE', 'อุปกรณ์นี้ไม่มีเซ็นเซอร์', 2.4, '#ff6a5a', 10); } return; }
+    if (typeof D.requestPermission !== 'function') { bindTilt(); return; }
+    D.requestPermission().then(r => {
+      if (r === 'granted') { bindTilt(); if (fromMenu) say('TILT TO STEER', 'ถือให้นิ่งสักครู่', 2.2, '#7fe0ff', 10); }
+      else { G.motion = 0; store.set('ob_motion', 0); say('MOTION ACCESS REFUSED', 'อนุญาตใน Settings > Safari > Motion', 3, '#ff6a5a', 9); }
+    }).catch(() => { G.motion = 0; store.set('ob_motion', 0); });
+  }
+  const MENU = STANDALONE ? ['RESUME', 'RESTART', 'MUSIC', 'MOTION SENSOR', 'TEST MODE', 'QUIT TO TITLE']
+    : ['RESUME', 'RESTART', 'MUSIC', 'FULL SCREEN', 'MOTION SENSOR', 'TEST MODE', 'QUIT TO TITLE'];
   OB.MENU = MENU;
   function menuAction(i) {
     A.sfx('select');
@@ -151,6 +198,10 @@
     else if (m === 'RESTART') { G.paused = false; startRun(); }
     else if (m === 'MUSIC') { G.muted = !G.muted; A.setMusicVolume(G.muted ? 0 : A.MUSIC_VOL); }
     else if (m === 'FULL SCREEN') toggleFullscreen();
+    else if (m === 'MOTION SENSOR') {
+      G.motion = G.motion ? 0 : 1; store.set('ob_motion', G.motion);
+      if (G.motion) askMotion(true); else unbindTilt();
+    }
     else if (m === 'TEST MODE') {
       G.test = !G.test; store.set('ob_test', G.test ? 1 : 0);
       G.light = OB.lightFor(T.STAGES[G.stageKey].theme);   // takes on the stage you are already riding
@@ -217,6 +268,7 @@
     let swipeX = null;
     cv.addEventListener('pointerdown', e => {
       A.init(); A.unlock();
+      if (G.motion && !tilt.bound) askMotion(false);   // the setting was already on when the page loaded
       const pc = toCanvas(e), ix = pc.x, iy = pc.y;
       const inBox = (b) => !!b && ix >= b.x && ix <= b.x + b.w && iy >= b.y && iy <= b.y + b.h;
       if (e.pointerType !== 'mouse' && !G.touchMode) { G.touchMode = true; fitPortrait(); }
@@ -766,7 +818,13 @@
     const tBrake = G.touchMode && (touch.brake > 0 || touch.fingers >= 3);
     const gas = mode === 'play' && !flipping ? (keys.gas || (G.touchMode && !tBrake)) : false;
     const brake = mode === 'play' && !flipping ? (keys.brake || tBrake) : true;
-    let steerIn = mode === 'play' && !flipping ? (usingTouch ? touch.steer : ((keys.left ? -1 : 0) + (keys.right ? 1 : 0))) : 0;
+    // with the sensor on, the phone steers and a finger on the glass is only there for the brake and the drift
+    // pads; the keys still work, so it does not lock anyone out on a desktop that happens to report a sensor
+    const tiltIn = tiltSteer();
+    let steerIn = mode === 'play' && !flipping
+      ? (tiltIn !== null ? tiltIn : (usingTouch ? touch.steer : ((keys.left ? -1 : 0) + (keys.right ? 1 : 0))))
+      : 0;
+    if (tiltIn !== null && mode === 'play' && !flipping && (keys.left || keys.right)) steerIn = (keys.left ? -1 : 0) + (keys.right ? 1 : 0);
     if (G.yadomT > 0 && mode === 'play' && !flipping) {
       // steer for the line, damped by how fast the bike is already moving sideways. Proportional control alone
       // overshot every target and put it on the kerb: at this speed the bike crosses a lane in a few frames.

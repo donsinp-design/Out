@@ -937,13 +937,17 @@
   // pause menu: resume / restart / music / full screen / quit
   R.pause = function (G) {
     dim(0.55); R.hit.rows = [];
-    const items = OB.MENU, RH = 40, x = W / 2 - 150, w = 300, y = 96, h = 60 + items.length * RH + 16;
+    // the panel is sized to whatever the menu holds and then centred, so adding an entry does not push the last
+    // row and the hint under it off the bottom of the screen
+    const items = OB.MENU, RH = 40, x = W / 2 - 150, w = 300, h = 60 + items.length * RH + 16;
+    const y = Math.max(34, Math.round((H - h) / 2) - 14);
     ctx.fillStyle = '#1a1c22'; ctx.fillRect(x, y, w, h); ctx.fillStyle = '#3a3d46'; ctx.fillRect(x, y, w, 4); ctx.fillRect(x, y + h - 4, w, 4); ctx.fillRect(x, y, 4, h); ctx.fillRect(x + w - 4, y, 4, h);
     TXT(ctx, 'PAUSE', W / 2, y + 34, { size: 14, sy: 1.5, fill: '#ffd800', outline: '#000', outlineW: 5, align: 'center' });
     items.forEach((label, i) => {
       const ry = y + 56 + i * RH, sel = i === (G.menuSel || 0);
       let text = label; if (label === 'MUSIC') text = 'MUSIC ' + (G.muted ? 'OFF' : 'ON'); if (label === 'FULL SCREEN' && OB.isFullscreen && OB.isFullscreen()) text = 'EXIT FULL SCREEN';
       if (label === 'TEST MODE') text = 'TEST MODE ' + (G.test ? 'ON' : 'OFF');
+      if (label === 'MOTION SENSOR') text = 'MOTION SENSOR ' + (G.motion ? 'ON' : 'OFF');
       ctx.fillStyle = sel ? 'rgba(255,216,0,0.2)' : 'rgba(255,255,255,0.05)'; ctx.fillRect(x + 14, ry, w - 28, RH - 6);
       if (sel) arrow(x + 32, ry + RH / 2 - 3, 1, 6, '#ffd800', '#000');
       TXT(ctx, text, W / 2 + 8, ry + RH / 2 + 4, { size: 9, sy: 1.4, fill: sel ? '#ffd800' : '#e8ecf4', outline: '#000', outlineW: 3, align: 'center' });
