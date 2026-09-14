@@ -2,8 +2,9 @@
 (function (OB) {
   'use strict';
   const FILES = ['bg','bike','portrait','face_ok','face_hurt','face_crit','taxi','taxi_orange','taxi_blue','taxi_green','sedan','sedan_black','sedan_red',
-    'green','green_yellow','green_purple','bus','tuktuk','tuktukp','seven','signs','ckrd','spirit','thatien','yen','vendor',
+    'green','green_yellow','green_purple','bus','tuktuk','tuktukp','signs','ckrd','spirit','thatien','yen','vendor',
     'noodle','storepanel','sangchai','thongbai','redsign','chedi','lamp','fence','boat0','boat1','boat2','yadom','plang',
+    'sv_store','sv_sign',
     'water0','water1','water2','water3','water4','water5','water6','water7',
     'facade0','facade1','facade2','facade3','facade4','facade5','towers0','towers1','towers2','title','atlas'];
   const IMG = {};
@@ -349,19 +350,18 @@
   // three different heights, so one clean piece (lintel, eave shadow, the three stripes, awning top) is repeated
   // level across the shop, mirrored every other time so the joins meet, and the photo's own logo panel goes on top.
   // Drawn after the texture pass so the photo pixels are left alone.
-  const STORE_TILE = { x: 14, w: 52, h: 108 };
-  function storeBand(g, W, y0) {
-    const src = IMG.facade1, logo = IMG.seven, t = STORE_TILE;
+  // The convenience store's whole ground floor, drawn from its own artwork: fascia, awning, glass, the shelves and
+  // fridges behind it. It used to be assembled here - one clean slice of the reference photo's stripe band repeated
+  // across the shopfront with a logo stamped on top, over whatever the photo had underneath. The art now arrives
+  // as one piece at exactly the size a facade's ground floor is, so it goes down in one blit and nothing else on
+  // the card shows through it. Only facades whose band is 'store' get it; every other shop is untouched.
+  function storeFront(g, W, y0) {
+    const src = IMG.sv_store; if (!src) return;
     g.save(); g.imageSmoothingEnabled = false;
-    for (let i = 0, x = 0; x < W; i++, x += t.w) {
-      const w = Math.min(t.w, W - x);
-      if (i % 2) { g.save(); g.translate(x + w, y0); g.scale(-1, 1); g.drawImage(src, t.x + t.w - w, 0, w, t.h, 0, 0, w, t.h); g.restore(); }
-      else g.drawImage(src, t.x, 0, w, t.h, x, y0, w, t.h);
-    }
-    g.drawImage(logo, Math.round((W - logo.width) / 2), y0 + 30);
+    g.drawImage(src, 0, 0, src.width, src.height, 0, y0, W, 300);
     g.restore();
   }
-  function sign247() { const logo = IMG.seven, s = 2.2, w = Math.round(logo.width * s), h = Math.round(logo.height * s), c = mk(w, h), g = c.getContext('2d'); g.imageSmoothingEnabled = false; g.drawImage(logo, 0, 0, w, h); return c; }
+  function sign247() { const s = IMG.sv_sign, c = mk(s.width, s.height), g = c.getContext('2d'); g.imageSmoothingEnabled = false; g.drawImage(s, 0, 0); return c; }
   function composeFacade(rng, opt) {
     const base = IMG[opt.cart ? 'facade0' : 'facade1'];
     const W = 260, floors = opt.floors, FH = 64, PAR = 14, TOP = 22, upperH = PAR + floors * FH;
@@ -454,8 +454,10 @@
       any = true;
     }
     if (any) { texturize(O, { amp: 0.08 }); g.drawImage(O, 0, TOP + upperH); }
-    if (opt.band === 'store') storeBand(g, W, TOP + upperH);
-    if (opt.awning) { g.save(); g.globalCompositeOperation = 'color'; g.fillStyle = opt.awning; g.fillRect(0, TOP + upperH + 96, W, 54); g.restore(); }
+    if (opt.band === 'store') storeFront(g, W, TOP + upperH);
+    // the awning tint recolours the shop's canopy, which is how a row gets its variety - but the convenience
+    // store's canopy is part of its own branding and has to stay the colour it is
+    if (opt.awning && opt.band !== 'store') { g.save(); g.globalCompositeOperation = 'color'; g.fillStyle = opt.awning; g.fillRect(0, TOP + upperH + 96, W, 54); g.restore(); }
     return c;
   }
   OB.composeFacade = composeFacade;
@@ -583,7 +585,11 @@
     // sliced by the crop (the taxi lost the bottom of its wheels and the top of its roof), which is what read as
     // cars being cut off; the sheet versions are whole. Colour variants are hue-rotated copies of the one taxi so
     // the traffic still varies.
-    const hueShift = (src, deg, light) => {
+    // Recolours the one saloon into the rest of the traffic. It rotates the hue and can lift or drop the whole
+    // thing, and now also pulls the colour in or out: the grey and the black saloon were the red one turned down
+    // and nothing else, which is not grey, it is maroon - two dark red cars in the traffic that were meant to be
+    // neither. Taking the colour out is what makes a grey car grey.
+    const hueShift = (src, deg, light, sat) => {
       const c = mk(src.width, src.height), g = c.getContext('2d');
       g.drawImage(src, 0, 0);
       const d = g.getImageData(0, 0, c.width, c.height), p = d.data, rad = deg * Math.PI / 180, cs = Math.cos(rad), sn = Math.sin(rad);
@@ -592,9 +598,13 @@
         const r = p[i], gr = p[i + 1], b = p[i + 2];
         // rotate around the luma axis, then optionally lift or drop the whole thing
         const lum = 0.213 * r + 0.715 * gr + 0.072 * b;
-        const nr = lum + cs * (r - lum) + sn * (0.143 * r + 0.140 * gr - 0.283 * b);
-        const ng = lum + cs * (gr - lum) + sn * (-0.136 * r + 0.030 * gr + 0.106 * b);
-        const nb = lum + cs * (b - lum) + sn * (0.787 * r - 0.715 * gr - 0.072 * b);
+        let nr = lum + cs * (r - lum) + sn * (0.143 * r + 0.140 * gr - 0.283 * b);
+        let ng = lum + cs * (gr - lum) + sn * (-0.136 * r + 0.030 * gr + 0.106 * b);
+        let nb = lum + cs * (b - lum) + sn * (0.787 * r - 0.715 * gr - 0.072 * b);
+        if (sat !== undefined && sat !== 1) {
+          const l2 = 0.213 * nr + 0.715 * ng + 0.072 * nb;
+          nr = l2 + (nr - l2) * sat; ng = l2 + (ng - l2) * sat; nb = l2 + (nb - l2) * sat;
+        }
         const k = light || 1;
         p[i] = OB.clamp(nr * k, 0, 255); p[i + 1] = OB.clamp(ng * k, 0, 255); p[i + 2] = OB.clamp(nb * k, 0, 255);
       }
@@ -605,9 +615,9 @@
       add('taxi_orange', hueShift(taxi, -28, 1.05), 940, { car: true });
       add('taxi_blue', hueShift(taxi, 150), 940, { car: true });
       add('taxi_green', hueShift(taxi, 95), 940, { car: true });
-      add('sedan', hueShift(taxi, 0, 0.42), 900, { car: true });        // dark grey saloon
-      add('sedan_black', hueShift(taxi, 0, 0.22), 900, { car: true });
-      add('sedan_red', hueShift(taxi, -12, 0.85), 900, { car: true });
+      add('sedan', hueShift(taxi, 0, 0.72, 0.09), 900, { car: true });        // grey saloon
+      add('sedan_black', hueShift(taxi, 0, 0.34, 0.07), 900, { car: true });  // black saloon
+      add('sedan_red', hueShift(taxi, -16, 1, 1.15), 900, { car: true });     // red saloon, and now actually red
       add('green', hueShift(taxi, 110, 0.9), 880, { car: true });
       add('green_yellow', hueShift(taxi, 60, 1.1), 880, { car: true });
       add('green_purple', hueShift(taxi, 205, 0.8), 880, { car: true }); }

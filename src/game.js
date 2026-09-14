@@ -177,12 +177,13 @@
   // Touch: no on-screen buttons. The bike accelerates by itself; steering follows the first finger's horizontal
   // position (left of centre steers left, further out steers harder); a second finger held while steering hard drifts;
   // three fingers brake. Menus are tapped. A small pause button sits top-right during play.
-  const touch = { steer: 0, active: false, fingers: 0, twoT: 0 };
+  const touch = { steer: 0, active: false, fingers: 0, twoT: 0, drift: 0, brake: 0 };
   const pointers = new Map();
+  const brakeHeld = new Set();   // fingers sitting on a brake button; they steer nothing
   // Drop every held input. A finger whose lift was never delivered (it happens on iOS) would otherwise sit in the
   // map for good: steering follows the first finger recorded, so the bike would steer itself and ignore the real
   // finger, and that carries into the next run. Same for a key whose keyup was lost while the page was away.
-  function resetInput() { pointers.clear(); touch.active = false; touch.steer = 0; touch.fingers = 0; for (const k in keys) keys[k] = false; driftReq = false; }
+  function resetInput() { pointers.clear(); brakeHeld.clear(); touch.active = false; touch.steer = 0; touch.fingers = 0; touch.drift = 0; touch.brake = 0; for (const k in keys) keys[k] = false; driftReq = false; }
   window.addEventListener('blur', resetInput); window.addEventListener('pagehide', resetInput);
   document.addEventListener('visibilitychange', () => { if (document.hidden) resetInput(); });
   // portrait phone: the stage is rotated 90 degrees by CSS to fill the screen; touches are mapped back through it
@@ -196,11 +197,21 @@
   function bindTouch() {
     const cv = document.getElementById('screen');
     G.touchMode = !!(window.matchMedia && window.matchMedia('(pointer: coarse)').matches);
+    const in2 = (b, p) => !!b && p.x >= b.x && p.x <= b.x + b.w && p.y >= b.y && p.y <= b.y + b.h;
     const upd = () => {
       touch.fingers = pointers.size;
+      touch.brake = brakeHeld.size ? 1 : 0;
+      // Drift used to need a second finger held down, which is not something a thumb on a phone can do while the
+      // other one steers. There is a pad at each side instead: steer hard and the thumb is already there, slide it
+      // into the pad and the bike drifts that way. The two-finger hold still works for anyone used to it.
+      touch.drift = 0;
+      for (const p of pointers.values()) {
+        if (in2(R.hit.driftL, p)) touch.drift = -1;
+        else if (in2(R.hit.driftR, p)) touch.drift = 1;
+      }
       if (!pointers.size) { touch.active = false; touch.steer = 0; return; }
       const first = pointers.values().next().value; // the first finger down steers; extra fingers only count
-      const rel = first / W - 0.5;
+      const rel = first.x / W - 0.5;
       touch.steer = OB.clamp(rel / 0.3, -1, 1); touch.active = true;
     };
     let swipeX = null;
@@ -215,7 +226,11 @@
       else if (G.mode === 'play' || G.mode === 'countdown') {
         // capture the pointer so a hard turn that drags the finger past the canvas edge keeps steering
         // instead of firing pointerleave (read as the finger lifting) and snapping the steering to zero
-        if (e.pointerType !== 'mouse') { pointers.set(e.pointerId, ix); upd(); try { cv.setPointerCapture(e.pointerId); } catch (_) {} }
+        if (e.pointerType !== 'mouse') {
+          if (inBox(R.hit.brakeL) || inBox(R.hit.brakeR)) brakeHeld.add(e.pointerId);
+          else pointers.set(e.pointerId, { x: ix, y: iy });
+          upd(); try { cv.setPointerCapture(e.pointerId); } catch (_) {}
+        }
       }
       else if (G.mode === 'radio') { // tap a station row (tap the selected one again to start), START button, or swipe
         swipeX = ix;
@@ -231,9 +246,9 @@
       else { startPressed = true; if (G.mode === 'title' && G.touchMode && !OB.isFullscreen() && !fsFailed) toggleFullscreen(true); }
       e.preventDefault();
     });
-    cv.addEventListener('pointermove', e => { if (pointers.has(e.pointerId)) { pointers.set(e.pointerId, toCanvas(e).x); upd(); } });
+    cv.addEventListener('pointermove', e => { if (pointers.has(e.pointerId)) { pointers.set(e.pointerId, toCanvas(e)); upd(); } });
     const end = e => {
-      if (pointers.has(e.pointerId)) { pointers.delete(e.pointerId); upd(); }
+      if (pointers.delete(e.pointerId) || brakeHeld.delete(e.pointerId)) upd();
       if (swipeX !== null && (G.mode === 'radio' || G.mode === 'course')) { const ix = toCanvas(e).x; if (Math.abs(ix - swipeX) > 70) tuneDir = ix > swipeX ? 1 : -1; }
       swipeX = null;
     };
@@ -241,7 +256,13 @@
     // The Touch API's touches list is the ground truth for fingers on the glass. Pointer events fire before the
     // matching touch event, so at each touch transition the map should hold exactly touches.length fingers; any
     // surplus is a finger whose lift went missing. Stale entries are always the oldest, so trim from the front.
-    const reconcile = e => { const n = e.touches ? e.touches.length : 0; let guard = 0; while (pointers.size > n && guard++ < 10) pointers.delete(pointers.keys().next().value); upd(); };
+    const reconcile = e => {
+      const n = e.touches ? e.touches.length : 0; let guard = 0;
+      while (pointers.size + brakeHeld.size > n && guard++ < 10) {
+        if (pointers.size) pointers.delete(pointers.keys().next().value); else brakeHeld.delete(brakeHeld.values().next().value);
+      }
+      upd();
+    };
     for (const t of ['touchstart', 'touchend', 'touchcancel']) cv.addEventListener(t, reconcile, { passive: true });
   }
 
@@ -740,9 +761,11 @@
     const yk = G.yadomT > 0 ? YADOM_SPEED : 1;
     const usingTouch = G.touchMode && touch.active;
     const flipping = !!G.crash;
-    // touch: one finger steers, a second finger held drifts (sustained while held), three fingers brake
-    const gas = mode === 'play' && !flipping ? (keys.gas || (G.touchMode && touch.fingers < 3)) : false;
-    const brake = mode === 'play' && !flipping ? (keys.brake || (G.touchMode && touch.fingers >= 3)) : true;
+    // touch: one finger steers, either brake button held brakes, a side pad (or a second finger) drifts
+    G.uiBrake = touch.brake; G.uiDrift = touch.drift;   // what the pads on screen should be showing
+    const tBrake = G.touchMode && (touch.brake > 0 || touch.fingers >= 3);
+    const gas = mode === 'play' && !flipping ? (keys.gas || (G.touchMode && !tBrake)) : false;
+    const brake = mode === 'play' && !flipping ? (keys.brake || tBrake) : true;
     let steerIn = mode === 'play' && !flipping ? (usingTouch ? touch.steer : ((keys.left ? -1 : 0) + (keys.right ? 1 : 0))) : 0;
     if (G.yadomT > 0 && mode === 'play' && !flipping) {
       // steer for the line, damped by how fast the bike is already moving sideways. Proportional control alone
@@ -752,7 +775,7 @@
       if (Math.abs(G.playerX) > 0.82 * seg.rw) steerIn = -Math.sign(G.playerX);   // never let it reach the wall
     }
     let askDrift = wantDrift;
-    if (G.touchMode && touch.fingers === 2 && mode === 'play') { if (G.drift > 0 && Math.sign(steerIn) === G.driftDir) G.drift = Math.max(G.drift, 0.3); else askDrift = true; }
+    if (G.touchMode && (touch.drift !== 0 || touch.fingers === 2) && mode === 'play') { if (G.drift > 0 && Math.sign(steerIn) === G.driftDir) G.drift = Math.max(G.drift, 0.3); else askDrift = true; }
     // drift: second finger / Shift while steering hard at speed. Sharper turn, less push from the curve, some speed scrubbed.
     if (askDrift && mode === 'play' && !flipping && G.drift <= 0 && pct > 0.3 && Math.abs(steerIn) > 0.5) { G.drift = 1.1; G.driftDir = Math.sign(steerIn); G.score += Math.round(300 * G.mult); A.sfx('drift'); G.skidCd = 0.4; }
     if (G.drift > 0) { G.drift -= dt; if (Math.abs(steerIn) < 0.3 || pct < 0.15 || Math.sign(steerIn) !== G.driftDir) G.drift = 0; }

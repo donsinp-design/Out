@@ -864,6 +864,27 @@
       TXT(ctx, G.touchMode ? 'TAP!' : 'PRESS E', ix + iw / 2, iy - 12, { size: 7, sy: 1.4, fill: pu > 0.5 ? '#fff' : '#3fd07a', outline: '#000', outlineW: 3, align: 'center' });
       R.hit.yadom = { x: ix - 18, y: iy - 22, w: iw + 36, h: ih + 40 };
     }
+    // Thumb controls. Braking wanted a third finger on the glass and drifting a second one held down, neither of
+    // which a pair of thumbs can do while one of them is steering. A brake sits at each top corner, so whichever
+    // hand is free can reach one, and a drift pad runs down each side: steering hard already puts the thumb at the
+    // edge, and sliding it into the pad drifts that way. Both old holds still work.
+    if (G.touchMode && (G.mode === 'play' || G.mode === 'countdown') && !G.paused) {
+      const pad = (b, label, on, col) => {
+        ctx.fillStyle = on ? 'rgba(255,255,255,0.16)' : 'rgba(0,0,0,0.3)';
+        ctx.fillRect(b.x, b.y, b.w, b.h);
+        ctx.fillStyle = on ? col : 'rgba(255,255,255,0.4)';
+        ctx.fillRect(b.x, b.y, b.w, 2); ctx.fillRect(b.x, b.y + b.h - 2, b.w, 2);
+        ctx.fillRect(b.x, b.y, 2, b.h); ctx.fillRect(b.x + b.w - 2, b.y, 2, b.h);
+        TXT(ctx, label, b.x + b.w / 2, b.y + b.h / 2 + 4, { size: 7, sy: 1.4, fill: on ? '#fff' : 'rgba(255,255,255,0.72)', outline: '#000', outlineW: 3, align: 'center' });
+      };
+      R.hit.brakeL = { x: 16, y: 92, w: 76, h: 44 };
+      R.hit.brakeR = { x: W - 92, y: 92, w: 76, h: 44 };
+      R.hit.driftL = { x: 0, y: 252, w: 94, h: 148 };
+      R.hit.driftR = { x: W - 94, y: 252, w: 94, h: 148 };
+      const bk = !!G.uiBrake, dr = G.uiDrift | 0;
+      pad(R.hit.brakeL, 'BRAKE', bk, '#ff6a5a'); pad(R.hit.brakeR, 'BRAKE', bk, '#ff6a5a');
+      pad(R.hit.driftL, 'DRIFT', dr < 0, '#7fe0ff'); pad(R.hit.driftR, 'DRIFT', dr > 0, '#7fe0ff');
+    } else { R.hit.brakeL = R.hit.brakeR = R.hit.driftL = R.hit.driftR = null; }
     // pause button (top-right corner)
     if (G.mode === 'play') {
       const bx = W - 40, by = 8, bw = 32, bh = 28;
@@ -912,7 +933,7 @@
 
   // ---------- overlays ----------
   // tap targets published for the input layer (rows: radio stations, nodes: course map, cells: name entry, start: START button)
-  R.hit = { rows: [], nodes: [], cells: [], start: null, pause: null, fs: null, yadom: null };
+  R.hit = { rows: [], nodes: [], cells: [], start: null, pause: null, fs: null, yadom: null, brakeL: null, brakeR: null, driftL: null, driftR: null };
   // pause menu: resume / restart / music / full screen / quit
   R.pause = function (G) {
     dim(0.55); R.hit.rows = [];
