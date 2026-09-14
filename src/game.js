@@ -10,7 +10,7 @@
     stageNo: 1, stageKey: 'charoenkrung', light: 'day', station: 0, hiScore: 0, msg: null, shake: 0, invuln: 0, bounce: 0,
     forkHint: null, wallCd: 0, countdown: 0, overReason: null, result: null, seed: 20240808, paused: false, route: [], cur: null, nextInfo: null, nextKey: null,
     muted: false, drawShift: -200, playerDX: 0, course: 0, touchMode: false,
-    wipe: 0, wipeDir: 1, parts: [], skidCd: 0, ranking: [], pendingRecord: null, nameEntry: null, smoke: [], smokeAcc: 0,
+    wipe: 0, wipeDir: 1, parts: [], skidCd: 0, ranking: [], pendingRecord: null, nameEntry: null,
     flip: null, rider: null, drift: 0, driftDir: 1, driftHold: 0, driftK: 0, marks: [], goT: 0, pops: [], mult: 1, multStep: 1, multWhy: '', multLock: 0, draft: 0,
     // sprite-driven rider / world state
     crash: null, bumpT: 0, braking: false, crouch: false, riderT: 0, vxLat: 0, flutter: 0,
@@ -96,11 +96,7 @@
   { const legacy = parseInt(store.get('ob_hiscore', 0)) || 0; if (legacy > 0 && !G.ranking.length) G.ranking.push({ name: 'ICE', score: legacy, route: '' }); }
   G.hiScore = G.ranking.length ? G.ranking[0].score : 0;
   G.station = Math.min(A.stations.length - 1, Math.max(0, store.get('ob_station', 0) | 0)); G.course = Math.min(6, Math.max(0, store.get('ob_course', 0) | 0));
-  // TEST MODE, off the pause menu: every stage runs at night and the ยาดม jar is always sitting there, so the
-  // night lighting and the power-up can be looked at on any stage without riding for them. It sticks between runs.
-  G.test = !!store.get('ob_test', 0);
-  G.motion = store.get('ob_motion', 0) ? 1 : 0;   // steer by tilting the phone
-  OB.lightFor = (themeKey) => G.test ? 'night' : T.THEMES[themeKey].light;
+  OB.lightFor = (themeKey) => T.THEMES[themeKey].light;
   OB.NAME_CHARS = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789'.split('').concat(['<', 'END']);
 
   // ---------- input ----------
@@ -143,53 +139,8 @@
   }
   function fsUnavailable() { fsFailed = true; say('FULL SCREEN NOT AVAILABLE HERE', 'iPhone: เพิ่มไปยังหน้าจอโฮม / ใช้แนวนอน', 2.6, '#ffd800', 10); }
   OB.isFullscreen = () => STANDALONE || !!(document.fullscreenElement || document.webkitFullscreenElement);
-  // ---------- steering by tilt ----------
-  // The phone's own sense of which way up it is, turned into a steering input. Two things have to be got right.
-  // Which way the picture is facing on the device: the page can be portrait while the phone is held sideways (the
-  // stage is turned 90 degrees by CSS to fill it), and the operating system may have turned it as well, so the
-  // total turn decides whether left and right live on the device's beta axis or its gamma one, and with which
-  // sign. The rule throughout is that the right-hand edge of the picture dipping steers right. And where level
-  // is: nobody holds a phone flat, so the angle it is at when the setting goes on becomes the neutral one, and
-  // it is taken again whenever the phone is turned.
-  const tilt = { raw: 0, zero: null, have: false, bound: false };
-  const TILT_FULL = 24, TILT_DEAD = 2.5;   // degrees off neutral for full lock, and the slack around neutral
-  function tiltAxis(e) {
-    const so = window.screen && window.screen.orientation;
-    const a = so && typeof so.angle === 'number' ? so.angle : (window.orientation || 0);
-    const phi = (((a + (document.body.classList.contains('rot') ? 90 : 0)) % 360) + 360) % 360;
-    const b = e.beta || 0, g = e.gamma || 0;
-    if (phi < 45 || phi >= 315) return g;     // picture upright on the device
-    if (phi < 135) return b;                  // turned a quarter clockwise - the usual one here
-    if (phi < 225) return -g;
-    return -b;
-  }
-  function onTilt(e) {
-    if (e.beta === null && e.gamma === null) return;
-    tilt.raw = tiltAxis(e); tilt.have = true;
-    if (tilt.zero === null) tilt.zero = tilt.raw;
-  }
-  function tiltSteer() {
-    if (!G.motion || !tilt.have || tilt.zero === null) return null;
-    const d = tilt.raw - tilt.zero, s = Math.abs(d) < TILT_DEAD ? 0 : (d - Math.sign(d) * TILT_DEAD);
-    return OB.clamp(s / (TILT_FULL - TILT_DEAD), -1, 1);
-  }
-  function bindTilt() { if (tilt.bound) return; tilt.bound = true; tilt.zero = null; window.addEventListener('deviceorientation', onTilt); }
-  function unbindTilt() { if (!tilt.bound) return; tilt.bound = false; window.removeEventListener('deviceorientation', onTilt); tilt.have = false; tilt.zero = null; }
-  function recentre() { tilt.zero = null; }
-  window.addEventListener('orientationchange', () => setTimeout(recentre, 300));
-  // iOS will not deliver a reading until it has been asked for, on a real tap. Turning the setting on is a tap,
-  // and so is the first touch of a session that starts with it already on.
-  function askMotion(fromMenu) {
-    const D = window.DeviceOrientationEvent;
-    if (!D) { if (fromMenu) { G.motion = 0; store.set('ob_motion', 0); say('NO MOTION SENSOR HERE', 'อุปกรณ์นี้ไม่มีเซ็นเซอร์', 2.4, '#ff6a5a', 10); } return; }
-    if (typeof D.requestPermission !== 'function') { bindTilt(); return; }
-    D.requestPermission().then(r => {
-      if (r === 'granted') { bindTilt(); if (fromMenu) say('TILT TO STEER', 'ถือให้นิ่งสักครู่', 2.2, '#7fe0ff', 10); }
-      else { G.motion = 0; store.set('ob_motion', 0); say('MOTION ACCESS REFUSED', 'อนุญาตใน Settings > Safari > Motion', 3, '#ff6a5a', 9); }
-    }).catch(() => { G.motion = 0; store.set('ob_motion', 0); });
-  }
-  const MENU = STANDALONE ? ['RESUME', 'RESTART', 'MUSIC', 'MOTION SENSOR', 'TEST MODE', 'QUIT TO TITLE']
-    : ['RESUME', 'RESTART', 'MUSIC', 'FULL SCREEN', 'MOTION SENSOR', 'TEST MODE', 'QUIT TO TITLE'];
+  const MENU = STANDALONE ? ['RESUME', 'RESTART', 'MUSIC', 'QUIT TO TITLE']
+    : ['RESUME', 'RESTART', 'MUSIC', 'FULL SCREEN', 'QUIT TO TITLE'];
   OB.MENU = MENU;
   function menuAction(i) {
     A.sfx('select');
@@ -198,15 +149,6 @@
     else if (m === 'RESTART') { G.paused = false; startRun(); }
     else if (m === 'MUSIC') { G.muted = !G.muted; A.setMusicVolume(G.muted ? 0 : A.MUSIC_VOL); }
     else if (m === 'FULL SCREEN') toggleFullscreen();
-    else if (m === 'MOTION SENSOR') {
-      G.motion = G.motion ? 0 : 1; store.set('ob_motion', G.motion);
-      if (G.motion) askMotion(true); else unbindTilt();
-    }
-    else if (m === 'TEST MODE') {
-      G.test = !G.test; store.set('ob_test', G.test ? 1 : 0);
-      G.light = OB.lightFor(T.STAGES[G.stageKey].theme);   // takes on the stage you are already riding
-      if (!G.test && G.yadomT <= 0) G.yadom = 0;
-    }
     else if (m === 'QUIT TO TITLE') { G.paused = false; A.stopMusic(); G.mode = 'title'; newGame(); }
   }
   function pauseKey(e) {
@@ -259,7 +201,6 @@
     let swipeX = null;
     cv.addEventListener('pointerdown', e => {
       A.init(); A.unlock();
-      if (G.motion && !tilt.bound) askMotion(false);   // the setting was already on when the page loaded
       const pc = toCanvas(e), ix = pc.x, iy = pc.y;
       const inBox = (b) => !!b && ix >= b.x && ix <= b.x + b.w && iy >= b.y && iy <= b.y + b.h;
       if (e.pointerType !== 'mouse' && !G.touchMode) { G.touchMode = true; fitPortrait(); }
@@ -292,18 +233,17 @@
     cv.addEventListener('pointermove', e => { const o = pointers.get(e.pointerId); if (o) { const c = toCanvas(e); o.x = c.x; o.y = c.y; upd(); } });
     // Drift is a tap. It used to want a second finger held down, then a pad at each side to slide a thumb into;
     // both were another thing to aim at while the first thumb was busy steering. A quick touch that does not
-    // travel is the whole gesture now - with the sensor steering, the finger has nothing else to do - and it
-    // still only takes hold when the bike is turning hard and moving, as the keyboard drift always has.
+    // travel is the whole gesture now, and it still only takes hold when the bike is turning hard and moving,
+    // as the keyboard drift always has.
     const TAP_MS = 240, TAP_MOVE = 26;
     const end = e => {
       const o = pointers.get(e.pointerId);
       if (o) {
         if (performance.now() - o.t < TAP_MS && Math.abs(o.x - o.x0) < TAP_MOVE && Math.abs(o.y - o.y0) < TAP_MOVE) {
           // the tap has already ended by the time this fires, so the steering it implied has to be remembered:
-          // the tilt if the sensor is doing the steering, otherwise which side of the screen the tap landed on
+          // which side of the screen the tap landed on
           driftReq = true;
-          const t = tiltSteer();
-          driftHint = t !== null ? t : OB.clamp((o.x0 / W - 0.5) / 0.3, -1, 1);
+          driftHint = OB.clamp((o.x0 / W - 0.5) / 0.3, -1, 1);
         }
         pointers.delete(e.pointerId); upd();
       } else if (brakeHeld.delete(e.pointerId)) upd();
@@ -340,31 +280,13 @@
     G.health = 100; G.ice = 100; G.score = 0; G.time = T.STAGES[G.stageKey].time + (G.stageNo > 1 ? 10 : 0);
     G.nearMiss = 0; G.yadom = 0; G.yadomT = 0;
     G.cars = []; G.msg = null; G.shake = 0; G.invuln = 0; G.forkHint = null; G.result = null; G.overReason = null; G.paused = false; G.mult = 1; G.multStep = 1; G.multArmed = false; G.multLock = 0; G.draft = 0;
-    G.wipe = 0; G.parts = []; G.skidCd = 0; G.smoke = []; G.smokeAcc = 0; G.pops = [];
+    G.wipe = 0; G.parts = []; G.skidCd = 0; G.pops = [];
     G.flip = null; G.rider = null; G.drift = 0; G.driftHold = 0; G.driftK = 0; G.marks = []; markLast = -1; G.goT = 0;
     for (let i = 0; i < 8; i++) spawnCar(60 + i * 40);
   }
-  // ---------- tyre smoke ----------
-  function emitSmoke(dir, ox) {
-    const cx = W / 2 + (G.drawShift || 0) + (G.playerDX || 0) + (ox || 0), by = 457 + (G.bounce || 0);
-    // OutRun-style: a low cloud that spreads sideways along the road behind the wheel and never rises
-    // arcade-style: a flat, ragged band of tiny pixel clusters spreading sideways along the road behind the wheel
-    const side = dir !== 0 ? dir : (Math.random() < 0.5 ? -1 : 1);
-    if (G.smoke.length > 640) G.smoke.shift();
-    const near = Math.random() < 0.35;
-    G.smoke.push({ x: cx + side * (2 + Math.random() * 14), y: by - 6 - Math.random() * 10, vx: side * (near ? 20 + Math.random() * 60 : 80 + Math.random() * 200) * (dir !== 0 ? 1.3 : 1),
-      vy: near ? -(4 + Math.random() * 10) : 4 + Math.random() * 10, life: 0.7 + Math.random() * 0.45, t: 0, seed: (Math.random() * 1000) | 0 });
-  }
-  function updateSmoke(dt) {
-    for (let i = G.smoke.length - 1; i >= 0; i--) {
-      const p = G.smoke[i]; p.t += dt; p.x += p.vx * dt; p.y += p.vy * dt;
-      p.vx *= Math.max(0, 1 - 2.4 * dt); // slows down so the band piles up
-      if (p.t >= p.life) G.smoke.splice(i, 1);
-    }
-  }
   // ---------- tyre marks ----------
   // The road behind the rear wheel is only a sliver in this view (the bike sits on the bottom edge), so rubber fixed to the
-  // tarmac would vanish within a frame. Like the smoke band, the trail is a screen-space effect: points laid under the tyre
+  // tarmac would vanish within a frame. The trail is a screen-space effect instead: points laid under the tyre
   // slide sideways with the road (so a drift smears them out to the side) and recede slowly, fading as they go.
   let markLast = -1;
   function layMark(w) {
@@ -776,7 +698,7 @@
     if (G.bumpT > 0) G.bumpT -= dt;
     if (G.splashT > 0) G.splashT -= dt;
     if (G.flutter > 0) G.flutter -= dt * 1.5;
-    updateParts(dt); updateSmoke(dt); updateCrash(dt);
+    updateParts(dt); updateCrash(dt);
     if (G.mode !== 'loading') WD.update(dt, G);
     G.bounce *= 0.8;
     // ice stack: a spring that lifts on knocks and compresses on landings; hop of the whole bike over bumps
@@ -833,13 +755,9 @@
     const tBrake = G.touchMode && (touch.brake > 0 || touch.fingers >= 3);
     const gas = mode === 'play' && !flipping ? (keys.gas || (G.touchMode && !tBrake)) : false;
     const brake = mode === 'play' && !flipping ? (keys.brake || tBrake) : true;
-    // with the sensor on, the phone steers and a finger on the glass is only there for the brake and the drift
-    // pads; the keys still work, so it does not lock anyone out on a desktop that happens to report a sensor
-    const tiltIn = tiltSteer();
     let steerIn = mode === 'play' && !flipping
-      ? (tiltIn !== null ? tiltIn : (usingTouch ? touch.steer : ((keys.left ? -1 : 0) + (keys.right ? 1 : 0))))
+      ? (usingTouch ? touch.steer : ((keys.left ? -1 : 0) + (keys.right ? 1 : 0)))
       : 0;
-    if (tiltIn !== null && mode === 'play' && !flipping && (keys.left || keys.right)) steerIn = (keys.left ? -1 : 0) + (keys.right ? 1 : 0);
     if (G.yadomT > 0 && mode === 'play' && !flipping) {
       // steer for the line, damped by how fast the bike is already moving sideways. Proportional control alone
       // overshot every target and put it on the kerb: at this speed the bike crosses a lane in a few frames.
@@ -892,17 +810,13 @@
     G.crouch = !flipping && ((gas && accel > G.maxSpeed * 0.12 && pct < 0.5) || pct > 0.9);
     G.cam.pitch += (((gas && accel > G.maxSpeed * 0.1 && pct < 0.7) ? 2 : 0) - G.cam.pitch) * Math.min(1, dt * 8);
     if (pct > 0.45 && Math.random() < dt * (0.4 + 4 * Math.pow(pct, 3))) G.stackV += (Math.random() - 0.5) * 6 * pct; // road buzz through the stack
-    // tyre smoke + rubber: burnout off the line and drifting lay marks; a hard corner at speed only smokes a little
-    const burnout = mode === 'play' && !flipping && gas && pct < 0.3, corner = mode === 'play' && !flipping && !drifting && pct > 0.6 && Math.abs(G.steer) > 0.85;
-    if (burnout) G.smokeAcc += dt * 520; else if (drifting) G.smokeAcc += dt * 460; else if (corner) G.smokeAcc += dt * 90;
-    while (G.smokeAcc >= 1) { G.smokeAcc -= 1; emitSmoke(drifting ? -G.driftDir : (corner ? -Math.sign(G.steer) : 0)); }
-    if (!burnout && !drifting && !corner) G.smokeAcc = 0;
+    // rubber: a burnout off the line and a drift both lay marks
+    const burnout = mode === 'play' && !flipping && gas && pct < 0.3;
     if (burnout && pct > 0.005) layMark(5); else if (drifting) layMark(7);
     if (mode === 'play' && G.skidCd <= 0 && (drifting || (pct > 0.55 && Math.abs(G.steer) > 0.85))) { A.sfx('skid'); G.skidCd = drifting ? 0.35 : 0.6; }
     if (mode === 'play') checkCollisions(seg);
     advance(dt, true);
     if (mode === 'play') {
-      if (G.test && !G.yadom && G.yadomT <= 0) G.yadom = 1;   // test mode: the jar is always sitting there
       if (G.yadomT > 0) { G.yadomT = Math.max(0, G.yadomT - dt); if (G.yadomT === 0) A.sfx('melt'); }
       else { G.time -= dt; if (G.time <= 0) { G.time = 0; gameOver('time'); return; } }   // the clock is held for the five seconds
       G.ice -= dt * (100 / 290) * (pct < 0.08 ? 1.6 : 1);
@@ -974,7 +888,7 @@
   OB.debugStage = function (key, no) {
     T.reset(); WD.clear(); G.stageNo = no || 2; G.stageKey = key; G.route = ['charoenkrung', key]; G.nextKey = null; G.nextInfo = null;
     G.cur = buildStage(key, G.stageNo); G.light = OB.lightFor(T.STAGES[key].theme);
-    G.position = 0; G.playerX = -0.3; G.speed = G.maxSpeed * 0.5; G.cars = []; G.time = 90; G.mode = 'play'; G.drawShift = 0; G.smoke = []; G.parts = [];
+    G.position = 0; G.playerX = -0.3; G.speed = G.maxSpeed * 0.5; G.cars = []; G.time = 90; G.mode = 'play'; G.drawShift = 0; G.parts = [];
     G.flip = null; G.rider = null; G.drift = 0; G.driftHold = 0; G.driftK = 0; G.marks = []; markLast = -1; G.goT = 0; G.crash = null; G.pops = []; G.mult = 1; G.multStep = 1; G.multArmed = false; G.multLock = 0; G.draft = 0;
     for (let i = 0; i < 8; i++) spawnCar(40 + i * 45);
   };

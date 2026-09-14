@@ -709,15 +709,6 @@
     ctx.restore();
   }
 
-  // smoke cluster shapes: [dx, dy, grey] in 2px cells; grey cells sit low for the shaded underside
-  const PUFFS = [
-    [[0, 0, 0], [1, 0, 0], [-1, 0, 0], [0, -1, 0], [0, 1, 1]],
-    [[0, 0, 0], [1, 0, 0], [-1, 0, 0], [0, -1, 0], [1, -1, 0], [0, 1, 1], [1, 1, 1], [-1, 1, 1]],
-    [[0, 0, 0], [1, 0, 0], [2, 0, 0], [-1, 0, 0], [0, -1, 0], [1, -1, 0], [0, 1, 1], [1, 1, 1], [2, 1, 1]],
-    [[0, 0, 0], [1, 0, 0], [0, 1, 1]],
-    [[0, 0, 0], [-1, 0, 0], [1, 0, 0], [-2, 0, 0], [2, 0, 1], [0, -1, 0], [-1, 1, 1], [1, 1, 1]],
-    [[0, 0, 0], [1, 0, 0], [0, -1, 0], [1, -1, 0], [-1, 0, 1], [2, 0, 1], [0, 1, 1], [1, 1, 1]]
-  ];
   // ---------- rider (sprite-sheet frames) ----------
   const RS = 178 / 137; // sheet rider frames drawn at the height the bike has always had on screen
   const ROWS = [0.30, 0.45, 0.60, 0.74]; // ice stack rows as fractions of a rider frame's height: top of row 3 ... bottom of row 1
@@ -791,7 +782,7 @@
     // shadow stays on the road under a hopping bike
     { const h = G.hopY || 0, k = Math.max(0.4, 1 - h / 200), sx = cx + (G.crash ? 0 : 2);
       if (!G.crash) { ctx.fillStyle = 'rgba(0,0,0,' + (0.35 * k).toFixed(2) + ')'; ctx.beginPath(); ctx.ellipse(sx, groundY - 6, 40 * k, 7 * k, 0, 0, Math.PI * 2); ctx.fill(); } }
-    // rubber: a dark trail from the rear tyre that smears sideways with the road under the smoke
+    // rubber: a dark trail from the rear tyre that smears sideways with the road
     if (G.marks && G.marks.length > 1) {
       ctx.save(); ctx.lineCap = 'butt';
       for (let i = 1; i < G.marks.length; i++) {
@@ -801,18 +792,6 @@
         ctx.beginPath(); ctx.moveTo(a.x, a.y); ctx.lineTo(b.x, b.y); ctx.stroke();
       }
       ctx.restore();
-    }
-    // tyre smoke: flat ragged band of 2px pixel clusters, white with grey speckle, dithering out (no soft fades)
-    if (G.smoke && G.smoke.length) {
-      const C = 2;
-      for (const p of G.smoke) {
-        const k = p.t / p.life, keep = k < 0.65 ? 1 : 1 - (k - 0.65) / 0.35;
-        const x = Math.round(p.x / C) * C, y = Math.round(p.y / C) * C, cells = PUFFS[p.seed % PUFFS.length];
-        for (let i = 0; i < cells.length; i++) {
-          if ((((i * 7 + p.seed) % 10) / 10) > keep) continue;
-          const c = cells[i]; ctx.fillStyle = c[2] ? '#c8c9cc' : '#f4f4f5'; ctx.fillRect(x + c[0] * C, y + c[1] * C, C, C);
-        }
-      }
     }
     // puddle splash off the rear wheel
     if (G.splashT > 0) { const f = WD.F('WATER_SPLASH_L'); if (f) { const s = G.splashSide || 1, k = OB.clamp(G.splashT / 0.32, 0, 1); WD.blit(ctx, f, cx + s * 30, groundY + 2, f.w * 1.5 * (1.3 - k * 0.3), f.h * 1.5, s < 0, 0, Math.min(1, k * 2.5)); } }
@@ -983,8 +962,6 @@
     items.forEach((label, i) => {
       const ry = y + 56 + i * RH, sel = i === (G.menuSel || 0);
       let text = label; if (label === 'MUSIC') text = 'MUSIC ' + (G.muted ? 'OFF' : 'ON'); if (label === 'FULL SCREEN' && OB.isFullscreen && OB.isFullscreen()) text = 'EXIT FULL SCREEN';
-      if (label === 'TEST MODE') text = 'TEST MODE ' + (G.test ? 'ON' : 'OFF');
-      if (label === 'MOTION SENSOR') text = 'MOTION SENSOR ' + (G.motion ? 'ON' : 'OFF');
       ctx.fillStyle = sel ? 'rgba(255,216,0,0.2)' : 'rgba(255,255,255,0.05)'; ctx.fillRect(x + 14, ry, w - 28, RH - 6);
       if (sel) arrow(x + 32, ry + RH / 2 - 3, 1, 6, '#ffd800', '#000');
       TXT(ctx, text, W / 2 + 8, ry + RH / 2 + 4, { size: 9, sy: 1.4, fill: sel ? '#ffd800' : '#e8ecf4', outline: '#000', outlineW: 3, align: 'center' });
@@ -1142,7 +1119,7 @@
     ctx.restore();
     // the controls live here now, not on the title screen
     const l1 = G.touchMode
-      ? (G.motion ? 'TILT TO STEER   -   AUTO GAS   -   BRAKE IN EITHER TOP CORNER' : 'FINGER LEFT / RIGHT STEERS   -   AUTO GAS   -   BRAKE IN EITHER TOP CORNER')
+      ? 'FINGER LEFT / RIGHT STEERS   -   AUTO GAS   -   BRAKE IN EITHER TOP CORNER'
       : 'ARROWS STEER   -   UP GAS   -   DOWN BRAKE';
     const l2 = G.touchMode ? 'TAP WHILE TURNING HARD TO DRIFT' : 'SHIFT (OR DOUBLE TAP THE ARROW) WHILE TURNING HARD TO DRIFT';
     TXT(ctx, l1, W / 2, 292, { size: 7, sy: 1.4, fill: '#fff', outline: '#000', outlineW: 3, align: 'center' });
