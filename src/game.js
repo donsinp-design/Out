@@ -113,6 +113,7 @@
   function newDay() { G.day = dayKey(); G.week = weekKey(); G.seed = G.day; }
   newDay();
   OB.dayKey = dayKey; OB.weekKey = weekKey;
+  G.ghostOn = store.get('ob_ghost', 1) ? 1 : 0;      // riding against today's leader, on unless turned off
   OB.lightFor = (themeKey) => T.THEMES[themeKey].light;
   OB.NAME_CHARS = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789'.split('').concat(['<', 'END']);
 
@@ -156,8 +157,8 @@
   }
   function fsUnavailable() { fsFailed = true; say('FULL SCREEN NOT AVAILABLE HERE', 'iPhone: เพิ่มไปยังหน้าจอโฮม / ใช้แนวนอน', 2.6, '#ffd800', 10); }
   OB.isFullscreen = () => STANDALONE || !!(document.fullscreenElement || document.webkitFullscreenElement);
-  const MENU = STANDALONE ? ['RESUME', 'RESTART', 'MUSIC', 'QUIT TO TITLE']
-    : ['RESUME', 'RESTART', 'MUSIC', 'FULL SCREEN', 'QUIT TO TITLE'];
+  const MENU = STANDALONE ? ['RESUME', 'RESTART', 'MUSIC', 'GHOST', 'QUIT TO TITLE']
+    : ['RESUME', 'RESTART', 'MUSIC', 'FULL SCREEN', 'GHOST', 'QUIT TO TITLE'];
   OB.MENU = MENU;
   function menuAction(i) {
     A.sfx('select');
@@ -166,6 +167,7 @@
     else if (m === 'RESTART') { G.paused = false; startRun(); }
     else if (m === 'MUSIC') { G.muted = !G.muted; A.setMusicVolume(G.muted ? 0 : A.MUSIC_VOL); }
     else if (m === 'FULL SCREEN') toggleFullscreen();
+    else if (m === 'GHOST') { G.ghostOn = G.ghostOn ? 0 : 1; store.set('ob_ghost', G.ghostOn); if (G.ghostOn) ghostStart(); else { G.ghost = null; G.ghostCar = null; } }
     else if (m === 'QUIT TO TITLE') { G.paused = false; A.stopMusic(); G.mode = 'title'; newGame(); }
   }
   function pauseKey(e) {
@@ -471,10 +473,16 @@
       db.doc(ghostDoc()).onSnapshot(s => { NET.ghost = s.exists ? s.data() : null; }, () => { });
     } catch (e) { NET.state = 'off'; }
   })();
+  // One row per rider, holding their best. Filing every run as its own row let one person's afternoon take all
+  // twenty places, which is a log rather than a leaderboard: a new score replaces that rider's own entry when it
+  // beats it and is dropped when it does not, so the board is always everybody's best and nothing else.
   async function pushBoard(path, row) {
     const doc = NET.db.doc(path), snap = await doc.get();
     const cur = (snap.exists && Array.isArray((snap.data() || {}).top)) ? (snap.data().top || []).slice() : [];
-    cur.push(row); cur.sort((a, b) => b.score - a.score);
+    const mine = cur.findIndex(r => r && r.name === row.name);
+    if (mine < 0) cur.push(row);
+    else if (row.score > cur[mine].score) cur[mine] = row;
+    cur.sort((a, b) => b.score - a.score);
     const top = cur.slice(0, BOARD_MAX);
     await doc.set({ top });
     return top;
@@ -510,8 +518,13 @@
   // Only ride against a ghost that took the same forks: once the routes part, the two of you are on different
   // roads and its distance means nothing here.
   function ghostStart() {
-    const g = NET.ghost;
-    G.ghost = (g && Array.isArray(g.pos) && g.pos.length > 8) ? { t: 0, dt: g.dt || REC_DT, pos: g.pos, x: g.x || [], name: g.name || '???', route: g.route || '', pz: 0, gx: 0, live: true } : null;
+    G.ghost = null; G.ghostCar = null;
+    if (!G.ghostOn) return;
+    const world = NET.ghost, mine = myGhost();
+    // today's leader if the store has given us one, otherwise your own best of today
+    const g = (world && Array.isArray(world.pos) && world.pos.length > 8 && (!mine || (world.score | 0) >= mine.score)) ? world : mine;
+    if (!g) return;
+    G.ghost = { t: 0, dt: g.dt || REC_DT, pos: g.pos, x: g.x || [], name: g.name || '???', route: g.route || '', score: g.score || 0, mine: g === mine, pz: 0, gx: 0, live: true };
   }
   function ghostTick(dt) {
     const gh = G.ghost; if (!gh) { G.ghostCar = null; return; }
@@ -536,6 +549,17 @@
   // Nothing in the game ever clears storage, and a rebuild published to the same address keeps the same origin, so
   // these survive it. Reads are defensive on purpose - anything unreadable is treated as "no days yet" and merged
   // into rather than replaced, so a single bad value can never take the rest of the day's runs with it.
+  // Your own best of today, kept here as well. Without it there is nothing to ride against until somebody has
+  // taken the day's lead on a page that has the shared store at all - which on a fresh day, or on a copy of the
+  // game hosted anywhere else, is nobody, ever. So the world leader is the ghost when there is one and your own
+  // morning is the ghost when there is not.
+  const MYGHOST_KEY = 'ob_ghost_v1';
+  function myGhost() { const g = store.get(MYGHOST_KEY, null); return (g && g.day === G.day && Array.isArray(g.pos) && g.pos.length > 8) ? g : null; }
+  function keepMyGhost(score) {
+    const cur = myGhost();
+    if (!G.rec || G.rec.pos.length < 9 || (cur && cur.score >= Math.floor(score))) return;
+    store.set(MYGHOST_KEY, { day: G.day, name: savedName() || 'YOU', score: Math.floor(score), route: routeStr(), dt: REC_DT, pos: G.rec.pos, x: G.rec.x });
+  }
   const DAYS_KEY = 'ob_days_v1', DAYS_KEEP = 14, DAY_ROWS = 10;
   function allDays() { const d = store.get(DAYS_KEY, null); return (d && typeof d === 'object' && !Array.isArray(d)) ? d : {}; }
   function todayRuns() { const r = allDays()[String(G.day)]; return Array.isArray(r) ? r : []; }
@@ -557,11 +581,26 @@
   // The name is remembered between runs: once it has been entered, a new record is filed under it straight away and
   // the entry screen is skipped, so a crash restarts immediately. Hold RENAME on the game over screen to change it.
   function savedName() { const n = String(store.get('ob_name', '') || '').toUpperCase().replace(/[^A-Z0-9]/g, '').slice(0, 3); return n || null; }
+  // One entry per rider on the local top five as well: five rows all holding the same name is not a ranking, it is
+  // one person's afternoon. A better score replaces theirs, a worse one is dropped.
   function fileRecord(rec, name) {
     OB.net.submit(name, rec.score, rec.route, rec.run);
-    G.ranking.push({ name, score: Math.floor(rec.score), route: rec.route });
+    const sc = Math.floor(rec.score), mine = G.ranking.findIndex(r => r.name === name);
+    if (mine < 0) G.ranking.push({ name, score: sc, route: rec.route });
+    else if (sc > G.ranking[mine].score) G.ranking[mine] = { name, score: sc, route: rec.route };
     G.ranking.sort((a, b) => b.score - a.score); G.ranking = G.ranking.slice(0, 5);
     store.set('ob_ranking', G.ranking); G.hiScore = G.ranking[0].score; G.pendingRecord = null; G.nameEntry = null;
+  }
+  // Every run that ends goes through here. It used to be only the ones that beat the fifth-best score this phone
+  // had ever seen, which meant an ordinary run reached no board at all and never left a ghost behind - so on most
+  // days there was nothing to ride against, because nothing had ever been filed.
+  function finishRun(score, reason) {
+    logRun(score, reason);
+    keepMyGhost(score);
+    const rec = { score: score, route: routeStr(), run: G.rec };
+    const name = savedName();
+    if (name) fileRecord(rec, name);                     // straight onto the boards under the name already given
+    else if (score >= 1000) G.pendingRecord = rec;       // no name yet: ask once, on the game over screen
   }
   function enterName(force) {
     const saved = savedName();
@@ -794,9 +833,8 @@
   function gameOver(reason) {
     if (G.mode === 'over') return;
     G.mode = 'over'; G.overReason = reason; G.forkHint = null; G.overSel = 0; A.stopMusic(); A.sfx('over'); resetInput();
-    logRun(G.score, reason);                          // logged whether or not it beat anything
     OB.savedNameLabel = savedName(); OB.MENU_OVER = OB.savedNameLabel ? ['RETRY', 'TITLE', 'RENAME'] : ['RETRY', 'TITLE'];
-    if (qualifies(G.score)) G.pendingRecord = { score: G.score, route: routeStr(), run: G.rec };
+    finishRun(G.score, reason);
   }
   function progress(seg) {
     const cur = G.cur; if (!cur) return;
@@ -825,8 +863,7 @@
       G.mode = 'goal'; G.forkHint = null; A.sfx('goal'); G.goalT = 0;
       const timeBonus = Math.ceil(G.time) * 3000, iceBonus = Math.round(G.ice) * 5000;
       const total = G.score + timeBonus + iceBonus;
-      logRun(total, 'goal');
-      const newHi = qualifies(total); if (newHi) G.pendingRecord = { score: total, route: routeStr(), run: G.rec };
+      const newHi = qualifies(total); finishRun(total, 'goal');
       G.result = { timeBonus, iceBonus, route: G.route.map(k => T.STAGES[k].name.eng).join(' > '), total, reveal: -1, newHi, base: G.score };
     }
   }

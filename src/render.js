@@ -930,11 +930,20 @@
     // the chain: everything clean since the last shop, and it all goes at the next crash
     if (G.mode === 'play' && G.chain > 0)
       TXT(ctx, 'CHAIN ' + G.chain, W - 8, 96, { size: 8, sy: 1.4, fill: G.chain >= 10 ? '#3fd07a' : '#e8ecf4', outline: '#000', outlineW: 3, align: 'right' });
-    // the split to today's leader, plus or minus, wherever they are on the road right now
-    if (G.mode === 'play' && G.ghost && G.ghost.live) {
-      const d = Math.round((G.position - G.ghost.pz) / 1000), ahead = d >= 0;
-      TXT(ctx, (ahead ? '+' : '') + d + 'km  ' + G.ghost.name, W - 8, 112,
-        { size: 7, sy: 1.4, fill: ahead ? '#3fd07a' : '#ff6a5a', outline: '#000', outlineW: 3, align: 'right' });
+    // The split to the ghost, and - just as important - a line when there is not one, because a ghost that never
+    // appears and a ghost that is switched off look exactly alike from the saddle.
+    if (G.mode === 'play' && G.ghostOn) {
+      const gh = G.ghost;
+      if (gh && gh.live) {
+        const d = (G.position - gh.pz) / 1000, ahead = d >= 0;
+        const near = Math.abs(G.position - gh.pz) < 58000;      // inside the draw distance: you can actually see them
+        TXT(ctx, (ahead ? 'AHEAD ' : 'BEHIND ') + Math.abs(d).toFixed(1) + 'km  ' + gh.name + (gh.mine && gh.name !== 'YOU' ? ' (YOU)' : ''), W - 8, 112,
+          { size: 7, sy: 1.4, fill: ahead ? '#3fd07a' : '#ff6a5a', outline: '#000', outlineW: 3, align: 'right' });
+        if (!near) TXT(ctx, ahead ? 'OUT OF SIGHT BEHIND' : 'OUT OF SIGHT AHEAD', W - 8, 126,
+          { size: 6, sy: 1.4, fill: '#9fb2c0', outline: '#000', outlineW: 3, align: 'right' });
+      } else {
+        TXT(ctx, gh ? 'GHOST FINISHED' : 'NO GHOST TODAY YET', W - 8, 112, { size: 6, sy: 1.4, fill: '#6b7785', outline: '#000', outlineW: 3, align: 'right' });
+      }
     }
     // speed
     const kmh = Math.round(G.speed / G.maxSpeed * 296);
@@ -991,6 +1000,7 @@
     items.forEach((label, i) => {
       const ry = y + 56 + i * RH, sel = i === (G.menuSel || 0);
       let text = label; if (label === 'MUSIC') text = 'MUSIC ' + (G.muted ? 'OFF' : 'ON'); if (label === 'FULL SCREEN' && OB.isFullscreen && OB.isFullscreen()) text = 'EXIT FULL SCREEN';
+      if (label === 'GHOST') text = 'GHOST ' + (G.ghostOn ? 'ON' : 'OFF');
       ctx.fillStyle = sel ? 'rgba(255,216,0,0.2)' : 'rgba(255,255,255,0.05)'; ctx.fillRect(x + 14, ry, w - 28, RH - 6);
       if (sel) arrow(x + 32, ry + RH / 2 - 3, 1, 6, '#ffd800', '#000');
       TXT(ctx, text, W / 2 + 8, ry + RH / 2 + 4, { size: 9, sy: 1.4, fill: sel ? '#ffd800' : '#e8ecf4', outline: '#000', outlineW: 3, align: 'center' });
