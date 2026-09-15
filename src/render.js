@@ -131,6 +131,19 @@
   }
 
   const MEDAL = ['#ffd700', '#c8d2dc', '#cd7f32'];   // gold, silver, bronze: a placing, never an advantage
+  // The ghost rider, blued once from the sprite's own art and kept. It has to be tinted on its own canvas: doing
+  // it on the frame, where every pixel of road and sky behind is already opaque, composites the fill over all of
+  // them and draws a solid blue rectangle around the bike instead of colouring the bike.
+  const GHOSTED = new WeakMap();
+  function ghostImg(img) {
+    let g = GHOSTED.get(img); if (g) return g;
+    const c = OB.makeCanvas(img.width, img.height), x = c.getContext('2d');
+    x.drawImage(img, 0, 0);
+    x.globalCompositeOperation = 'source-atop';           // only where the rider is
+    x.fillStyle = 'rgba(120,205,255,0.62)';
+    x.fillRect(0, 0, c.width, c.height);
+    GHOSTED.set(img, c); return c;
+  }
   function drawSprite(img, destX, destY, destW, destH, clipY, flip) {
     if (destW < 1 || destH < 1) return;
     const clipH = clipY ? Math.max(0, destY + destH - clipY) : 0;
@@ -344,10 +357,8 @@
         const destW = c.spr.w * cs * K, destH = destW * img.height / img.width;
         const dx0 = cx + cs * c.offset * RW * seg.rw * K - destW / 2;
         if (c.ghost) {   // a rider who is not really there: see through them, and never light or sound them
-          ctx.save(); ctx.globalAlpha = 0.42;
-          drawSprite(img, dx0, cy - destH, destW, destH, seg.clip, false);
-          ctx.globalCompositeOperation = 'source-atop'; ctx.fillStyle = 'rgba(127,224,255,0.45)';
-          ctx.fillRect(dx0, cy - destH, destW, destH);
+          ctx.save(); ctx.globalAlpha = 0.45;
+          drawSprite(ghostImg(img), dx0, cy - destH, destW, destH, seg.clip, false);
           ctx.restore();
           continue;
         }
