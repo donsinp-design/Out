@@ -130,6 +130,7 @@
     }
   }
 
+  const MEDAL = ['#ffd700', '#c8d2dc', '#cd7f32'];   // gold, silver, bronze: a placing, never an advantage
   function drawSprite(img, destX, destY, destW, destH, clipY, flip) {
     if (destW < 1 || destH < 1) return;
     const clipH = clipY ? Math.max(0, destY + destH - clipY) : 0;
@@ -247,7 +248,9 @@
     WD.bucket(actorsBySeg, WD.actors.items, WD.actors.n, segLen); WD.bucket(debrisBySeg, WD.debris.items, WD.debris.n, segLen);
     // cars per segment
     const carsBySeg = new Map();
-    for (const c of G.cars) { const i = Math.floor(c.z / segLen); if (!carsBySeg.has(i)) carsBySeg.set(i, []); carsBySeg.get(i).push(c); }
+    const push = c => { const i = Math.floor(c.z / segLen); if (!carsBySeg.has(i)) carsBySeg.set(i, []); carsBySeg.get(i).push(c); };
+    for (const c of G.cars) push(c);
+    if (G.ghostCar) push(G.ghostCar);   // today's leader rides in the same draw order as the traffic
     // ---- ground pass (front to back) ----
     let maxy = H, x = 0, dx = -(baseSeg.curve * basePct);
     const projected = [];
@@ -340,6 +343,14 @@
         const img = (night && c.spr.night) ? c.spr.night : c.spr.img;
         const destW = c.spr.w * cs * K, destH = destW * img.height / img.width;
         const dx0 = cx + cs * c.offset * RW * seg.rw * K - destW / 2;
+        if (c.ghost) {   // a rider who is not really there: see through them, and never light or sound them
+          ctx.save(); ctx.globalAlpha = 0.42;
+          drawSprite(img, dx0, cy - destH, destW, destH, seg.clip, false);
+          ctx.globalCompositeOperation = 'source-atop'; ctx.fillStyle = 'rgba(127,224,255,0.45)';
+          ctx.fillRect(dx0, cy - destH, destW, destH);
+          ctx.restore();
+          continue;
+        }
         drawSprite(img, dx0, cy - destH, destW, destH, seg.clip, false);
         // brake lights and indicators (rear views only; the indicator sits on the side it announces)
         if (!c.oncoming && destW > 8 && cy <= seg.clip + destH) {
@@ -902,6 +913,29 @@
       ctx.fillStyle = 'rgba(0,0,0,0.45)'; ctx.fillRect(bx, by, bw, bh); ctx.fillStyle = G.paused ? '#ffd800' : '#fff'; ctx.fillRect(bx + 10, by + 7, 4, 14); ctx.fillRect(bx + 18, by + 7, 4, 14);
       R.hit.pause = { x: bx - 6, y: by - 6, w: bw + 12, h: bh + 12 };
     } else R.hit.pause = null;
+    // The load, as three bags that go dark as they burst. Two have to reach the next shop, so the third one is
+    // the margin: the bar under them marks where the run ends rather than where it is comfortable.
+    if (G.mode === 'play' || G.mode === 'countdown') {
+      const bx = 84, by = 54, bw = 15, bh = 19;   // under the health bar, clear of the portrait beside it
+      for (let i = 0; i < 3; i++) {
+        const on = i < G.bags, x = bx + i * (bw + 4);
+        ctx.fillStyle = on ? '#dff2ff' : 'rgba(0,0,0,0.42)'; ctx.fillRect(x, by, bw, bh);
+        ctx.fillStyle = on ? '#7fc7ee' : 'rgba(255,255,255,0.22)'; ctx.fillRect(x, by, bw, 3); ctx.fillRect(x, by + bh - 4, bw, 4);
+        if (on) { ctx.fillStyle = '#4b9ed0'; ctx.fillRect(x + 3, by + 7, bw - 6, 2); ctx.fillRect(x + 3, by + 11, bw - 6, 2); }
+      }
+      ctx.fillStyle = G.bags >= 2 ? 'rgba(63,208,122,0.9)' : '#ff6a5a';
+      ctx.fillRect(bx, by + bh + 3, (bw + 4) * 2 - 4, 2);
+      TXT(ctx, 'NEED 2', bx + (bw + 4) * 3 + 4, by + bh - 4, { size: 6, sy: 1.4, fill: G.bags >= 2 ? '#9fb2c0' : '#ff6a5a', outline: '#000', outlineW: 3 });
+    }
+    // the chain: everything clean since the last shop, and it all goes at the next crash
+    if (G.mode === 'play' && G.chain > 0)
+      TXT(ctx, 'CHAIN ' + G.chain, W - 8, 96, { size: 8, sy: 1.4, fill: G.chain >= 10 ? '#3fd07a' : '#e8ecf4', outline: '#000', outlineW: 3, align: 'right' });
+    // the split to today's leader, plus or minus, wherever they are on the road right now
+    if (G.mode === 'play' && G.ghost && G.ghost.live) {
+      const d = Math.round((G.position - G.ghost.pz) / 1000), ahead = d >= 0;
+      TXT(ctx, (ahead ? '+' : '') + d + 'km  ' + G.ghost.name, W - 8, 112,
+        { size: 7, sy: 1.4, fill: ahead ? '#3fd07a' : '#ff6a5a', outline: '#000', outlineW: 3, align: 'right' });
+    }
     // speed
     const kmh = Math.round(G.speed / G.maxSpeed * 296);
     TXT(ctx, String(kmh), 74, H - 16, { size: 15, sy: 1.3, fill: '#fff', outline: '#000', outlineW: 4, align: 'right' });
@@ -1002,14 +1036,23 @@
     ctx.imageSmoothingEnabled = true; ctx.drawImage(art, ax, 0, aw, ah); ctx.imageSmoothingEnabled = false;
     // flashing start prompt between the wheel and the credit line
     if (Math.floor(G.t * 2.5) % 2 === 0) TXT(ctx, G.touchMode ? 'TAP TO START' : 'PRESS START', W / 2, 434, { size: 14, sy: 1.3, fill: '#fff', outline: '#000', outlineW: 6, align: 'center' });
-    // world board on the left margin when the page has one, this phone's best on the right
-    const net = OB.net || {}, wb = net.board || [];
-    if (wb.length && ax > 150) {
-      const wx = 12, wy = H - 132;
-      TXT(ctx, 'WORLD BEST', wx, wy, { size: 7, sy: 1.4, fill: '#7fe0ff', outline: '#000', outlineW: 3 });
-      for (let i = 0; i < 5; i++) { const r = wb[i]; if (!r) break;
-        TXT(ctx, (i + 1) + ' ' + ((r.name || '???') + '   ').slice(0, 3) + ' ' + OB.pad(r.score, 7), wx, wy + 16 + i * 13,
-          { size: 6, sy: 1.4, fill: i === 0 ? '#ffd800' : '#fff', outline: '#000', outlineW: 3 }); }
+    // Today's board and this week's, in the left margin. A medal is the top three of a board and nothing more -
+    // it never hands anybody a faster bike, so the leader stays beatable by riding rather than by having won.
+    const net = OB.net || {};
+    const board = (title, list, bx, by, col) => {
+      TXT(ctx, title, bx, by, { size: 7, sy: 1.4, fill: col, outline: '#000', outlineW: 3 });
+      if (!list.length) { TXT(ctx, 'NOBODY YET', bx, by + 15, { size: 6, sy: 1.4, fill: '#6b7785', outline: '#000', outlineW: 3 }); return; }
+      for (let i = 0; i < 5; i++) {
+        const r = list[i]; if (!r) break;
+        const y = by + 15 + i * 13;
+        if (i < 3) { ctx.fillStyle = MEDAL[i]; ctx.fillRect(bx, y - 6, 6, 6); ctx.fillStyle = 'rgba(0,0,0,0.5)'; ctx.fillRect(bx + 1, y - 5, 1, 4); }
+        TXT(ctx, ((r.name || '???') + '   ').slice(0, 3) + ' ' + OB.pad(r.score, 7), bx + 10, y,
+          { size: 6, sy: 1.4, fill: i < 3 ? MEDAL[i] : '#dfe4ec', outline: '#000', outlineW: 3 });
+      }
+    };
+    if (ax > 150) {
+      board('TODAY', net.day || [], 12, H - 196, '#ffd800');
+      board('THIS WEEK', net.week || [], 12, H - 106, '#7fe0ff');
     }
     // best riders in the right margin
     const rk = G.ranking || [];
@@ -1130,10 +1173,15 @@
     band(120, 200, 0.6);
     TXT(ctx, 'GAME OVER', W / 2, 176, { size: 30, sy: 1.3, fill: '#ff3b3b', outline: '#000', outlineW: 8, align: 'center' });
     const r = G.overReason;
-    const reasons = { time: ['TIME UP', 'หมดเวลา'], ice: ['ICE MELTED', 'น้ำแข็งละลายหมด'], wreck: ['WRECKED', 'รถพัง'] };
+    const reasons = { time: ['TIME UP', 'หมดเวลา'], ice: ['ICE MELTED', 'น้ำแข็งละลายหมด'], wreck: ['WRECKED', 'รถพัง'], short: ['LOAD TOO SHORT', 'น้ำแข็งไม่พอส่ง'] };
     TXT(ctx, reasons[r][0], W / 2, 212, { size: 13, sy: 1.4, fill: '#fff', outline: '#000', outlineW: 5, align: 'center' });
     TXT(ctx, reasons[r][1], W / 2, 240, { size: 20, font: 'Kanit', weight: '700', fill: '#ffd23f', outline: '#000', outlineW: 5, align: 'center' });
-    TXT(ctx, 'SCORE ' + OB.pad(G.score, 7) + '    STAGE ' + G.stageNo, W / 2, 276, { size: 9, sy: 1.4, fill: '#fff', outline: '#000', outlineW: 4, align: 'center' });
+    TXT(ctx, 'SCORE ' + OB.pad(G.score, 7) + '    STAGE ' + G.stageNo + '    ' + G.delivered + ' BAGS', W / 2, 276, { size: 9, sy: 1.4, fill: '#fff', outline: '#000', outlineW: 4, align: 'center' });
+    if (G.medal) {
+      const names = ['', 'GOLD', 'SILVER', 'BRONZE'];
+      ctx.fillStyle = MEDAL[G.medal - 1]; ctx.fillRect(W / 2 - 64, 288, 10, 10);
+      TXT(ctx, names[G.medal] + ' TODAY', W / 2 + 6, 297, { size: 9, sy: 1.4, fill: MEDAL[G.medal - 1], outline: '#000', outlineW: 4, align: 'center' });
+    }
     R.hit.rows = [];
     if (G.pendingRecord) { if (Math.floor(G.t * 2) % 2 === 0) TXT(ctx, 'PRESS START', W / 2, 306, { size: 10, sy: 1.3, fill: '#ffd800', outline: '#000', outlineW: 4, align: 'center' }); return; }
     const labels = OB.MENU_OVER || ['RETRY', 'TITLE'];

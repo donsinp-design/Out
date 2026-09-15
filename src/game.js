@@ -12,6 +12,7 @@
     muted: false, drawShift: -200, playerDX: 0, course: 0, touchMode: false,
     wipe: 0, wipeDir: 1, parts: [], skidCd: 0, ranking: [], pendingRecord: null, nameEntry: null,
     flip: null, rider: null, drift: 0, driftDir: 1, driftHold: 0, driftCd: 0, driftK: 0, marks: [], goT: 0, pops: [], mult: 1, multStep: 1, multWhy: '', multLock: 0, draft: 0,
+    day: 0, week: 0, bags: 3, delivered: 0, chain: 0, chainBest: 0, rec: null, ghost: null, ghostCar: null, medal: 0,
     // sprite-driven rider / world state
     crash: null, bumpT: 0, braking: false, crouch: false, riderT: 0, vxLat: 0, flutter: 0,
     hopY: 0, hopV: 0, stackY: 0, stackV: 0, stackC: 0, splashT: 0, splashSide: 1,
@@ -96,6 +97,22 @@
   { const legacy = parseInt(store.get('ob_hiscore', 0)) || 0; if (legacy > 0 && !G.ranking.length) G.ranking.push({ name: 'ICE', score: legacy, route: '' }); }
   G.hiScore = G.ranking.length ? G.ranking[0].score : 0;
   G.station = Math.min(A.stations.length - 1, Math.max(0, store.get('ob_station', 0) | 0)); G.course = Math.min(6, Math.max(0, store.get('ob_course', 0) | 0));
+  // ---------- the daily road ----------
+  // The world was built from one constant, so every run anybody ever rode was the same city. The seed is the date
+  // now: today's road is the same road for everyone playing today, which is what makes one score comparable to
+  // another, and tomorrow is a different one to learn. Both keys are UTC so the day turns over at the same instant
+  // everywhere rather than handing whoever lives furthest east a private head start.
+  function dayKey(d) { d = d || new Date(); return d.getUTCFullYear() * 10000 + (d.getUTCMonth() + 1) * 100 + d.getUTCDate(); }
+  function weekKey(d) {
+    const t = new Date(d || Date.now());
+    t.setUTCHours(0, 0, 0, 0);
+    t.setUTCDate(t.getUTCDate() + 4 - (t.getUTCDay() || 7));            // ISO weeks: the Thursday decides the year
+    const jan1 = new Date(Date.UTC(t.getUTCFullYear(), 0, 1));
+    return t.getUTCFullYear() * 100 + Math.ceil(((t - jan1) / 86400000 + 1) / 7);
+  }
+  function newDay() { G.day = dayKey(); G.week = weekKey(); G.seed = G.day; }
+  newDay();
+  OB.dayKey = dayKey; OB.weekKey = weekKey;
   OB.lightFor = (themeKey) => T.THEMES[themeKey].light;
   OB.NAME_CHARS = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789'.split('').concat(['<', 'END']);
 
@@ -267,6 +284,7 @@
     return info;
   }
   function newGame(key, stageNo) {
+    newDay();                        // a tab left open overnight starts the next run on the new day's road
     T.reset(); WD.clear();
     G.crash = null; G.bumpT = 0; G.hopY = 0; G.hopV = 0; G.stackY = 0; G.stackV = 0; G.stackC = 0; G.splashT = 0; G.flutter = 0; G.cam.pitch = 0; G.cam.lean = 0; G.cam.squash = 0; G.cam.zoom = 1;
     G.stageNo = stageNo || 1; G.stageKey = key || 'charoenkrung'; G.route = [G.stageKey]; G.nextKey = null; G.nextInfo = null;
@@ -278,6 +296,8 @@
     G.cars = []; G.msg = null; G.shake = 0; G.invuln = 0; G.forkHint = null; G.result = null; G.overReason = null; G.paused = false; G.mult = 1; G.multStep = 1; G.multArmed = false; G.multLock = 0; G.draft = 0;
     G.wipe = 0; G.parts = []; G.skidCd = 0; G.pops = [];
     G.flip = null; G.rider = null; G.drift = 0; G.driftHold = 0; G.driftCd = 0; G.driftK = 0; G.marks = []; markLast = -1; G.goT = 0;
+    G.bags = BAGS_FULL; G.delivered = 0; G.chain = 0; G.chainBest = 0; G.medal = 0;
+    recStart(); ghostStart();
     for (let i = 0; i < 8; i++) spawnCar(60 + i * 40);
   }
   // ---------- tyre marks ----------
@@ -357,8 +377,35 @@
   G.breakCombo = function (hard) {
     if (G.yadomT > 0) return;                         // and the combo survives พลังยาดม whatever it drives through
     G.mult = 1; G.multStep = 1; G.multArmed = false;  // earn it back by getting flat out again
+    G.chain = 0;                                      // and everything strung together since the last shop with it
     G.multLock = MULT_LOCK;                           // and not straight away: a hit costs you the next few seconds
   };
+  // ---------- the load ----------
+  // The ice was only ever a second clock. It is cargo now: three bags leave the depot with you and at least two
+  // have to reach each shop, so a leg is a delivery you can fail rather than a distance you survive. A bag bursts
+  // when the bike goes down - not when it is scraped or nudged - which buys exactly one wipeout a leg and makes
+  // the second one the end of the run. The count resets to three at every checkpoint, so a leg is never lost
+  // before it starts.
+  const BAGS_FULL = 3, BAGS_NEED = 2;
+  function loseBag() {
+    if (G.yadomT > 0 || G.bags <= 0) return;
+    G.bags--;
+    pop(G.bags >= BAGS_NEED ? 'BAG BURST  ' + G.bags + '/' + BAGS_FULL : 'LOAD SHORT  ' + G.bags + '/' + BAGS_FULL, G.bags >= BAGS_NEED ? '#7fe0ff' : '#ff6a5a');
+  }
+  // Delivering is the leg's whole point, so it is where the leg's riding gets paid: the chain is everything clean
+  // you strung together to get here, and it banks at the shop door or not at all.
+  function deliver(label) {
+    if (G.bags < BAGS_NEED) { gameOver('short'); return false; }
+    const bagPts = Math.round(G.bags * 4000 * G.mult), chainPts = Math.round(G.chain * 250 * G.mult);
+    G.delivered += G.bags; G.score += bagPts + chainPts;
+    G.chainBest = Math.max(G.chainBest, G.chain); G.chain = 0;
+    G.bags = BAGS_FULL;
+    if (chainPts > 0) pop(label + '  ' + G.delivered + ' BAGS  +' + (bagPts + chainPts), '#3fd07a');
+    return true;
+  }
+  // Everything clean, counted in a row. Distance alone made a wild run and a careful one land within about twice
+  // each other; the chain is what a leg was actually worth, and a crash takes all of it.
+  function chain(n) { G.chain += (n || 1); }
   // ---------- people crossing the road ----------
   // Someone stepping off the kerb is scenery with a scoreboard attached, never an obstacle: crossers are not in
   // the collision set at all, so nothing here can cost health, end a run or break the combo, and they always get
@@ -369,7 +416,7 @@
     if (G.mode !== 'play' || G.crash || G.yadomT > 0) return;
     if (gap < 0.17) { G.shake = Math.max(G.shake, 0.2); G.bumpT = 0.22; G.flutter = 1; pop('ระวัง!', '#ff6a5a'); return; }
     if (gap > PED_NEAR) return;
-    const pts = Math.round(250 * G.mult); G.score += pts;
+    chain(); const pts = Math.round(250 * G.mult); G.score += pts;
     A.sfx('whoosh'); G.flutter = 1;
     pop('CLOSE ONE +' + pts, '#7fe0ff');
   };
@@ -390,35 +437,97 @@
     }
     return Math.min(1, best);
   }
-  // ---------- online leaderboard ----------
-  // Published as an artifact, the page gets a shared document store, so the board is world-wide with no account,
-  // key or server of our own. Anywhere else (the standalone build, the iPhone app) claude.use is absent, the whole
-  // thing stays null and the game runs on its local ranking exactly as before. The whole board is ONE document
-  // holding a top-20 array rather than a document per score, so it can never grow into the store's document cap.
-  const NET = { db: null, board: [], state: 'off' };
+  // ---------- leaderboards ----------
+  // Published as an artifact, the page gets a shared document store, so the boards are world-wide with no account,
+  // key or server of our own. Anywhere else - the standalone build, the iPhone app, a copy dropped on a plain web
+  // host - claude.use is simply absent, everything below stays null, and the game runs on its own local ranking.
+  // Nothing here may ever throw into a run.
+  //
+  // Three boards, each ONE document holding a sorted array rather than a document per score, so no amount of
+  // playing can grow into the store's document cap. Today's and this week's are the ones that matter: an all-time
+  // list nobody can catch is not a competition, and a board that resets is a reason to come back tomorrow.
+  const NET = { db: null, day: [], week: [], board: [], state: 'off', ghost: null };
   OB.net = NET;
-  const BOARD_DOC = 'scores/global', BOARD_MAX = 20;
+  const BOARD_MAX = 20;
+  const dayDoc = () => 'boards/d' + G.day, weekDoc = () => 'boards/w' + G.week, ghostDoc = () => 'ghosts/d' + G.day;
+  // Gold, silver, bronze for the top three of a board, and nothing else: a medal says where you placed, it never
+  // hands anybody a faster bike or a longer clock. A game that pays its best players in power keeps them in front
+  // by arithmetic rather than by riding, and everyone behind stops being able to catch up at all.
+  NET.medalFor = function (list, name, score) {
+    if (!name) return 0;
+    for (let i = 0; i < 3 && i < list.length; i++) if (list[i].name === name && list[i].score === Math.floor(score)) return i + 1;
+    return 0;
+  };
   (async function () {
     try {
       if (!window.claude || typeof claude.use !== 'function') return;
       const db = await claude.use('db');
       if (!db) return;
       NET.db = db; NET.state = 'on';
-      db.doc(BOARD_DOC).onSnapshot(
-        s => { const d = s.exists ? s.data() : null; NET.board = (d && Array.isArray(d.top)) ? d.top : []; },
+      const watch = (path, key) => db.doc(path).onSnapshot(
+        s => { const d = s.exists ? s.data() : null; NET[key] = (d && Array.isArray(d.top)) ? d.top : []; },
         () => { NET.state = 'off'; });
+      watch(dayDoc(), 'day'); watch(weekDoc(), 'week'); watch('scores/global', 'board');
+      db.doc(ghostDoc()).onSnapshot(s => { NET.ghost = s.exists ? s.data() : null; }, () => { });
     } catch (e) { NET.state = 'off'; }
   })();
-  NET.submit = async function (name, score, route) {
+  async function pushBoard(path, row) {
+    const doc = NET.db.doc(path), snap = await doc.get();
+    const cur = (snap.exists && Array.isArray((snap.data() || {}).top)) ? (snap.data().top || []).slice() : [];
+    cur.push(row); cur.sort((a, b) => b.score - a.score);
+    const top = cur.slice(0, BOARD_MAX);
+    await doc.set({ top });
+    return top;
+  }
+  NET.submit = async function (name, score, route, rec) {
     if (!NET.db) return;
+    const row = { name: name, score: Math.floor(score), route: route || '', at: Date.now() };
     try {
-      const doc = NET.db.doc(BOARD_DOC), snap = await doc.get();
-      const cur = (snap.exists && Array.isArray((snap.data() || {}).top)) ? (snap.data().top || []).slice() : [];
-      cur.push({ name: name, score: Math.floor(score), route: route || '', at: Date.now() });
-      cur.sort((a, b) => b.score - a.score);
-      await doc.set({ top: cur.slice(0, BOARD_MAX) });
+      const dayTop = await pushBoard(dayDoc(), row);
+      await pushBoard(weekDoc(), row);
+      await pushBoard('scores/global', row);
+      G.medal = NET.medalFor(dayTop, name, score);
+      // The ghost is whoever leads today, so it is filed only by the run that takes the lead. Positions are
+      // rounded and sampled a few times a second: a whole run is some tens of kilobytes, well inside a document.
+      if (rec && rec.pos.length > 8 && dayTop.length && dayTop[0].name === name && dayTop[0].score === Math.floor(score)) {
+        await NET.db.doc(ghostDoc()).set({ name: name, score: Math.floor(score), route: route || '', dt: REC_DT, pos: rec.pos, x: rec.x });
+      }
     } catch (e) { /* a full store or a lost grant must never break the run */ }
   };
+  // ---------- the ghost ----------
+  // Today's leader, riding today's road beside you. Not a replay of your own best: the point is that the person
+  // to beat is in front of you where you can see the line they took, and the split says by how much. Recorded as
+  // distance-along-the-road and lane position five times a second, which is enough to read a line and small
+  // enough to be one document.
+  const REC_DT = 0.2;
+  function recStart() { G.rec = { t: 0, pos: [], x: [] }; }
+  function recTick(dt) {
+    const r = G.rec; if (!r) return;
+    r.t += dt;
+    while (r.pos.length * REC_DT <= r.t) { r.pos.push(Math.round(G.position)); r.x.push(Math.round(G.playerX * 1000)); }
+    if (r.pos.length > 6000) r.pos.length = r.x.length = 6000;        // ~20 minutes; nobody rides that long
+  }
+  // Only ride against a ghost that took the same forks: once the routes part, the two of you are on different
+  // roads and its distance means nothing here.
+  function ghostStart() {
+    const g = NET.ghost;
+    G.ghost = (g && Array.isArray(g.pos) && g.pos.length > 8) ? { t: 0, dt: g.dt || REC_DT, pos: g.pos, x: g.x || [], name: g.name || '???', route: g.route || '', pz: 0, gx: 0, live: true } : null;
+  }
+  function ghostTick(dt) {
+    const gh = G.ghost; if (!gh) { G.ghostCar = null; return; }
+    gh.t += dt;
+    const f = gh.t / gh.dt, i = Math.floor(f);
+    if (i >= gh.pos.length - 1) { gh.live = false; G.ghostCar = null; return; }   // they finished; nothing left to chase
+    const k = f - i;
+    gh.pz = gh.pos[i] + (gh.pos[i + 1] - gh.pos[i]) * k;
+    gh.gx = (gh.x[i] + (gh.x[i + 1] - gh.x[i]) * k) / 1000;
+    gh.live = gh.route === '' || routeStr() === gh.route.slice(0, routeStr().length);
+    // handed to the renderer as one more vehicle, so it sits in the same per-segment draw order as the traffic
+    // and is occluded by the road exactly as a real bike would be
+    if (!gh.live || !OB.SPR.moto) { G.ghostCar = null; return; }
+    const gz = gh.pz + G.playerZ, gseg = T.findSegment(gz);
+    G.ghostCar = { z: gz, offset: gh.gx / (gseg.rw || 1), spr: OB.SPR.moto, ghost: true, brake: 0, ind: 0, oncoming: false, speed: 0 };
+  }
   // ---------- records / name entry ----------
   function qualifies(score) { return score >= 1000 && (G.ranking.length < 5 || score > G.ranking[G.ranking.length - 1].score); }
   function routeStr() { return G.route.map(k => T.STAGES[k].name.eng.split(' ').map(w => w[0]).join('')).join('>'); }
@@ -426,7 +535,7 @@
   // the entry screen is skipped, so a crash restarts immediately. Hold RENAME on the game over screen to change it.
   function savedName() { const n = String(store.get('ob_name', '') || '').toUpperCase().replace(/[^A-Z0-9]/g, '').slice(0, 3); return n || null; }
   function fileRecord(rec, name) {
-    OB.net.submit(name, rec.score, rec.route);
+    OB.net.submit(name, rec.score, rec.route, rec.run);
     G.ranking.push({ name, score: Math.floor(rec.score), route: rec.route });
     G.ranking.sort((a, b) => b.score - a.score); G.ranking = G.ranking.slice(0, 5);
     store.set('ob_ranking', G.ranking); G.hiScore = G.ranking[0].score; G.pendingRecord = null; G.nameEntry = null;
@@ -573,11 +682,11 @@
     G.shake = 1; G.invuln = 1.3; G.bounce = 4; G.breakCombo();
     if (kind === 'car') {
       const carX = car.offset * T.findSegment(car.z).rw;
-      if (car.oncoming) { G.speed = 0; G.health -= 18; G.ice -= 8; wipeout(3, carX); }
-      else if (G.speed - car.speed > G.maxSpeed * 0.55) { G.speed = 0; G.health -= 16; G.ice -= 7; wipeout(2, carX); } // rear-ended at speed: over the bars
+      if (car.oncoming) { G.speed = 0; G.health -= 18; G.ice -= 8; loseBag(); wipeout(3, carX); }
+      else if (G.speed - car.speed > G.maxSpeed * 0.55) { G.speed = 0; G.health -= 16; G.ice -= 7; loseBag(); wipeout(2, carX); } // rear-ended at speed: over the bars
       else { G.speed = Math.min(G.speed, Math.max(0, car.speed * 0.45)); G.health -= 12; G.ice -= 5; G.bumpT = 0.35; G.stackKick(0.8); WD.spillIce(G.position + G.playerZ, G.playerX, 0, 3, G.speed, G.playerX >= carX ? 1 : -1); }
       G.playerX += (G.playerX >= carX ? 1 : -1) * 0.12;
-    } else if (kind === 'sprite') { G.speed = 0; G.health -= 20; G.ice -= 10; wipeout(3, car); G.playerX += (G.playerX > 0 ? -1 : 1) * 0.18; }
+    } else if (kind === 'sprite') { G.speed = 0; G.health -= 20; G.ice -= 10; loseBag(); wipeout(3, car); G.playerX += (G.playerX > 0 ? -1 : 1) * 0.18; }
     else if (kind === 'wall') { G.speed *= 0.4; G.health -= 8; G.ice -= 3; }
     else if (kind === 'median') { G.speed *= 0.3; G.health -= 8; G.ice -= 4; }
     if (G.health <= 0) { G.health = 0; gameOver('wreck'); }
@@ -634,7 +743,7 @@
             const big = c.spr.w >= 1100;
             A.sfx('whoosh'); G.shake = Math.max(G.shake, big ? 0.3 : 0.2); G.bumpT = 0.35; G.flutter = 1;
             G.playerX += (G.playerX >= c.offset * cseg.rw ? 1 : -1) * (big ? 0.03 : 0.02); G.stackKick(big ? 0.5 : 0.35);
-            const pts = Math.round((c.oncoming ? 600 : 300) * G.mult); G.score += pts;
+            chain(); const pts = Math.round((c.oncoming ? 600 : 300) * G.mult); G.score += pts;
           pop('NEAR MISS +' + pts, c.oncoming ? '#ff6a5a' : '#ffd800');
           if (!G.yadom && G.yadomT <= 0 && ++G.nearMiss >= YADOM_NEED) { G.nearMiss = 0; G.yadom = 1; A.sfx('check'); pop('ยาดม READY', '#3fd07a'); }
           horn(c, 0.9, true);                              // they lean on it as you cut past
@@ -663,7 +772,7 @@
     if (G.mode === 'over') return;
     G.mode = 'over'; G.overReason = reason; G.forkHint = null; G.overSel = 0; A.stopMusic(); A.sfx('over'); resetInput();
     OB.savedNameLabel = savedName(); OB.MENU_OVER = OB.savedNameLabel ? ['RETRY', 'TITLE', 'RENAME'] : ['RETRY', 'TITLE'];
-    if (qualifies(G.score)) G.pendingRecord = { score: G.score, route: routeStr() };
+    if (qualifies(G.score)) G.pendingRecord = { score: G.score, route: routeStr(), run: G.rec };
   }
   function progress(seg) {
     const cur = G.cur; if (!cur) return;
@@ -679,17 +788,20 @@
     }
     if (cur.checkAt && !cur.checkDone && i >= cur.checkAt) {
       cur.checkDone = true;
+      if (!deliver('DELIVERED')) return;              // short load: the run ends at the shop door
       const bonus = Math.ceil(G.time) * 1000; G.score += bonus;
       G.stageNo++; G.stageKey = G.nextKey; G.route.push(G.nextKey); G.cur = G.nextInfo; G.nextInfo = null;
       const st = T.STAGES[G.stageKey]; G.time += st.time; G.ice = Math.min(100, G.ice + 22); G.health = Math.min(100, G.health + 12);
       G.light = OB.lightFor(st.theme);
-      say('CHECK POINT', 'ต่อเวลา +' + st.time + '  ·  ' + st.name.thai, 2.6, '#ffd800', 22); A.sfx('check');
+      say('CHECK POINT', 'ส่งน้ำแข็ง  ·  ต่อเวลา +' + st.time, 2.6, '#ffd800', 22); A.sfx('check');
     }
     if (cur.goalAt && !cur.goalDone && i >= cur.goalAt) {
-      cur.goalDone = true; G.mode = 'goal'; G.forkHint = null; A.sfx('goal'); G.goalT = 0;
+      cur.goalDone = true;
+      if (!deliver('LAST DROP')) return;
+      G.mode = 'goal'; G.forkHint = null; A.sfx('goal'); G.goalT = 0;
       const timeBonus = Math.ceil(G.time) * 3000, iceBonus = Math.round(G.ice) * 5000;
       const total = G.score + timeBonus + iceBonus;
-      const newHi = qualifies(total); if (newHi) G.pendingRecord = { score: total, route: routeStr() };
+      const newHi = qualifies(total); if (newHi) G.pendingRecord = { score: total, route: routeStr(), run: G.rec };
       G.result = { timeBonus, iceBonus, route: G.route.map(k => T.STAGES[k].name.eng).join(' > '), total, reveal: -1, newHi, base: G.score };
     }
   }
@@ -793,7 +905,7 @@
       G.drift = 1.1; G.driftDir = Math.sign(driftIn); G.driftHold = 0.45;
       // the bonus and the skid are once a corner, not once a press: with a press starting a drift outright,
       // flicking from side to side would otherwise pay out several times a second
-      if (G.driftCd <= 0) { G.score += Math.round(300 * G.mult); A.sfx('drift'); G.skidCd = 0.4; G.driftCd = 1.2; }
+      if (G.driftCd <= 0) { chain(); G.score += Math.round(300 * G.mult); A.sfx('drift'); G.skidCd = 0.4; G.driftCd = 1.2; }
     }
     if (G.drift > 0) {
       G.drift -= dt;
@@ -834,7 +946,7 @@
     const burnout = mode === 'play' && !flipping && gas && pct < 0.3;
     if (burnout && pct > 0.005) layMark(5); else if (drifting) layMark(7);
     if (mode === 'play' && G.skidCd <= 0 && (drifting || (pct > 0.55 && Math.abs(G.steer) > 0.85))) { A.sfx('skid'); G.skidCd = drifting ? 0.35 : 0.6; }
-    if (mode === 'play') checkCollisions(seg);
+    if (mode === 'play') { recTick(dt); ghostTick(dt); checkCollisions(seg); }
     advance(dt, true);
     if (mode === 'play') {
       if (G.yadomT > 0) { G.yadomT = Math.max(0, G.yadomT - dt); if (G.yadomT === 0) A.sfx('melt'); }
@@ -905,6 +1017,7 @@
 
   // debug/testing hook: jump straight into a given stage
   OB.debugCrash = function (hx) { wipeout(3, hx); }; OB.debugDrift = function () { driftReq = true; };
+  OB.debugHit = function (kind) { G.invuln = 0; G.wallCd = 0; crash(kind || 'sprite', 0); };   // the real collision path, bag and all
   OB.debugStage = function (key, no) {
     T.reset(); WD.clear(); G.stageNo = no || 2; G.stageKey = key; G.route = ['charoenkrung', key]; G.nextKey = null; G.nextInfo = null;
     G.cur = buildStage(key, G.stageNo); G.light = OB.lightFor(T.STAGES[key].theme);
