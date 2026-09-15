@@ -528,6 +528,29 @@
     const gz = gh.pz + G.playerZ, gseg = T.findSegment(gz);
     G.ghostCar = { z: gz, offset: gh.gx / (gseg.rw || 1), spr: OB.SPR.moto, ghost: true, brake: 0, ind: 0, oncoming: false, speed: 0 };
   }
+  // ---------- today, on this phone ----------
+  // Every finished run is written here the moment it ends - not only the ones that beat something. A list you can
+  // get on to only by breaking your own record looks exactly like a list that keeps wiping itself: you ride, the
+  // run ends, nothing is there. So: one key, one entry per run, kept per day.
+  //
+  // Nothing in the game ever clears storage, and a rebuild published to the same address keeps the same origin, so
+  // these survive it. Reads are defensive on purpose - anything unreadable is treated as "no days yet" and merged
+  // into rather than replaced, so a single bad value can never take the rest of the day's runs with it.
+  const DAYS_KEY = 'ob_days_v1', DAYS_KEEP = 14, DAY_ROWS = 10;
+  function allDays() { const d = store.get(DAYS_KEY, null); return (d && typeof d === 'object' && !Array.isArray(d)) ? d : {}; }
+  function todayRuns() { const r = allDays()[String(G.day)]; return Array.isArray(r) ? r : []; }
+  OB.todayRuns = todayRuns;
+  function logRun(score, reason) {
+    if (!(score > 0)) return;
+    const all = allDays(), key = String(G.day);
+    const rows = (Array.isArray(all[key]) ? all[key] : []).slice();
+    rows.push({ s: Math.floor(score), b: G.delivered, c: G.chainBest, st: G.stageNo, r: reason || '', at: Date.now() });
+    rows.sort((a, b) => b.s - a.s);
+    all[key] = rows.slice(0, DAY_ROWS);
+    const keys = Object.keys(all).sort((a, b) => Number(b) - Number(a)).slice(0, DAYS_KEEP);   // a fortnight, newest first
+    const keep = {}; for (const k of keys) keep[k] = all[k];
+    store.set(DAYS_KEY, keep);
+  }
   // ---------- records / name entry ----------
   function qualifies(score) { return score >= 1000 && (G.ranking.length < 5 || score > G.ranking[G.ranking.length - 1].score); }
   function routeStr() { return G.route.map(k => T.STAGES[k].name.eng.split(' ').map(w => w[0]).join('')).join('>'); }
@@ -771,6 +794,7 @@
   function gameOver(reason) {
     if (G.mode === 'over') return;
     G.mode = 'over'; G.overReason = reason; G.forkHint = null; G.overSel = 0; A.stopMusic(); A.sfx('over'); resetInput();
+    logRun(G.score, reason);                          // logged whether or not it beat anything
     OB.savedNameLabel = savedName(); OB.MENU_OVER = OB.savedNameLabel ? ['RETRY', 'TITLE', 'RENAME'] : ['RETRY', 'TITLE'];
     if (qualifies(G.score)) G.pendingRecord = { score: G.score, route: routeStr(), run: G.rec };
   }
@@ -801,6 +825,7 @@
       G.mode = 'goal'; G.forkHint = null; A.sfx('goal'); G.goalT = 0;
       const timeBonus = Math.ceil(G.time) * 3000, iceBonus = Math.round(G.ice) * 5000;
       const total = G.score + timeBonus + iceBonus;
+      logRun(total, 'goal');
       const newHi = qualifies(total); if (newHi) G.pendingRecord = { score: total, route: routeStr(), run: G.rec };
       G.result = { timeBonus, iceBonus, route: G.route.map(k => T.STAGES[k].name.eng).join(' > '), total, reveal: -1, newHi, base: G.score };
     }

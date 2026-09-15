@@ -1054,14 +1054,20 @@
       board('TODAY', net.day || [], 12, H - 196, '#ffd800');
       board('THIS WEEK', net.week || [], 12, H - 106, '#7fe0ff');
     }
-    // best riders in the right margin
-    const rk = G.ranking || [];
-    if (rk.length) {
-      const rx = ax + aw + 14, ry = H - 120;
-      if (W - rx > 150) {
-        TXT(ctx, net.state === 'on' ? 'THIS PHONE' : 'BEST RIDERS', rx, ry, { size: 7, sy: 1.4, fill: '#ff37a8', outline: '#000', outlineW: 3 });
-        for (let i = 0; i < 3; i++) { const r = rk[i]; if (!r) break; TXT(ctx, (i + 1) + ['ST', 'ND', 'RD'][i] + ' ' + (r.name + '   ').slice(0, 3) + ' ' + OB.pad(r.score, 7), rx, ry + 16 + i * 14, { size: 6, sy: 1.4, fill: i === 0 ? '#ffd800' : '#fff', outline: '#000', outlineW: 3 }); }
+    // This phone's runs on today's road, in the right margin: every run that finished, not only the ones that beat
+    // something, so a session always leaves a trace. These are kept in the browser and a rebuild does not touch them.
+    const mine = OB.todayRuns ? OB.todayRuns() : [];
+    const rx = ax + aw + 14, ry = H - 168;
+    if (W - rx > 150) {
+      TXT(ctx, 'TODAY  THIS PHONE', rx, ry, { size: 7, sy: 1.4, fill: '#ff37a8', outline: '#000', outlineW: 3 });
+      if (!mine.length) TXT(ctx, 'NO RUNS YET', rx, ry + 15, { size: 6, sy: 1.4, fill: '#6b7785', outline: '#000', outlineW: 3 });
+      for (let i = 0; i < 6; i++) {
+        const r = mine[i]; if (!r) break;
+        TXT(ctx, OB.pad(r.s, 7) + '  ' + (r.b || 0) + ' BAGS', rx, ry + 15 + i * 13,
+          { size: 6, sy: 1.4, fill: i === 0 ? '#ffd800' : '#dfe4ec', outline: '#000', outlineW: 3 });
       }
+      const all = G.ranking || [];
+      if (all.length) TXT(ctx, 'ALL TIME ' + OB.pad(all[0].score, 7), rx, ry + 15 + 6 * 13 + 6, { size: 6, sy: 1.4, fill: '#7fe0ff', outline: '#000', outlineW: 3 });
     }
     // full screen toggle, top-right (F on a keyboard); not needed when launched from the home screen
     R.hit.fs = null;
