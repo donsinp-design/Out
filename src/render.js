@@ -884,23 +884,9 @@
       TXT(ctx, G.touchMode ? 'TAP!' : 'PRESS E', ix + iw / 2, iy - 12, { size: 7, sy: 1.4, fill: pu > 0.5 ? '#fff' : '#3fd07a', outline: '#000', outlineW: 3, align: 'center' });
       R.hit.yadom = { x: ix - 18, y: iy - 22, w: iw + 36, h: ih + 40 };
     }
-    // Thumb controls. Braking wanted a third finger on the glass, which a pair of thumbs cannot do while one of
-    // them is steering, so a brake sits at each top corner where whichever hand is free can reach one. Drifting is
-    // a tap - no button for it, because a button for it was another thing to aim at.
-    if (G.touchMode && (G.mode === 'play' || G.mode === 'countdown') && !G.paused) {
-      const pad = (b, label, on, col) => {
-        ctx.fillStyle = on ? 'rgba(255,255,255,0.16)' : 'rgba(0,0,0,0.3)';
-        ctx.fillRect(b.x, b.y, b.w, b.h);
-        ctx.fillStyle = on ? col : 'rgba(255,255,255,0.4)';
-        ctx.fillRect(b.x, b.y, b.w, 2); ctx.fillRect(b.x, b.y + b.h - 2, b.w, 2);
-        ctx.fillRect(b.x, b.y, 2, b.h); ctx.fillRect(b.x + b.w - 2, b.y, 2, b.h);
-        TXT(ctx, label, b.x + b.w / 2, b.y + b.h / 2 + 4, { size: 7, sy: 1.4, fill: on ? '#fff' : 'rgba(255,255,255,0.72)', outline: '#000', outlineW: 3, align: 'center' });
-      };
-      R.hit.brakeL = { x: 16, y: 92, w: 76, h: 44 };
-      R.hit.brakeR = { x: W - 92, y: 92, w: 76, h: 44 };
-      const bk = !!G.uiBrake;
-      pad(R.hit.brakeL, 'BRAKE', bk, '#ff6a5a'); pad(R.hit.brakeR, 'BRAKE', bk, '#ff6a5a');
-    } else { R.hit.brakeL = R.hit.brakeR = null; }
+    // There are no buttons on the glass any more. Braking had a pad in each top corner, put there because it
+    // wanted a third finger and a pair of thumbs cannot manage that while one of them is steering; a second
+    // thumb anywhere does it now, so the corners are clear.
     // pause button (top-right corner)
     if (G.mode === 'play') {
       const bx = W - 40, by = 8, bw = 32, bh = 28;
@@ -949,7 +935,7 @@
 
   // ---------- overlays ----------
   // tap targets published for the input layer (rows: radio stations, nodes: course map, cells: name entry, start: START button)
-  R.hit = { rows: [], nodes: [], cells: [], start: null, pause: null, fs: null, yadom: null, brakeL: null, brakeR: null };
+  R.hit = { rows: [], nodes: [], cells: [], start: null, pause: null, fs: null, yadom: null };
   // pause menu: resume / restart / music / full screen / quit
   R.pause = function (G) {
     dim(0.55); R.hit.rows = [];
@@ -1121,7 +1107,7 @@
     const l1 = G.touchMode
       ? 'PRESS THE LEFT OR RIGHT HALF TO DRIFT THAT WAY   -   AUTO GAS'
       : 'ARROWS STEER   -   UP GAS   -   DOWN BRAKE';
-    const l2 = G.touchMode ? 'BRAKE IN EITHER TOP CORNER' : 'SHIFT (OR DOUBLE TAP THE ARROW) WHILE TURNING HARD TO DRIFT';
+    const l2 = G.touchMode ? 'TWO FINGERS DOWN AT ONCE TO BRAKE' : 'SHIFT (OR DOUBLE TAP THE ARROW) WHILE TURNING HARD TO DRIFT';
     TXT(ctx, l1, W / 2, 292, { size: 7, sy: 1.4, fill: '#fff', outline: '#000', outlineW: 3, align: 'center' });
     TXT(ctx, l2, W / 2, 310, { size: 7, sy: 1.4, fill: '#ffd800', outline: '#000', outlineW: 3, align: 'center' });
   };
