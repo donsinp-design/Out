@@ -891,12 +891,14 @@
       ctx.restore();
       if (G.multWhy && m > 1.2) TXT(ctx, G.multWhy, 762, 74, { size: 6, sy: 1.4, fill: col, outline: '#000', outlineW: 3, align: 'center' });
     }
-    // the ยาดม jar, bottom right, waiting to be tapped. It bobs on its own nine frames and sits over a soft
-    // pulse so it reads as something to press rather than scenery; the hit box is generous for a thumb.
+    // The ยาดม jar, under the clock, waiting to be tapped. It bobs on its own nine frames and sits over a soft
+    // pulse so it reads as something to press rather than scenery; the hit box is generous for a thumb. It used
+    // to sit in the bottom right, where the one thing you have earned was furthest from where you are looking.
+    // Its prompt goes underneath it rather than above, so it never crowds the time.
     R.hit.yadom = null;
     if (G.mode === 'play' && G.yadom && OB.YADOM) {
       const f = OB.YADOM[Math.floor(G.t * 3.7) % OB.YADOM.length], iw = f.width, ih = f.height;
-      const ix = W - iw - 24, iy = H - ih - 104, pu = 0.5 + 0.5 * Math.sin(G.t * 5);   // clear of the stage name in the corner
+      const ix = Math.round(420 - iw / 2), iy = 56, pu = 0.5 + 0.5 * Math.sin(G.t * 5);
       ctx.save();
       ctx.globalCompositeOperation = 'lighter';
       const gr = ctx.createRadialGradient(ix + iw / 2, iy + ih / 2, 0, ix + iw / 2, iy + ih / 2, iw * 0.9);
@@ -904,8 +906,8 @@
       ctx.fillStyle = gr; ctx.fillRect(ix - iw / 2, iy - ih / 2, iw * 2, ih * 2);
       ctx.restore();
       ctx.drawImage(f, ix, iy);
-      TXT(ctx, G.touchMode ? 'TAP!' : 'PRESS E', ix + iw / 2, iy - 12, { size: 7, sy: 1.4, fill: pu > 0.5 ? '#fff' : '#3fd07a', outline: '#000', outlineW: 3, align: 'center' });
-      R.hit.yadom = { x: ix - 18, y: iy - 22, w: iw + 36, h: ih + 40 };
+      TXT(ctx, G.touchMode ? 'TAP!' : 'PRESS E', ix + iw / 2, iy + ih + 11, { size: 7, sy: 1.4, fill: pu > 0.5 ? '#fff' : '#3fd07a', outline: '#000', outlineW: 3, align: 'center' });
+      R.hit.yadom = { x: ix - 18, y: iy - 10, w: iw + 36, h: ih + 34 };
     }
     // There are no buttons on the glass any more. Braking had a pad in each top corner, put there because it
     // wanted a third finger and a pair of thumbs cannot manage that while one of them is steering; a second
