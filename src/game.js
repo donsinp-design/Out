@@ -30,7 +30,10 @@
   // YADOM_LIM is how far out the auto-line is allowed to end up. The line itself never asks to go past 0.78 of the
   // half width, but at 30% over top speed the curve pushes the bike outward faster than the steering can answer, so
   // it was arriving at the railing anyway; the lane is held here so the drift has nowhere to take it.
-  const YADOM_NEED = 15, YADOM_TIME = 5, YADOM_SPEED = 1.3, YADOM_LIM = 0.95;
+  // 555 on the clock while the jar is open - the speedometer reads 296 at the bike's own top speed, so the
+  // multiplier is whatever takes it there and the two stay tied if either number is ever changed.
+  const YADOM_KMH = 555, TOP_KMH = 296;
+  const YADOM_NEED = 15, YADOM_TIME = 5, YADOM_SPEED = YADOM_KMH / TOP_KMH, YADOM_LIM = 0.95;
   // The line the bike takes on its own during พลังยาดม. Every place across the road is scored on the room it
   // leaves against the traffic ahead, weighted by how soon each car arrives, against how far it is from where the
   // bike already is so it does not weave for the sake of it, and against how far it is from the middle - the first
@@ -555,17 +558,22 @@
     // today's leader if the store has given us one, otherwise your own best of today
     const g = (world && Array.isArray(world.pos) && world.pos.length > 8 && (!mine || (world.score | 0) >= mine.score)) ? world : mine;
     if (!g) return;
-    G.ghost = { t: 0, dt: g.dt || REC_DT, pos: g.pos, x: g.x || [], name: g.name || '???', route: g.route || '', score: g.score || 0, mine: g === mine, pz: 0, gx: 0, live: true };
+    G.ghost = { t: 0, dt: g.dt || REC_DT, pos: g.pos, x: g.x || [], name: g.name || '???', route: g.route || '', score: g.score || 0, mine: g === mine, pz: 0, gx: 0, live: true, state: 'run' };
   }
   function ghostTick(dt) {
     const gh = G.ghost; if (!gh) { G.ghostCar = null; return; }
     gh.t += dt;
     const f = gh.t / gh.dt, i = Math.floor(f);
-    if (i >= gh.pos.length - 1) { gh.live = false; G.ghostCar = null; return; }   // they finished; nothing left to chase
+    if (i >= gh.pos.length - 1) { gh.live = false; gh.state = 'done'; G.ghostCar = null; return; }   // their run ended here
     const k = f - i;
     gh.pz = gh.pos[i] + (gh.pos[i + 1] - gh.pos[i]) * k;
     gh.gx = (gh.x[i] + (gh.x[i + 1] - gh.x[i]) * k) / 1000;
-    gh.live = gh.route === '' || routeStr() === gh.route.slice(0, routeStr().length);
+    // Which road they are on matters as much as whether they are still going. The fork is decided by the side of
+    // the road you are on when you reach it, so two runs part company easily - and when they do, their distance
+    // along a different road means nothing here. Said plainly, because it used to read as "finished".
+    const apart = gh.route !== '' && routeStr() !== gh.route.slice(0, routeStr().length);
+    gh.state = apart ? 'apart' : 'run';
+    gh.live = !apart;
     // handed to the renderer as one more vehicle, so it sits in the same per-segment draw order as the traffic
     // and is occluded by the road exactly as a real bike would be
     if (!gh.live || !OB.SPR.moto) { G.ghostCar = null; return; }
@@ -1053,6 +1061,13 @@
     else G.speed -= G.maxSpeed / 7 * dt;
     if (drifting) G.speed -= G.maxSpeed * 0.12 * dt; else if (pct > 0.8 && Math.abs(G.steer) > 0.85) G.speed -= G.maxSpeed * 0.04 * dt; // tyres scrub speed
     if (offroad) { if (G.speed > G.maxSpeed * 0.45) G.speed -= G.maxSpeed * 0.7 * dt; if (pct > 0.1) { G.bounce = (Math.random() - 0.5) * 4 * pct; if (Math.random() < dt * 3) { G.bumpT = 0.2; G.stackKick(0.4 * pct); } } }
+    // The jar is a five second burst, so it has to arrive like one. Left to the engine the bike needs most of
+    // those five seconds just to reach the higher ceiling, and the number it is all for is never actually seen -
+    // so while it is open the speed is pulled up to the ceiling instead of accelerated towards it.
+    if (G.yadomT > 0 && !flipping) {
+      const cap = G.maxSpeed * yk;
+      if (G.speed < cap) G.speed += (cap - G.speed) * Math.min(1, dt * 5);
+    }
     // a slipstream lets you run past your own top speed while you stay in it
     G.speed = OB.clamp(G.speed, 0, G.maxSpeed * yk * (1 + 0.07 * (G.draft || 0)));
     const accel = (G.speed - speedPrev) / dt;

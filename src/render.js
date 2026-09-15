@@ -862,19 +862,20 @@
     TXT(ctx, 'HEALTH', 80, 45, { size: 7, sy: 1.8, fill: '#fff', outline: '#000', outlineW: 3 });
     bar(127, 33, 12, 4, 1, 13, Math.ceil(G.health / 100 * 12), '#ff0e00', '#ff6a5a', '#3a0806');
     if (G.ice < 25 && Math.floor(G.t * 4) % 2 === 0) TXT(ctx, 'MELTING!', 200, 45, { size: 7, sy: 1.4, fill: '#7fe0ff', outline: '#000', outlineW: 3 });
-    // time - or, while พลังยาดม is running, the banner in its place, because the clock is not moving
+    // Time, always. พลังยาดม used to take the clock's place while it ran, on the grounds that the clock was not
+    // moving - but it is the number you are riding against and hiding it is worse than showing it held. The
+    // banner sits under it now, with its own five seconds draining beneath.
+    TXT(ctx, 'TIME', 352, 34, { size: 12, sy: 1.7, fill: '#f90000', outline: '#000', outlineW: 6, outline2: '#fff', outline2W: 3 });
+    const tcol = G.yadomT > 0 ? '#3fd07a' : (G.time <= 10 && Math.floor(G.t * 4) % 2 === 0) ? '#ff3b3b' : '#ffd800';
+    TXT(ctx, String(Math.max(0, Math.ceil(G.time))), 418, 38, { size: 19, sy: 1.4, fill: tcol, outline: '#000', outlineW: 5 });
     if (G.yadomT > 0 && IMG.plang) {
-      const bw = IMG.plang.width, bh = IMG.plang.height, bx = Math.round(420 - bw / 2);
+      const bw = IMG.plang.width, bh = IMG.plang.height, bx = Math.round(420 - bw / 2), by = 48;
       const k = 1 + 0.05 * Math.sin(G.t * 14);
-      ctx.save(); ctx.translate(420, 40); ctx.scale(k, k); ctx.translate(-420, -40);
-      ctx.drawImage(IMG.plang, bx, 20);
+      ctx.save(); ctx.translate(420, by + bh / 2); ctx.scale(k, k); ctx.translate(-420, -(by + bh / 2));
+      ctx.drawImage(IMG.plang, bx, by);
       ctx.restore();
       const seg = Math.floor((bw - 10) / 5);
-      bar(bx + Math.round((bw - (seg * 5 + 1)) / 2), 20 + bh + 3, seg, 4, 1, 7, Math.ceil(G.yadomT / 5 * seg), '#ff2d2d', '#ff9a9a', '#3a0806');
-    } else {
-      TXT(ctx, 'TIME', 352, 34, { size: 12, sy: 1.7, fill: '#f90000', outline: '#000', outlineW: 6, outline2: '#fff', outline2W: 3 });
-      const tcol = (G.time <= 10 && Math.floor(G.t * 4) % 2 === 0) ? '#ff3b3b' : '#ffd800';
-      TXT(ctx, String(Math.max(0, Math.ceil(G.time))), 418, 38, { size: 19, sy: 1.4, fill: tcol, outline: '#000', outlineW: 5 });
+      bar(bx + Math.round((bw - (seg * 5 + 1)) / 2), by + bh + 3, seg, 4, 1, 7, Math.ceil(G.yadomT / 5 * seg), '#ff2d2d', '#ff9a9a', '#3a0806');
     }
     // score
     TXT(ctx, 'SCORE', 622, 34, { size: 12, sy: 1.7, fill: '#ff37a8', outline: '#000', outlineW: 6, outline2: '#fff', outline2W: 3 });
@@ -958,7 +959,10 @@
         if (!near) TXT(ctx, ahead ? 'OUT OF SIGHT BEHIND' : 'OUT OF SIGHT AHEAD', W - 8, 126,
           { size: 6, sy: 1.4, fill: '#9fb2c0', outline: '#000', outlineW: 3, align: 'right' });
       } else {
-        TXT(ctx, gh ? 'GHOST FINISHED' : 'NO GHOST TODAY YET', W - 8, 112, { size: 6, sy: 1.4, fill: '#6b7785', outline: '#000', outlineW: 3, align: 'right' });
+        const why = !gh ? 'NO GHOST TODAY YET'
+          : gh.state === 'apart' ? gh.name + ' TOOK ANOTHER ROAD'
+          : gh.name + ' FINISHED - YOU ARE PAST THEM';
+        TXT(ctx, why, W - 8, 112, { size: 6, sy: 1.4, fill: gh && gh.state === 'done' ? '#3fd07a' : '#6b7785', outline: '#000', outlineW: 3, align: 'right' });
       }
     }
     // speed
