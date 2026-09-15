@@ -78,6 +78,7 @@
     a.frame = null; a.flip = false; a.rot = 0; a.hop = 0; a.side = x < 0 ? -1 : 1; a.home = x; a.dir = 1; a.hit = false; a.alpha = 1; a.chased = false; a.timer = 0; a.walkPh = 0;
     a.body = null; a.runF = null;   // locked frames are per-life: a pooled actor must not inherit the last one's body
     a.called = false; a.pdz = undefined; a.plat = 0;   // and so is the one bark or meow it gets, and the pass it is measured across
+    a.passed = false; a.honked = false; a.dive = 0; a.crossTo = 0; a.dashTo = 0;   // same for a crossing's one score and one horn
     a.calm = Math.random(); a.notice = 900 + Math.random() * 1400; a.risk = 0.3 + Math.random() * 0.35; a.reactDelay = 0.05 + Math.random() * 0.35;
     if (extra) Object.assign(a, extra);
     return a;
@@ -101,6 +102,12 @@
           const sub = rng.pick(CAST[env] || CAST.shop), p = spawn('ped', sub, z, pave(rng.range(0.01, 0.1)));
           if (p) { p.flip = rng.chance(0.5); p.state = PEDS[sub].still ? 'idle' : (rng.chance(0.55) ? 'walk' : 'idle'); p.dir = rng.chance(0.5) ? 1 : -1; if (PEDS[sub].calm) p.calm = 0.9; p.walkPh = rng.range(0, 6);
             if (rng.chance(0.3) && !PEDS[sub].still) { const q = spawn('ped', rng.pick(CAST[env] || CAST.shop), z + 120, pave(rng.range(0.01, 0.1))); if (q) { q.state = 'idle'; q.flip = !p.flip; p.state = 'idle'; p.talk = true; q.talk = true; } } }
+        }
+        // someone crossing: waits on this kerb for the road to look clear, then walks to the other side
+        if (env !== 'water' && (rel + (sd === 'L' ? 23 : 67)) % 61 === 0 && rng.chance(0.75)) {
+          const sub = rng.pick(CAST[env] || CAST.shop);
+          const q = spawn('ped', sub, z, s * (rw + 0.01), { state: 'xwait', crossTo: -s, crossAt: 4500 + rng.range(0, 5000) });
+          if (q) q.walkPh = rng.range(0, 6);
         }
         // dogs: asleep by the wall, idling at the kerb, or about to cross
         if (env !== 'water' && (rel + (sd === 'L' ? 11 : 53)) % 95 === 0 && rng.chance(0.75)) {
@@ -179,6 +186,16 @@
   // and one for running; the walk is carried by the hop, as it already is for the dogs and cats.
   function pedBody(a, ch) { if (!a.body) a.body = ch.idle[Math.abs(a.seed | 0) % ch.idle.length]; return a.body; }
   function pedRun(a, ch) { if (!a.runF) a.runF = ch.run[Math.abs((a.seed | 0) + 1) % ch.run.length]; return a.runF; }
+  const PED_BRUSH = 0.17;                                  // inside this, the bike went through where they stood
+  // Off the road the short way, and a shout with it. `dive` is the version where the bike was already on top of
+  // them: faster, and a bigger leap, so it reads as getting clear rather than as being hit.
+  function startDash(a, px, rw, dive) {
+    a.state = 'xdash'; a.t = 0; a.dive = dive ? 1 : 0;
+    a.dashTo = Math.abs(a.x) < 0.25 ? a.crossTo : (a.x >= 0 ? 1 : -1);
+    if (Math.sign(a.dashTo) === Math.sign(px - a.x) && Math.abs(px - a.x) < rw * 0.5) a.dashTo = -a.dashTo;  // never towards the bike
+    if (!a.honked) { a.honked = true; OB.audio.sfx('horn', dive ? 0.85 : 0.35); }   // the rider leans on it
+  }
+  function land(a, side, rw) { a.x = side * (rw + 0.01); a.side = side; a.state = 'recover'; a.t = 0; a.dive = 0; }
   function pedUpdate(a, dt, G, pz, px, pct) {
     const ch = PEDS[a.sub], dz = a.z - pz, rw = T.findSegment(a.z).rw;
     const outer = a.side * (rw + 0.02), inner = outer, kerb = a.side * (rw + 0.005), wall = a.side * (rw + 0.125);
@@ -212,6 +229,35 @@
         a.frame = dz < 0 ? ch.point : ch.react; a.flip = a.side > 0 ? px < a.x : px > a.x;
         if (a.t > 0.9 + a.calm) { a.state = ch.still ? 'idle' : 'walk'; a.t = 0; a.dir = Math.random() < 0.5 ? 1 : -1; }
         break;
+      // ---- crossing the road ----
+      // Waits at the kerb, sets off while the bike is still a long way back, and hurries for whichever kerb is
+      // nearer once it is close. Nothing in here can hurt the rider or them: they are not in the collision set
+      // at all, so the worst case is a dive out of the way.
+      case 'xwait':
+        a.frame = ch.react; a.hop = 0; a.flip = a.side > 0;
+        if (dz > 0 && dz < a.crossAt) { a.state = 'xcross'; a.t = 0; }
+        break;
+      case 'xcross':
+        a.frame = pedRun(a, ch); a.hop = Math.abs(Math.sin(a.t * 7)) * 2.2; a.flip = a.crossTo > 0;
+        a.x += a.crossTo * 0.42 * dt;
+        if (dz > -segLen() && dz < 1100 && Math.abs(a.x - px) < 0.6) startDash(a, px, rw);
+        else if (a.x * a.crossTo >= rw + 0.005) land(a, a.crossTo, rw);
+        break;
+      case 'xdash': // gets off the road the short way, arms up
+        a.frame = pedRun(a, ch); a.hop = Math.abs(Math.sin(a.t * 16)) * (a.dive ? 9 : 5); a.flip = a.dashTo > 0;
+        a.x += a.dashTo * (a.dive ? 1.9 : 1.25) * dt;
+        if (a.x * a.dashTo >= rw + 0.005) land(a, a.dashTo, rw);
+        break;
+    }
+    // one score for the pass, and the dive if the bike came right through where they were standing
+    if (a.state === 'xcross' || a.state === 'xdash') {
+      const gap = passGap(a, dz, Math.abs(a.x - px));
+      if (gap !== null && !a.passed) {
+        a.passed = true;
+        if (gap < PED_BRUSH && a.state === 'xcross') startDash(a, px, rw, true);
+        if (OB.pedPass) OB.pedPass(gap);
+      }
+      return;                                   // no pavement clamp while they are out in the road
     }
     if (a.x * a.side > wall * a.side) a.x = wall; if (a.x * a.side < kerb * a.side) a.x = kerb;
     if (ch.photo && Math.floor(a.age * 0.7 + a.seed) % 7 === 0 && (a.age % 1.4) < 0.05) a.flash = 0.08; // the tourist's camera flash
@@ -229,17 +275,21 @@
   // crossing itself, because sampling the gap once per frame misses the pass entirely at speed. One call per
   // animal per life, and the level follows how close it was.
   const CALL_NEAR = 0.5;                                   // about a bike and a half either side
-  function passingCall(a, dz, px, sfx, reach) {
-    const near = reach || CALL_NEAR;
-    const lat = Math.abs(a.x - px);
-    if (!a.called && a.pdz !== undefined && (a.pdz > 0) !== (dz > 0)) {
+  // the lateral gap at the frame the bike drew level, or null on any other frame
+  function passGap(a, dz, lat) {
+    let gap = null;
+    if (a.pdz !== undefined && (a.pdz > 0) !== (dz > 0)) {
       const span = a.pdz - dz;
-      if (span > 0 && span < segLen() * 10) {              // a sane one-frame step, not a gap left by the crash freeze
-        const gap = a.plat + (lat - a.plat) * OB.clamp(a.pdz / span, 0, 1);
-        if (gap < near) { a.called = true; OB.audio.sfx(sfx, OB.clamp(1 - (gap / near) * 0.6, 0.4, 1)); }
-      }
+      if (span > 0 && span < segLen() * 10)                // a sane one-frame step, not a gap left by the crash freeze
+        gap = a.plat + (lat - a.plat) * OB.clamp(a.pdz / span, 0, 1);
     }
     a.pdz = dz; a.plat = lat;
+    return gap;
+  }
+  function passingCall(a, dz, px, sfx, reach) {
+    const near = reach || CALL_NEAR;
+    const gap = passGap(a, dz, Math.abs(a.x - px));
+    if (gap !== null && !a.called && gap < near) { a.called = true; OB.audio.sfx(sfx, OB.clamp(1 - (gap / near) * 0.6, 0.4, 1)); }
   }
   function dogUpdate(a, dt, G, pz, px, pct) {
     const dz = a.z - pz, rw = T.findSegment(a.z).rw; a.t += dt;

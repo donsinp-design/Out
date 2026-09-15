@@ -350,6 +350,20 @@
     G.mult = 1; G.multStep = 1; G.multArmed = false;  // earn it back by getting flat out again
     G.multLock = MULT_LOCK;                           // and not straight away: a hit costs you the next few seconds
   };
+  // ---------- people crossing the road ----------
+  // Someone stepping off the kerb is scenery with a scoreboard attached, never an obstacle: crossers are not in
+  // the collision set at all, so nothing here can cost health, end a run or break the combo, and they always get
+  // clear on their own feet. Threading the gap pays; going straight through where they were standing pays
+  // nothing and only costs you the horn.
+  const PED_NEAR = 0.62;
+  OB.pedPass = function (gap) {
+    if (G.mode !== 'play' || G.crash || G.yadomT > 0) return;
+    if (gap < 0.17) { G.shake = Math.max(G.shake, 0.2); G.bumpT = 0.22; G.flutter = 1; pop('ระวัง!', '#ff6a5a'); return; }
+    if (gap > PED_NEAR) return;
+    const pts = Math.round(250 * G.mult); G.score += pts;
+    A.sfx('whoosh'); G.flutter = 1;
+    pop('CLOSE ONE +' + pts, '#7fe0ff');
+  };
   // ---------- slipstream ----------
   // Sitting square behind a vehicle and close to it pulls you along: free speed for a risky line.
   function draftAmount(G) {
