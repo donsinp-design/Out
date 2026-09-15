@@ -93,6 +93,12 @@
     'tuktuk0', 'tuktuk1', 'tuktuk2', 'tuktuk3', 'tuktuk4'];
   const ONCOMING = []; // no traffic comes the other way; every theme's oncoming rate is 0 so all lanes run with us
   const store = { get(k, d) { try { const v = localStorage.getItem(k); return v === null ? d : JSON.parse(v); } catch (e) { return d; } }, set(k, v) { try { localStorage.setItem(k, JSON.stringify(v)); } catch (e) { } } };
+  // Does this browser actually keep anything? Embedded in someone else's page the game can be handed a sandbox
+  // whose storage is refused or thrown away between loads, and every write above fails silently into its catch -
+  // which looks from the outside exactly like something wiping the list on purpose. Ask once, plainly, and say so
+  // on screen rather than quietly losing every run.
+  store.ok = (function () { try { localStorage.setItem('ob_probe', '1'); const v = localStorage.getItem('ob_probe'); localStorage.removeItem('ob_probe'); return v === '1'; } catch (e) { return false; } })();
+  OB.storeOk = () => store.ok;
   G.ranking = store.get('ob_ranking', []); if (!Array.isArray(G.ranking)) G.ranking = [];
   { const legacy = parseInt(store.get('ob_hiscore', 0)) || 0; if (legacy > 0 && !G.ranking.length) G.ranking.push({ name: 'ICE', score: legacy, route: '' }); }
   G.hiScore = G.ranking.length ? G.ranking[0].score : 0;
@@ -137,6 +143,7 @@
     if (e.key === 'Enter' || e.key === ' ') { startPressed = true; e.preventDefault(); }
     if (e.key === 'ArrowLeft' || e.key === 'a') tuneDir -= 1; if (e.key === 'ArrowRight' || e.key === 'd') tuneDir += 1; // accumulate so fast double presses are not lost
     if (e.key === 'ArrowUp' && (G.mode === 'radio' || G.mode === 'course')) startPressed = true;
+    if ((e.key === 'n' || e.key === 'N') && G.mode === 'title' && OB.nameMe()) { e.preventDefault(); return; }
     if (e.key === 'm' || e.key === 'M') { G.muted = !G.muted; A.setMusicVolume(G.muted ? 0 : A.MUSIC_VOL); }
     if ((e.key === 'p' || e.key === 'P' || e.key === 'Escape') && (G.mode === 'play')) { G.paused = true; G.menuSel = 0; }
   });
@@ -253,6 +260,7 @@
         else { const nd = R.hit.nodes.find(inBox); if (nd) { const ci = T.COURSES.findIndex(c => c.key === nd.key); if (ci === G.course) startPressed = true; else if (ci >= 0) { G.course = ci; store.set('ob_course', ci); A.sfx('select'); } } }
       } else if (G.mode === 'name') { const cell = R.hit.cells.find(inBox); if (cell) nameSelect(cell.i); }
       else if (G.mode === 'over') { const row = R.hit.rows.find(inBox); if (row) overAction(row.i); else if (!R.hit.rows.length) leaveOver(); }
+      else if (G.mode === 'title' && inBox(R.hit.name) && OB.nameMe()) { }
       else if (G.mode === 'title' && inBox(R.hit.fs)) toggleFullscreen();
       else { startPressed = true; if (G.mode === 'title' && G.touchMode && !OB.isFullscreen() && !fsFailed) toggleFullscreen(true); }
       e.preventDefault();
@@ -470,6 +478,7 @@
         s => { const d = s.exists ? s.data() : null; NET[key] = (d && Array.isArray(d.top)) ? d.top : []; },
         () => { NET.state = 'off'; });
       watch(dayDoc(), 'day'); watch(weekDoc(), 'week'); watch('scores/global', 'board');
+      NET.watchRuns(savedName());
       db.doc(ghostDoc()).onSnapshot(s => { NET.ghost = s.exists ? s.data() : null; }, () => { });
     } catch (e) { NET.state = 'off'; }
   })();
@@ -487,6 +496,28 @@
     await doc.set({ top });
     return top;
   }
+  // This rider's runs today, kept in the shared store as well as in the browser. The browser copy is the fast one
+  // and the only one a plain web host has; the stored copy is the one that cannot be lost to a new address, a
+  // cleared cache or a sandbox that refuses to keep anything. One document per rider per day, so two people
+  // riding at once can never overwrite each other.
+  const runsDoc = name => 'runs/' + G.day + '-' + name;
+  NET.runs = []; NET.runsName = null; NET.runsOff = null;
+  NET.watchRuns = function (name) {
+    if (!NET.db || !name || NET.runsName === name) return;
+    NET.runsName = name;
+    if (NET.runsOff) { try { NET.runsOff(); } catch (e) { } }
+    NET.runsOff = NET.db.doc(runsDoc(name)).onSnapshot(
+      s => { const d = s.exists ? s.data() : null; NET.runs = (d && Array.isArray(d.top)) ? d.top : []; }, () => { });
+  };
+  NET.pushRun = async function (name, row) {
+    if (!NET.db || !name) return;
+    try {
+      const doc = NET.db.doc(runsDoc(name)), snap = await doc.get();
+      const cur = (snap.exists && Array.isArray((snap.data() || {}).top)) ? (snap.data().top || []).slice() : [];
+      cur.push(row); cur.sort((a, b) => b.s - a.s);
+      await doc.set({ top: cur.slice(0, DAY_ROWS) });
+    } catch (e) { /* never let the board cost somebody their run */ }
+  };
   NET.submit = async function (name, score, route, rec) {
     if (!NET.db) return;
     const row = { name: name, score: Math.floor(score), route: route || '', at: Date.now() };
@@ -562,13 +593,26 @@
   }
   const DAYS_KEY = 'ob_days_v1', DAYS_KEEP = 14, DAY_ROWS = 10;
   function allDays() { const d = store.get(DAYS_KEY, null); return (d && typeof d === 'object' && !Array.isArray(d)) ? d : {}; }
-  function todayRuns() { const r = allDays()[String(G.day)]; return Array.isArray(r) ? r : []; }
+  function localRuns() { const r = allDays()[String(G.day)]; return Array.isArray(r) ? r : []; }
+  // What the title screen shows: whichever of the two copies has it, merged. The same run written to both is one
+  // row, matched on its score and the moment it ended.
+  function todayRuns() {
+    const seen = {}, out = [];
+    for (const r of localRuns().concat(NET.runs || [])) {
+      if (!r || !(r.s > 0)) continue;
+      const k = r.s + ':' + (r.at || 0); if (seen[k]) continue;
+      seen[k] = 1; out.push(r);
+    }
+    out.sort((a, b) => b.s - a.s);
+    return out.slice(0, DAY_ROWS);
+  }
   OB.todayRuns = todayRuns;
   function logRun(score, reason) {
     if (!(score > 0)) return;
+    G.lastRow = { s: Math.floor(score), b: G.delivered, c: G.chainBest, st: G.stageNo, r: reason || '', at: Date.now() };
     const all = allDays(), key = String(G.day);
     const rows = (Array.isArray(all[key]) ? all[key] : []).slice();
-    rows.push({ s: Math.floor(score), b: G.delivered, c: G.chainBest, st: G.stageNo, r: reason || '', at: Date.now() });
+    rows.push(G.lastRow);
     rows.sort((a, b) => b.s - a.s);
     all[key] = rows.slice(0, DAY_ROWS);
     const keys = Object.keys(all).sort((a, b) => Number(b) - Number(a)).slice(0, DAYS_KEEP);   // a fortnight, newest first
@@ -585,6 +629,7 @@
   // one person's afternoon. A better score replaces theirs, a worse one is dropped.
   function fileRecord(rec, name) {
     OB.net.submit(name, rec.score, rec.route, rec.run);
+    NET.watchRuns(name); if (G.lastRow) NET.pushRun(name, G.lastRow);   // the first run after a name is given still counts
     const sc = Math.floor(rec.score), mine = G.ranking.findIndex(r => r.name === name);
     if (mine < 0) G.ranking.push({ name, score: sc, route: rec.route });
     else if (sc > G.ranking[mine].score) G.ranking[mine] = { name, score: sc, route: rec.route };
@@ -599,7 +644,7 @@
     keepMyGhost(score);
     const rec = { score: score, route: routeStr(), run: G.rec };
     const name = savedName();
-    if (name) fileRecord(rec, name);                     // straight onto the boards under the name already given
+    if (name) { NET.watchRuns(name); NET.pushRun(name, G.lastRow); fileRecord(rec, name); }   // browser and store both
     else if (score >= 1000) G.pendingRecord = rec;       // no name yet: ask once, on the game over screen
   }
   function enterName(force) {
@@ -627,9 +672,19 @@
     const ne = G.nameEntry; if (!ne) return;
     const name = (ne.chars.map(c => c === '_' ? '' : c).join('') || 'ICE').slice(0, 3);
     store.set('ob_name', name); // remembered, so the next record files itself and the entry screen is skipped
-    fileRecord({ score: ne.score, route: ne.route }, name);
+    OB.savedNameLabel = name;
+    if (ne.score > 0) fileRecord({ score: ne.score, route: ne.route }, name);
+    else NET.watchRuns(name);   // named from the title screen: nothing to file, but today's runs can be found again
     A.sfx('check'); G.mode = 'title'; newGame();
   }
+  // Giving a name with no run attached. The runs kept in the shared store are filed under it, so a rider whose
+  // browser has forgotten everything - a cleared cache, a sandbox that keeps nothing, a page served from a new
+  // address after a rebuild - types the same three letters and has their day back.
+  OB.nameMe = function () {
+    if (G.mode !== 'title') return false;
+    G.mode = 'name'; G.nameEntry = { chars: ['_', '_', '_'], pos: 0, cursor: 0, time: 30, score: 0, route: '' };
+    A.sfx('select'); return true;
+  };
   function leaveOver() { A.sfx('select'); startPressed = false; if (G.pendingRecord) enterName(); else { G.mode = 'title'; newGame(); } }
   // ---------- wipeout ----------
   function spawnParts(n) {

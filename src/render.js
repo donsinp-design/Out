@@ -946,9 +946,14 @@
     if (G.mode === 'play' && G.ghostOn) {
       const gh = G.ghost;
       if (gh && gh.live) {
-        const d = (G.position - gh.pz) / 1000, ahead = d >= 0;
-        const near = Math.abs(G.position - gh.pz) < 58000;      // inside the draw distance: you can actually see them
-        TXT(ctx, (ahead ? 'AHEAD ' : 'BEHIND ') + Math.abs(d).toFixed(1) + 'km  ' + gh.name + (gh.mine && gh.name !== 'YOU' ? ' (YOU)' : ''), W - 8, 112,
+        // The gap in real distance. It used to be world units over a thousand, labelled km - and a world unit is
+        // about seven millimetres at the speed the speedometer claims, so a gap of a couple of bike lengths read
+        // as a kilometre. The scale comes from the speedometer itself now, so the two can never disagree.
+        const mPerU = (296 / 3.6) / G.maxSpeed;
+        const du = G.position - gh.pz, ahead = du >= 0, m = Math.abs(du) * mPerU;
+        const gap = m >= 1000 ? (m / 1000).toFixed(1) + 'km' : Math.round(m) + 'm';
+        const near = m < 400;                                   // inside the draw distance: you can actually see them
+        TXT(ctx, (ahead ? 'AHEAD ' : 'BEHIND ') + gap + '  ' + gh.name + (gh.mine && gh.name !== 'YOU' ? ' (YOU)' : ''), W - 8, 112,
           { size: 7, sy: 1.4, fill: ahead ? '#3fd07a' : '#ff6a5a', outline: '#000', outlineW: 3, align: 'right' });
         if (!near) TXT(ctx, ahead ? 'OUT OF SIGHT BEHIND' : 'OUT OF SIGHT AHEAD', W - 8, 126,
           { size: 6, sy: 1.4, fill: '#9fb2c0', outline: '#000', outlineW: 3, align: 'right' });
@@ -998,7 +1003,7 @@
 
   // ---------- overlays ----------
   // tap targets published for the input layer (rows: radio stations, nodes: course map, cells: name entry, start: START button)
-  R.hit = { rows: [], nodes: [], cells: [], start: null, pause: null, fs: null, yadom: null };
+  R.hit = { rows: [], nodes: [], cells: [], start: null, pause: null, fs: null, yadom: null, name: null };
   // pause menu: resume / restart / music / full screen / quit
   R.pause = function (G) {
     dim(0.55); R.hit.rows = [];
@@ -1089,6 +1094,17 @@
       }
       const all = G.ranking || [];
       if (all.length) TXT(ctx, 'ALL TIME ' + OB.pad(all[0].score, 7), rx, ry + 15 + 6 * 13 + 6, { size: 6, sy: 1.4, fill: '#7fe0ff', outline: '#000', outlineW: 3 });
+      // No name and a store to look in: offer to fetch the day back rather than showing an empty list
+      R.hit.name = null;
+      if (!OB.savedNameLabel && net.state === 'on') {
+        const ny = ry + 15 + 6 * 13 + 6;
+        TXT(ctx, G.touchMode ? 'TAP: GET MY RUNS' : 'PRESS N: GET MY RUNS', rx, ny, { size: 6, sy: 1.4, fill: '#ffd800', outline: '#000', outlineW: 3 });
+        R.hit.name = { x: rx - 6, y: ny - 12, w: 150, h: 20 };
+      }
+      // If the browser will not keep anything, say so instead of letting the list look as though it wipes itself
+      if (OB.storeOk && !OB.storeOk())
+        TXT(ctx, (net.state === 'on' ? 'BROWSER SAVE OFF - KEPT ONLINE' : 'BROWSER SAVE OFF - NOT KEPT'), rx, ry + 15 + 7 * 13 + 10,
+          { size: 6, sy: 1.4, fill: '#ff6a5a', outline: '#000', outlineW: 3 });
     }
     // full screen toggle, top-right (F on a keyboard); not needed when launched from the home screen
     R.hit.fs = null;
