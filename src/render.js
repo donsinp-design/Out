@@ -887,6 +887,15 @@
     // There are no buttons on the glass any more. Braking had a pad in each top corner, put there because it
     // wanted a third finger and a pair of thumbs cannot manage that while one of them is steering; a second
     // thumb anywhere does it now, so the corners are clear.
+    // Embedded in someone else's page, the game only gets the keyboard once it has been clicked, and it loses it
+    // again the moment anything outside is clicked. Silently, and it looks exactly like a bike that will not
+    // steer - so say what is wrong, only while it is wrong, and only where there are keys to lose.
+    if (!G.touchMode && OB.hasKeys && !OB.hasKeys()) {
+      const t = 'CLICK THE GAME TO USE THE KEYBOARD', y = H - 40;
+      ctx.fillStyle = 'rgba(0,0,0,0.62)'; ctx.fillRect(W / 2 - 150, y - 13, 300, 20);
+      ctx.fillStyle = '#ffd800'; ctx.fillRect(W / 2 - 150, y - 13, 300, 2); ctx.fillRect(W / 2 - 150, y + 5, 300, 2);
+      TXT(ctx, t, W / 2, y + 1, { size: 7, sy: 1.4, fill: '#ffd800', outline: '#000', outlineW: 3, align: 'center' });
+    }
     // pause button (top-right corner)
     if (G.mode === 'play') {
       const bx = W - 40, by = 8, bw = 32, bh = 28;

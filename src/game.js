@@ -186,6 +186,15 @@
   }
   function fitPortrait() { const rot = G.touchMode && window.innerHeight > window.innerWidth * 1.1; document.body.classList.toggle('rot', rot); }
   window.addEventListener('resize', fitPortrait); window.addEventListener('orientationchange', () => setTimeout(fitPortrait, 200));
+  // Take the keyboard. The game is usually embedded in someone else's page, and a click on a frame does not by
+  // itself hand that frame the keys - the more so because the press handler below calls preventDefault, which is
+  // what would otherwise have moved focus. Without this a player on a computer can start a run with the mouse and
+  // then not drive it: no gas, no steering, not one keydown delivered. Asking for focus on every press costs
+  // nothing when the page already has it, and takes it back the moment they click the game again.
+  function grabKeys() {
+    try { if (!document.hasFocus()) window.focus(); } catch (e) { }
+  }
+  OB.hasKeys = () => { try { return document.hasFocus(); } catch (e) { return true; } };
   function bindTouch() {
     const cv = document.getElementById('screen');
     G.touchMode = !!(window.matchMedia && window.matchMedia('(pointer: coarse)').matches);
@@ -200,7 +209,7 @@
     };
     let swipeX = null;
     cv.addEventListener('pointerdown', e => {
-      A.init(); A.unlock();
+      A.init(); A.unlock(); grabKeys();
       const pc = toCanvas(e), ix = pc.x, iy = pc.y;
       const inBox = (b) => !!b && ix >= b.x && ix <= b.x + b.w && iy >= b.y && iy <= b.y + b.h;
       if (e.pointerType !== 'mouse' && !G.touchMode) { G.touchMode = true; fitPortrait(); }
