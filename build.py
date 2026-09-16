@@ -4,8 +4,12 @@
 dist/index.html  body fragment for the claude.ai artifact host, which supplies its own document wrapper
 dist/app/        full standalone page for hosting (GitHub Pages): home-screen web app meta, manifest, icons
 """
-import base64, datetime, json, pathlib, re, shutil
+import base64, datetime, json, os, pathlib, re, shutil
 ROOT = pathlib.Path(__file__).parent
+# The Cloudflare Worker that keeps the boards and takes the winners' addresses (worker/README.md). Set it here or
+# export ICEMAN_SCORES_URL before building. Left blank the game posts nowhere and asks nobody for anything, which
+# is exactly what the claude.ai artifact build wants: that page's content policy would refuse the call anyway.
+SCORES_URL = os.environ.get('ICEMAN_SCORES_URL', '').strip().rstrip('/')
 def b64(path, mime):
     return 'data:%s;base64,%s' % (mime, base64.b64encode((ROOT / path).read_bytes()).decode())
 fonts = {
@@ -19,7 +23,7 @@ assets = {}
 for f in sorted((ROOT / 'assets').glob('*.png')):
     assets[f.stem] = b64('assets/' + f.name, 'image/png')
 css = (ROOT / 'src/style.css').read_text()
-js = '\n'.join((ROOT / 'src' / n).read_text() for n in ['util.js', 'assets.js', 'atlas_frames.js', 'audio.js', 'track.js', 'world.js', 'render.js', 'game.js'])
+js = '\n'.join((ROOT / 'src' / n).read_text() for n in ['util.js', 'assets.js', 'atlas_frames.js', 'audio.js', 'track.js', 'world.js', 'render.js', 'contact.js', 'game.js'])
 build_stamp = datetime.datetime.now(datetime.timezone.utc).strftime('%Y-%m-%d %H:%M UTC')
 audio_js = ''
 for name, var in (('track', '__TRACK__'), ('horn', '__HORN__'), ('bark', '__BARK__'), ('meow', '__MEOW__')):
@@ -32,6 +36,11 @@ body = re.search(r'<body>(.*)</body>', html, re.S).group(1)
 body = re.sub(r'<script src="[^"]+"></script>\s*', '', body)
 style = '<style>\n' + '\n'.join(fonts.values()) + '\n' + css + '\n</style>\n'
 scripts = '<script>' + assets_js + '</script>\n<script>\n' + js + '\n</script>\n'
+# The score service is baked into the standalone build only. The artifact fragment must never carry it: that page
+# is served under a content policy that refuses the call, so it would fail on every run and ask for an address it
+# could not deliver.
+scores_js = ('<script>window.__SCORES__=%s;</script>\n' % json.dumps(SCORES_URL)) if SCORES_URL else ''
+scripts_app = '<script>' + assets_js + '</script>\n' + scores_js + '<script>\n' + js + '\n</script>\n'
 
 # artifact fragment: the host supplies doctype/html/head/body
 page = ('<meta charset="utf-8">\n<title>OutRun Bangkok</title>\n<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">\n'
@@ -51,7 +60,7 @@ head = ('<!doctype html>\n<html lang="en">\n<head>\n<meta charset="utf-8">\n'
         '<meta name="theme-color" content="#07070c">\n'
         '<link rel="manifest" href="manifest.webmanifest">\n<link rel="apple-touch-icon" href="icon-180.png">\n<link rel="icon" href="icon-180.png">\n'
         + style + '</head>\n<body>\n')
-(app / 'index.html').write_text(head + body.strip() + '\n' + scripts + '</body>\n</html>\n')
+(app / 'index.html').write_text(head + body.strip() + '\n' + scripts_app + '</body>\n</html>\n')
 (app / 'manifest.webmanifest').write_text(json.dumps({
     'name': 'ICE MAN', 'short_name': 'ICE MAN', 'start_url': './', 'scope': './', 'display': 'fullscreen', 'orientation': 'landscape',
     'background_color': '#07070c', 'theme_color': '#07070c',
@@ -59,4 +68,8 @@ head = ('<!doctype html>\n<html lang="en">\n<head>\n<meta charset="utf-8">\n'
 }))
 for n in ('icon-180.png', 'icon-512.png'):
     shutil.copy(ROOT / 'assets/pwa' / n, app / n)
+# the scores admin page, deployed alongside the game. It holds no secret: whoever opens it types the token.
+admin = app / 'admin'
+admin.mkdir(parents=True, exist_ok=True)
+shutil.copy(ROOT / 'admin/index.html', admin / 'index.html')
 print('dist/app/', sorted(p.name for p in app.iterdir()))

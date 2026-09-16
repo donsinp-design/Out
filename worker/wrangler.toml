@@ -1,0 +1,12 @@
+name = "iceman-scores"
+main = "worker.js"
+compatibility_date = "2026-09-01"
+
+# Create the namespace first, then paste its id here:
+#   npx wrangler kv namespace create SCORES
+[[kv_namespaces]]
+binding = "SCORES"
+id = "PUT_YOUR_KV_NAMESPACE_ID_HERE"
+
+# ADMIN_TOKEN is NOT set here on purpose - a secret in a file ends up in git.
+#   npx wrangler secret put ADMIN_TOKEN

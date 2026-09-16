@@ -450,6 +450,34 @@
     }
     return Math.min(1, best);
   }
+  // ---------- the score service ----------
+  // A Cloudflare Worker over KV, used when the build has been given its URL (see worker/README.md). It is what
+  // makes the boards outlive one browser and lets a winner leave an address - and it is the only path that ever
+  // carries one. Inside the claude.ai artifact it is simply never configured, and would be refused by that page's
+  // content policy anyway, so there the shared artifact store does the same job and no address is ever asked for.
+  const SVC = String(window.__SCORES__ || '').replace(/\/+$/, '');
+  // one id per browser, so a rider's rows collapse into their best rather than filling the board
+  function uid() {
+    let u = store.get('ob_uid', '');
+    if (!u) { u = 'p' + Date.now().toString(36) + Math.random().toString(36).slice(2, 8); store.set('ob_uid', u); }
+    return u;
+  }
+  const SVCX = { on: !!SVC, place: null, mailed: () => !!store.get('ob_email_sent', 0) };
+  OB.svc = SVCX;
+  async function svcPost(row, name, mail) {
+    if (!SVC) return null;
+    try {
+      const r = await fetch(SVC + '/score', {
+        method: 'POST', headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ id: uid(), name: name || 'ICE', score: row.s, bags: row.b, chain: row.c, stage: row.st, route: routeStr(), email: mail || undefined }),
+      });
+      if (!r.ok) return null;
+      const d = await r.json();
+      SVCX.place = d && d.place != null ? d.place : null;
+      return d;
+    } catch (e) { return null; }   // a score service that is down must never cost somebody their run
+  }
+  OB.svcPost = svcPost;
   // ---------- leaderboards ----------
   // Published as an artifact, the page gets a shared document store, so the boards are world-wide with no account,
   // key or server of our own. Anywhere else - the standalone build, the iPhone app, a copy dropped on a plain web
@@ -653,6 +681,7 @@
     const rec = { score: score, route: routeStr(), run: G.rec };
     const name = savedName();
     if (name) { NET.watchRuns(name); NET.pushRun(name, G.lastRow); fileRecord(rec, name); }   // browser and store both
+    if (SVC && G.lastRow) svcPost(G.lastRow, name || savedName() || 'ICE').then(d => { if (d) OB.askEmail && OB.askEmail(d.place); });
     else if (score >= 1000) G.pendingRecord = rec;       // no name yet: ask once, on the game over screen
   }
   function enterName(force) {

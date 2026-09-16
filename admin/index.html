@@ -1,0 +1,265 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>ICE MAN — scores</title>
+<style>
+  :root{
+    --bg:#0e1016; --panel:#171a22; --line:#2a2f3c; --ink:#e8ecf4; --dim:#8d97a8;
+    --gold:#ffd700; --silver:#c8d2dc; --bronze:#cd7f32; --accent:#7fe0ff; --bad:#ff6a5a;
+    color-scheme:dark;
+  }
+  *{box-sizing:border-box}
+  body{margin:0;background:var(--bg);color:var(--ink);
+    font:14px/1.5 ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;
+    padding-block:24px;padding-left:16px;padding-right:16px}
+  .wrap{max-width:1000px;margin:0 auto}
+  h1{font-size:18px;letter-spacing:.14em;margin:0 0 2px;text-transform:uppercase}
+  .sub{color:var(--dim);margin:0 0 20px;font-size:12px}
+  .panel{background:var(--panel);border:1px solid var(--line);border-radius:8px;padding:16px;margin-bottom:16px}
+  label{display:block;font-size:11px;color:var(--dim);text-transform:uppercase;letter-spacing:.08em;margin-bottom:5px}
+  input,select,button{font:inherit;background:#0b0d13;color:var(--ink);border:1px solid var(--line);
+    border-radius:6px;padding:9px 11px}
+  input:focus,select:focus,button:focus{outline:2px solid var(--accent);outline-offset:1px}
+  input{width:100%}
+  button{cursor:pointer;background:#232838;border-color:#39405420}
+  button:hover{background:#2c3244}
+  button.go{background:var(--accent);color:#06131a;border-color:transparent;font-weight:700}
+  button.go:hover{filter:brightness(1.1)}
+  .row{display:flex;gap:10px;flex-wrap:wrap;align-items:flex-end}
+  .row>div{flex:1 1 220px;min-width:0}
+  .row .tight{flex:0 0 auto}
+  .tabs{display:flex;gap:6px;margin-bottom:12px;flex-wrap:wrap}
+  .tabs button[aria-selected=true]{background:var(--accent);color:#06131a;font-weight:700;border-color:transparent}
+  .scroll{overflow-x:auto}
+  table{border-collapse:collapse;width:100%;font-size:13px;min-width:640px}
+  th,td{text-align:left;padding:8px 10px;border-bottom:1px solid var(--line);white-space:nowrap}
+  th{font-size:11px;color:var(--dim);text-transform:uppercase;letter-spacing:.07em;font-weight:400}
+  td.num{text-align:right;font-variant-numeric:tabular-nums}
+  tr:hover td{background:#1d222c}
+  .medal{display:inline-block;width:9px;height:9px;border-radius:2px;margin-right:7px;vertical-align:baseline}
+  .m1{background:var(--gold)} .m2{background:var(--silver)} .m3{background:var(--bronze)}
+  .mail a{color:var(--accent)}
+  .none{color:#5d6675}
+  .msg{padding:11px 13px;border-radius:6px;font-size:13px;margin-bottom:14px}
+  .msg.err{background:#3a1512;border:1px solid #6b2620;color:#ffb3aa}
+  .msg.ok{background:#12251a;border:1px solid #235238;color:#9fe7bd}
+  .stats{display:flex;gap:22px;flex-wrap:wrap;color:var(--dim);font-size:12px;margin:10px 2px 0}
+  .stats b{color:var(--ink);font-weight:700}
+  .note{color:var(--dim);font-size:11.5px;margin-top:14px;line-height:1.65}
+  [hidden]{display:none!important}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <h1>ICE MAN — scores</h1>
+  <p class="sub">Daily and weekly boards with the addresses players left. Nothing here is public: the token stays in this browser.</p>
+
+  <div class="panel">
+    <div class="row">
+      <div>
+        <label for="url">Worker URL</label>
+        <input id="url" placeholder="https://iceman-scores.you.workers.dev" autocomplete="off" spellcheck="false">
+      </div>
+      <div>
+        <label for="tok">Admin token</label>
+        <input id="tok" type="password" placeholder="the ADMIN_TOKEN secret" autocomplete="off">
+      </div>
+      <div class="tight"><button class="go" id="load">Load</button></div>
+      <div class="tight"><button id="forget" title="Clear the URL and token from this browser">Forget</button></div>
+    </div>
+  </div>
+
+  <div id="msg" hidden></div>
+
+  <div class="panel" id="results" hidden>
+    <div class="tabs">
+      <button id="tabDay" aria-selected="true">Today</button>
+      <button id="tabWeek" aria-selected="false">This week</button>
+      <span style="flex:1"></span>
+      <button id="csv">Download CSV</button>
+      <button id="copy">Copy emails</button>
+    </div>
+    <div class="row" style="margin-bottom:12px">
+      <div>
+        <label for="key">Look at a past board (blank = current)</label>
+        <input id="key" placeholder="day: 20260916   ·   week: 202638" autocomplete="off" inputmode="numeric">
+      </div>
+      <div class="tight"><button id="go2">Show</button></div>
+    </div>
+    <div class="scroll">
+      <table>
+        <thead><tr>
+          <th>#</th><th>Name</th><th class="num">Score</th><th class="num">Bags</th>
+          <th class="num">Chain</th><th class="num">Stage</th><th>Email</th><th>When</th>
+        </tr></thead>
+        <tbody id="rows"></tbody>
+      </table>
+    </div>
+    <div class="stats" id="stats"></div>
+  </div>
+
+  <p class="note">
+    The token is your admin password. It is kept in this browser's local storage and sent only to the Worker URL
+    above &mdash; put <b>Cloudflare Access</b> in front of the <code>/admin*</code> routes if you want real accounts
+    and an audit trail behind it. Addresses were given so you could contact winners: keep the export to whoever
+    needs it.
+  </p>
+</div>
+
+<script>
+(function () {
+  'use strict';
+  var $ = function (id) { return document.getElementById(id); };
+  var LS = 'iceman_admin';
+  var period = 'day', rows = [], lastKey = '';
+
+  function saved() { try { return JSON.parse(localStorage.getItem(LS) || '{}') || {}; } catch (e) { return {}; } }
+  function save(o) { try { localStorage.setItem(LS, JSON.stringify(o)); } catch (e) {} }
+
+  var s = saved();
+  if (s.url) $('url').value = s.url;
+  if (s.tok) $('tok').value = s.tok;
+
+  function say(text, bad) {
+    var m = $('msg');
+    if (!text) { m.hidden = true; return; }
+    m.hidden = false; m.className = 'msg ' + (bad ? 'err' : 'ok'); m.textContent = text;
+  }
+  function base() { return $('url').value.trim().replace(/\/+$/, ''); }
+  function tok() { return $('tok').value.trim(); }
+
+  function when(ms) {
+    if (!ms) return '';
+    var d = new Date(ms);
+    return d.toISOString().slice(0, 16).replace('T', ' ') + 'Z';
+  }
+
+  function render() {
+    var tb = $('rows');
+    tb.textContent = '';
+    rows.forEach(function (r, i) {
+      var tr = document.createElement('tr');
+      function cell(text, cls) {
+        var td = document.createElement('td');
+        if (cls) td.className = cls;
+        td.textContent = text;
+        tr.appendChild(td);
+        return td;
+      }
+      var first = cell('', 'num');
+      if (i < 3) { var m = document.createElement('span'); m.className = 'medal m' + (i + 1); first.appendChild(m); }
+      first.appendChild(document.createTextNode(String(i + 1)));
+      cell(r.name || '???');
+      cell(Number(r.score).toLocaleString(), 'num');
+      cell(String(r.bags || 0), 'num');
+      cell(String(r.chain || 0), 'num');
+      cell(String(r.stage || 0), 'num');
+      var e = document.createElement('td');
+      e.className = 'mail';
+      if (r.email) { var a = document.createElement('a'); a.href = 'mailto:' + r.email; a.textContent = r.email; e.appendChild(a); }
+      else { var n = document.createElement('span'); n.className = 'none'; n.textContent = '—'; e.appendChild(n); }
+      tr.appendChild(e);
+      cell(when(r.at));
+      tb.appendChild(tr);
+    });
+    var withMail = rows.filter(function (r) { return r.email; }).length;
+    $('stats').textContent = '';
+    [['Players', rows.length], ['With an address', withMail], ['Board', period + ' ' + (lastKey || 'current')]].forEach(function (p) {
+      var sp = document.createElement('span');
+      sp.appendChild(document.createTextNode(p[0] + ' '));
+      var b = document.createElement('b'); b.textContent = String(p[1]); sp.appendChild(b);
+      $('stats').appendChild(sp);
+    });
+    $('results').hidden = false;
+  }
+
+  function load() {
+    var u = base(), t = tok();
+    if (!u || !t) { say('Both the Worker URL and the admin token are needed.', true); return; }
+    save({ url: u, tok: t });
+    var key = $('key').value.trim();
+    lastKey = key;
+    var q = u + '/admin/board?p=' + period + (key ? '&key=' + encodeURIComponent(key) : '');
+    say('Loading…');
+    fetch(q, { headers: { authorization: 'Bearer ' + t } })
+      .then(function (r) {
+        if (r.status === 401) throw new Error('The token was refused. Check it matches the ADMIN_TOKEN secret on the Worker.');
+        if (!r.ok) throw new Error('The Worker answered ' + r.status + '.');
+        return r.json();
+      })
+      .then(function (d) {
+        rows = (d && d.rows) || [];
+        lastKey = d && d.key ? String(d.key) : key;
+        say(rows.length ? '' : 'That board is empty — nobody has posted a score to it yet.', false);
+        render();
+      })
+      .catch(function (e) {
+        rows = []; $('results').hidden = true;
+        say(e.message === 'Failed to fetch'
+          ? 'Could not reach the Worker. Check the URL, and that it is deployed.'
+          : e.message, true);
+      });
+  }
+
+  function tab(p) {
+    period = p;
+    $('tabDay').setAttribute('aria-selected', String(p === 'day'));
+    $('tabWeek').setAttribute('aria-selected', String(p === 'week'));
+    $('key').value = '';
+    load();
+  }
+
+  $('load').onclick = load;
+  $('go2').onclick = load;
+  $('tabDay').onclick = function () { tab('day'); };
+  $('tabWeek').onclick = function () { tab('week'); };
+  $('key').addEventListener('keydown', function (e) { if (e.key === 'Enter') load(); });
+  $('tok').addEventListener('keydown', function (e) { if (e.key === 'Enter') load(); });
+
+  $('forget').onclick = function () {
+    try { localStorage.removeItem(LS); } catch (e) {}
+    $('url').value = ''; $('tok').value = '';
+    rows = []; $('results').hidden = true;
+    say('Cleared from this browser.', false);
+  };
+
+  // The CSV comes from the Worker so it is the same rows the Worker holds, not a re-serialisation of this table.
+  $('csv').onclick = function () {
+    var u = base(), t = tok();
+    if (!u || !t) return;
+    var q = u + '/admin/export?p=' + period + (lastKey ? '&key=' + encodeURIComponent(lastKey) : '');
+    fetch(q, { headers: { authorization: 'Bearer ' + t } })
+      .then(function (r) { if (!r.ok) throw new Error('Export failed (' + r.status + ').'); return r.blob(); })
+      .then(function (b) {
+        var a = document.createElement('a');
+        a.href = URL.createObjectURL(b);
+        a.download = 'iceman-' + period + '-' + (lastKey || 'current') + '.csv';
+        document.body.appendChild(a); a.click(); a.remove();
+        setTimeout(function () { URL.revokeObjectURL(a.href); }, 5000);
+      })
+      .catch(function (e) { say(e.message, true); });
+  };
+
+  $('copy').onclick = function () {
+    var list = rows.filter(function (r) { return r.email; }).map(function (r) { return r.email; });
+    if (!list.length) { say('No addresses on this board.', true); return; }
+    var text = list.join(', ');
+    function done() { say('Copied ' + list.length + ' address' + (list.length === 1 ? '' : 'es') + '.', false); }
+    if (navigator.clipboard && navigator.clipboard.writeText) navigator.clipboard.writeText(text).then(done, fallback);
+    else fallback();
+    function fallback() {
+      var ta = document.createElement('textarea');
+      ta.value = text; ta.style.position = 'fixed'; ta.style.opacity = '0';
+      document.body.appendChild(ta); ta.select();
+      try { document.execCommand('copy'); done(); } catch (e) { say('Could not copy — select them from the table.', true); }
+      ta.remove();
+    }
+  };
+
+  if (s.url && s.tok) load();
+})();
+</script>
+</body>
+</html>
