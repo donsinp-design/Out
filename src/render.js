@@ -452,6 +452,11 @@
   }
   function noteCarLight(c, dx0, cy, destW, destH, segs, segLen, RW, lim) {
     const moto = !!c.spr.moto, braking = c.brake > 0, neon = c.spr.neon;
+    // This vehicle's own body, recorded BEFORE its lights. The emissive pass paints over the finished frame, so
+    // without it a tuk-tuk's neon lit up the cars in front of it as though they were glass. Everything recorded
+    // earlier is further away, so a glow is cut off by any body filed after it - and never by its own, which is
+    // why the box goes down first.
+    lights.push({ kind: 'veh', x: dx0, y: cy - destH, w: destW, h: destH });
     // tail lights: a pair on a car, one on a bike, and brighter under braking. A tuk-tuk running its neon has
     // them in its own colour instead of red, plus the strip over the cab and the wash it throws on the road.
     const tc = neon || [255, 40, 30];
@@ -647,12 +652,23 @@
     // drawn after it covers where it sits
     for (let i = 0; i < lights.length; i++) {
       const l = lights[i]; if (l.kind !== 'glow') continue;
-      let hidden = false;
+      let hidden = false, clips = null;
       for (let j = i + 1; j < lights.length; j++) {
         const b = lights[j];
         if (b.kind === 'block' && l.x > b.x && l.x < b.x + b.w && l.y > b.y && l.y < b.y + b.h) { hidden = true; break; }
+        // a body nearer than this light takes the light's place wherever the two overlap
+        if (b.kind === 'veh' && l.x + l.rx > b.x && l.x - l.rx < b.x + b.w && l.y + l.rx > b.y && l.y - l.rx < b.y + b.h) (clips = clips || []).push(b);
       }
-      if (!hidden) ellipseLight(ctx, { x: l.x, y: l.y, rx: l.rx, ry: l.rx, r: l.r, g: l.g, b: l.b, a: l.a });
+      if (hidden) continue;
+      const spec = { x: l.x, y: l.y, rx: l.rx, ry: l.rx, r: l.r, g: l.g, b: l.b, a: l.a };
+      if (!clips) { ellipseLight(ctx, spec); continue; }
+      ctx.save();
+      const cut = new Path2D();
+      cut.rect(-80, -80, W + 160, H + 160);                 // generous: the frame is drawn through the camera shake
+      for (const b of clips) cut.rect(b.x, b.y, b.w, b.h);
+      ctx.clip(cut, 'evenodd');
+      ellipseLight(ctx, spec);
+      ctx.restore();
     }
     ctx.globalCompositeOperation = 'source-over';
     if (lift) restoreFront(ctx, G);
