@@ -1223,8 +1223,8 @@
     // the controls live here now, not on the title screen
     const l1 = G.touchMode
       ? 'PRESS THE LEFT OR RIGHT HALF TO DRIFT THAT WAY   -   AUTO GAS'
-      : 'ARROWS STEER   -   UP GAS   -   DOWN BRAKE';
-    const l2 = G.touchMode ? 'TWO FINGERS DOWN AT ONCE TO BRAKE' : 'SHIFT (OR DOUBLE TAP THE ARROW) WHILE TURNING HARD TO DRIFT';
+      : 'HOLD LEFT OR RIGHT TO DRIFT THAT WAY   -   AUTO GAS';
+    const l2 = G.touchMode ? 'TWO FINGERS DOWN AT ONCE TO BRAKE' : 'DOWN ARROW TO BRAKE';
     TXT(ctx, l1, W / 2, 292, { size: 7, sy: 1.4, fill: '#fff', outline: '#000', outlineW: 3, align: 'center' });
     TXT(ctx, l2, W / 2, 310, { size: 7, sy: 1.4, fill: '#ffd800', outline: '#000', outlineW: 3, align: 'center' });
   };

@@ -1031,11 +1031,14 @@
     // The brake had a pad in each top corner, because it used to want a third finger.
     const tBrake = G.touchMode && touch.fingers >= 2;
     const usingTouch = G.touchMode && touch.active && !tBrake;
-    const gas = mode === 'play' && !flipping ? (keys.gas || (G.touchMode && !tBrake)) : false;
-    const brake = mode === 'play' && !flipping ? (keys.brake || tBrake) : true;
-    let steerIn = mode === 'play' && !flipping
-      ? (usingTouch ? touch.steer : ((keys.left ? -1 : 0) + (keys.right ? 1 : 0)))
-      : 0;
+    const driving = mode === 'play' && !flipping;
+    const keySteer = (keys.left ? -1 : 0) + (keys.right ? 1 : 0);
+    const brake = driving ? (keys.brake || tBrake) : true;
+    // The throttle is not a control on either device. It was one on the keyboard, which meant a key held down for
+    // the whole run to no effect other than being let go of by accident; the bike is always going unless the brake
+    // is stopping it. The gas keys stay mapped so they still swallow the browser's own scrolling.
+    const gas = driving && !brake;
+    let steerIn = driving ? (usingTouch ? touch.steer : keySteer) : 0;
     if (G.yadomT > 0 && mode === 'play' && !flipping) {
       // steer for the line, damped by how fast the bike is already moving sideways. Proportional control alone
       // overshot every target and put it on the kerb: at this speed the bike crosses a lane in a few frames.
@@ -1047,12 +1050,14 @@
     // and keeps it there for as long as it is held; the right half does the same the other way. Nothing to hold
     // for, nothing to double tap, no second finger - the side of the glass is the whole control. While the press
     // lasts the drift is topped back up rather than restarted, so one corner is one drift however long it runs.
+    // A key does exactly what the thumb does: left or right IS the drift, not a lean that a separate drift button
+    // then has to be pressed on top of. Shift and the double tap still work, but nothing needs them any more.
+    const sidePress = usingTouch || (driving && keySteer !== 0);
     let askDrift = wantDrift;
-    if (usingTouch && mode === 'play' && !flipping && G.yadomT <= 0) {
+    if (sidePress && driving && G.yadomT <= 0) {
       if (G.drift > 0 && Math.sign(steerIn) === G.driftDir) G.drift = Math.max(G.drift, 0.3); else askDrift = true;
     }
-    // on the keyboard it is still Shift, space or a double tap of the arrow, with the arrow held into the turn,
-    // and it holds for a moment afterwards so a key lifting cannot cancel it at once
+    // the drift holds for a moment after the input goes, so a key or thumb lifting cannot cancel it at once
     const driftIn = Math.abs(steerIn) > 0.5 ? steerIn : 0;
     if (G.driftCd > 0) G.driftCd -= dt;
     if (askDrift && mode === 'play' && !flipping && G.drift <= 0 && pct > 0.3 && Math.abs(driftIn) > 0.5) {
