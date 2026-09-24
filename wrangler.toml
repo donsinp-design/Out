@@ -17,8 +17,8 @@ directory = "./dist/app"
 
 # Declaring the hostname here rather than adding it by hand means each deploy attaches the custom domain and
 # writes its DNS record itself, so the live address is part of the repo instead of a setting somebody has to
-# remember. looktwicestudios.com must be a zone on the same Cloudflare account; if it is not, the deploy fails
+# remember. looktwicestudio.com must be a zone on the same Cloudflare account; if it is not, the deploy fails
 # saying so rather than quietly doing nothing.
 [[routes]]
-pattern = "iceman.looktwicestudios.com"
+pattern = "iceman.looktwicestudio.com"
 custom_domain = true
