@@ -1,0 +1,16 @@
+# The game itself, served as static files.
+#
+# There is no Worker script here on purpose: `assets` without a `main` deploys the folder and nothing else, which
+# is all a self-contained HTML file needs. Cloudflare's dashboard build runs `npx wrangler deploy` from the repo
+# root and reads this.
+#
+# dist/app is the standalone build - five files, every sprite and audio track inlined as a data URI. It is
+# committed, so there is no build step to run here; `python3 build.py` regenerates it when the source changes.
+#
+# Not to be confused with worker/wrangler.toml, which is the score service and deploys separately from inside
+# that folder.
+name = "iceman"
+compatibility_date = "2026-09-24"
+
+[assets]
+directory = "./dist/app"
