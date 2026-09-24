@@ -943,6 +943,24 @@
       ctx.fillStyle = 'rgba(0,0,0,0.45)'; ctx.fillRect(bx, by, bw, bh); ctx.fillStyle = G.paused ? '#ffd800' : '#fff'; ctx.fillRect(bx + 10, by + 7, 4, 14); ctx.fillRect(bx + 18, by + 7, 4, 14);
       R.hit.pause = { x: bx - 6, y: by - 6, w: bw + 12, h: bh + 12 };
     } else R.hit.pause = null;
+    // Way out of full screen, stacked under the pause button. Going full screen hides the browser's own back and
+    // address bar, so without this the only way out is a system gesture the player has to already know. The top
+    // right is the one free corner: the score digits run to about 790 and the perimeter is busy everywhere else.
+    R.hit.exitFs = null;
+    if ((G.mode === 'play' || G.mode === 'countdown') && OB.isFullscreen && OB.isFullscreen() && !OB.standalone) {
+      // clear of the pause button above it: both hit boxes are grown by 6px for thumbs, and this one is tested
+      // first, so any overlap would eat taps meant for pause rather than merely sitting too close
+      const bx = W - 40, by = 50, bw = 32, bh = 28;
+      ctx.fillStyle = 'rgba(0,0,0,0.45)'; ctx.fillRect(bx, by, bw, bh);
+      ctx.save();
+      ctx.strokeStyle = '#fff'; ctx.lineWidth = 3;
+      ctx.beginPath();
+      ctx.moveTo(bx + 11, by + 9); ctx.lineTo(bx + 21, by + 19);
+      ctx.moveTo(bx + 21, by + 9); ctx.lineTo(bx + 11, by + 19);
+      ctx.stroke();
+      ctx.restore();
+      R.hit.exitFs = { x: bx - 6, y: by - 6, w: bw + 12, h: bh + 12 };
+    }
     // The load, as three bags that go dark as they burst. Two have to reach the next shop, so the third one is
     // the margin: the bar under them marks where the run ends rather than where it is comfortable.
     if (G.mode === 'play' || G.mode === 'countdown') {
@@ -1128,9 +1146,14 @@
         TXT(ctx, (net.state === 'on' ? 'BROWSER SAVE OFF - KEPT ONLINE' : 'BROWSER SAVE OFF - NOT KEPT'), rx, ry + 15 + 7 * 13 + 10,
           { size: 6, sy: 1.4, fill: '#ff6a5a', outline: '#000', outlineW: 3 });
     }
+    // Where the browser has no full screen to give - an iPhone will not grant it to anything but a video - the
+    // button is a lie and tapping start silently does nothing. Say the one thing that does work instead.
+    if (G.touchMode && !OB.standalone && OB.fsSupported === false)
+      TXT(ctx, 'ADD TO HOME SCREEN FOR FULL SCREEN', W / 2, H - 28,
+        { size: 7, sy: 1.4, fill: '#ffd800', outline: '#000', outlineW: 3, align: 'center' });
     // full screen toggle, top-right (F on a keyboard); not needed when launched from the home screen
     R.hit.fs = null;
-    if (!OB.standalone) { const bx = W - 44, by = 10, s = 30; ctx.fillStyle = 'rgba(0,0,0,0.5)'; ctx.fillRect(bx, by, s, s); ctx.fillStyle = '#fff';
+    if (!OB.standalone && OB.fsSupported !== false) { const bx = W - 44, by = 10, s = 30; ctx.fillStyle = 'rgba(0,0,0,0.5)'; ctx.fillRect(bx, by, s, s); ctx.fillStyle = '#fff';
       for (const [cx, cy] of [[0, 0], [1, 0], [0, 1], [1, 1]]) { const px = bx + 6 + cx * (s - 12 - 3), py = by + 6 + cy * (s - 12 - 3); ctx.fillRect(px, py + (cy ? 6 : 0), 9, 3); ctx.fillRect(px + (cx ? 6 : 0), py, 3, 9); }
       R.hit.fs = { x: bx - 8, y: by - 8, w: s + 16, h: s + 16 }; }
     // build stamp, so a stale cached copy can be told apart from the current one

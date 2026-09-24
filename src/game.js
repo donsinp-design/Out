@@ -155,6 +155,9 @@
   const STANDALONE = !!(navigator.standalone || (window.matchMedia && (matchMedia('(display-mode: standalone)').matches || matchMedia('(display-mode: fullscreen)').matches)));
   OB.standalone = STANDALONE;
   let fsFailed = false;
+  // Whether this browser has the API at all, which is not the same as it working: an iPhone exposes neither, so the
+  // title screen can say so up front rather than offering a button that does nothing when tapped.
+  OB.fsSupported = !!(document.documentElement.requestFullscreen || document.documentElement.webkitRequestFullscreen);
   function toggleFullscreen(quiet) {
     if (STANDALONE) return;
     const el = document.documentElement;
@@ -243,6 +246,7 @@
       const inBox = (b) => !!b && ix >= b.x && ix <= b.x + b.w && iy >= b.y && iy <= b.y + b.h;
       if (e.pointerType !== 'mouse' && !G.touchMode) { G.touchMode = true; fitPortrait(); }
       if (G.mode === 'play' && !G.paused && G.yadom && inBox(R.hit.yadom) && yadomTap()) { e.preventDefault(); return; }
+      if (inBox(R.hit.exitFs) && !G.paused) { toggleFullscreen(); A.sfx('select'); e.preventDefault(); return; }
       if (G.mode === 'play' && G.paused) { const row = R.hit.rows.find(inBox); if (row) menuAction(row.i); else if (inBox(R.hit.pause)) G.paused = false; }
       else if (G.mode === 'play' && inBox(R.hit.pause)) { G.paused = true; G.menuSel = 0; A.sfx('select'); }
       else if (G.mode === 'play' || G.mode === 'countdown') {

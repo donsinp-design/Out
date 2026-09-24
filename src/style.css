@@ -1,15 +1,24 @@
-html,body{margin:0;padding:0;background:#07070c;color:#fff;height:100%;overflow:hidden;font-family:'Press Start 2P',monospace}
+html,body{margin:0;padding:0;background:#07070c;color:#fff;height:100%;height:100dvh;overflow:hidden;font-family:'Press Start 2P',monospace}
 /* nothing on this page is ever meant to be selected, long-pressed, dragged or zoomed: no text content exists to
    select or look up, so this is applied to every element rather than trying to guess which one the touch lands on */
 *{touch-action:none;-webkit-user-select:none;user-select:none;-webkit-touch-callout:none;-webkit-user-drag:none;-webkit-tap-highlight-color:transparent}
 html{touch-action:none}
 body{display:flex;align-items:center;justify-content:center;padding:0 16px;box-sizing:border-box}
-#stage{position:relative;width:min(100%,calc((100vh - 16px) * 840 / 472));aspect-ratio:840/472;max-width:100%}
+/* dvh, not vh: on a phone 100vh is the viewport with the browser's own bars pretended away, so sizing the stage
+   off it makes something taller than the window whenever those bars are actually showing. Rotated into portrait
+   that overflow lands on the game's left and right edges and quietly crops them. dvh tracks what is really
+   visible; the vh line above it is the fallback for browsers too old to know the unit. */
+#stage{position:relative;width:min(100%,calc((100vh - 16px) * 840 / 472));width:min(100%,calc((100dvh - 16px) * 840 / 472));aspect-ratio:840/472;max-width:100%}
 #screen{display:block;width:100%;height:100%;image-rendering:pixelated;image-rendering:crisp-edges;background:#000;cursor:none}
 body.rot{padding:0}
-body.rot #stage{position:fixed;left:50%;top:50%;max-width:none;width:min(100vh,calc(100vw * 840 / 472));height:auto;transform:translate(-50%,-50%) rotate(90deg)}
+body.rot #stage{position:fixed;left:50%;top:50%;max-width:none;width:min(100vh,calc(100vw * 840 / 472));width:min(100dvh,calc(100vw * 840 / 472));height:auto;transform:translate(-50%,-50%) rotate(90deg)}
+/* a phone has no room to spare for the desktop's breathing space on either side */
+@media (pointer: coarse){
+  body{padding:0}
+  #stage{width:min(100%,calc(100vh * 840 / 472));width:min(100%,calc(100dvh * 840 / 472))}
+}
 html:fullscreen body,html:-webkit-full-screen body{padding:0}
-html:fullscreen #stage,html:-webkit-full-screen #stage{width:min(100vw,calc(100vh * 840 / 472))}
+html:fullscreen #stage,html:-webkit-full-screen #stage{width:min(100vw,calc(100vh * 840 / 472));width:min(100vw,calc(100dvh * 840 / 472))}
 
 /* the one HTML dialogue the game has: asking a winner for an address. Sits over the canvas, in its own colours
    rather than the arcade font, because it is a form and forms should look like forms. */
